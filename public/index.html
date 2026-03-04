@@ -752,6 +752,8 @@ function createRoom() {
   const quickstart = document.getElementById('quickstartToggle').checked;
   socket.emit('createRoom', { name, maxPlayers, quickstart }, (res) => {
     if (res.error) return showError(res.error);
+    saveSession(res.code, name, res.token);
+    history.pushState({}, '', '/' + res.code);
     document.getElementById('lobbyCode').textContent = res.code;
     showScreen('lobby');
   });
@@ -765,10 +767,56 @@ function joinRoom() {
   myName = name;
   socket.emit('joinRoom', { name, code }, (res) => {
     if (res.error) return showError(res.error);
+    if (res.token) saveSession(code, name, res.token);
+    history.pushState({}, '', '/' + code);
     document.getElementById('lobbyCode').textContent = code;
     showScreen('lobby');
   });
 }
+
+function saveSession(code, name, token) {
+  localStorage.setItem('acquire_token_' + code, token);
+  localStorage.setItem('acquire_name_' + code, name);
+}
+
+function clearSession(code) {
+  localStorage.removeItem('acquire_token_' + code);
+  localStorage.removeItem('acquire_name_' + code);
+}
+
+function attemptReconnect(code, name, token) {
+  myName = name;
+  socket.emit('rejoinRoom', { code, token, name }, (res) => {
+    if (res.error) {
+      // Session expired or room gone — show join form pre-filled
+      clearSession(code);
+      document.getElementById('joinCode').value = code;
+      document.getElementById('joinName').value = name;
+      return;
+    }
+    document.getElementById('lobbyCode').textContent = code;
+    if (res.inGame) {
+      showScreen('game');
+      startTurnClock();
+    } else {
+      showScreen('lobby');
+    }
+  });
+}
+
+// On page load: if URL contains a room code, pre-fill or auto-reconnect
+(function handleUrlOnLoad() {
+  const match = window.location.pathname.match(/^\/(\d{4})$/);
+  if (!match) return;
+  const code = match[1];
+  const token = localStorage.getItem('acquire_token_' + code);
+  const name = localStorage.getItem('acquire_name_' + code);
+  if (token && name) {
+    attemptReconnect(code, name, token);
+  } else {
+    document.getElementById('joinCode').value = code;
+  }
+})();
 
 function toggleReady() { socket.emit('toggleReady'); }
 
@@ -790,6 +838,13 @@ socket.on('backToLobby', () => {
   document.getElementById('gameOverOverlay').style.display = 'none';
   showScreen('lobby');
   stopTurnClock();
+});
+
+socket.on('disconnect', () => {
+  // If kicked back to landing, reset URL
+  if (window.location.pathname !== '/') {
+    history.replaceState({}, '', '/');
+  }
 });
 
 /* ── Game State ────────────────────────────────── */

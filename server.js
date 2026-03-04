@@ -5,6 +5,8 @@
 
 const express = require('express');
 const http = require('http');
+const path = require('path');
+const { randomUUID } = require('crypto');
 const { Server } = require('socket.io');
 const engine = require('./gameEngine');
 
@@ -13,6 +15,11 @@ const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
 
 app.use(express.static('public'));
+
+// Serve index.html for room URLs (e.g. /1234) so the frontend can read the code
+app.get('/:code([0-9]{4})', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
 /* ── Room store ────────────────────────────────────────────── */
 const rooms = {};
@@ -60,16 +67,17 @@ io.on('connection', (socket) => {
     const code = generateCode();
     currentRoom = code;
     playerName = name;
+    const token = randomUUID();
 
     rooms[code] = {
-      players: [{ name, socketId: socket.id, ready: false, idx: 0 }],
+      players: [{ name, socketId: socket.id, ready: false, idx: 0, token }],
       spectators: [],
       game: null,
       config: { maxPlayers: Math.min(Math.max(maxPlayers || 4, 2), 6), quickstart: quickstart !== false },
     };
 
     socket.join(code);
-    cb({ ok: true, code });
+    cb({ ok: true, code, token });
     broadcastLobby(code);
   });
 
@@ -93,10 +101,33 @@ io.on('connection', (socket) => {
       room.spectators.push({ name, socketId: socket.id });
       cb({ ok: true, spectator: true });
     } else {
-      room.players.push({ name, socketId: socket.id, ready: false, idx: room.players.length });
-      cb({ ok: true, spectator: false });
+      const token = randomUUID();
+      room.players.push({ name, socketId: socket.id, ready: false, idx: room.players.length, token });
+      cb({ ok: true, spectator: false, token });
     }
     broadcastLobby(code);
+  });
+
+  socket.on('rejoinRoom', ({ code, token, name }, cb) => {
+    const room = rooms[code];
+    if (!room) return cb({ error: 'Room not found' });
+
+    const p = room.players.find(p => p.token === token && p.name === name);
+    if (!p) return cb({ error: 'Session not found' });
+
+    p.socketId = socket.id;
+    p.disconnected = false;
+    currentRoom = code;
+    playerName = name;
+    socket.join(code);
+
+    cb({ ok: true, inGame: !!room.game });
+    if (room.game) {
+      room.game.log.push(`${name} reconnected`);
+      broadcastState(code);
+    } else {
+      broadcastLobby(code);
+    }
   });
 
   socket.on('toggleReady', () => {
