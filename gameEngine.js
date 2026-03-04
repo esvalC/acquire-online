@@ -21,13 +21,13 @@ const END_SIZE = 41;
 const MAX_STOCK = 25; // per chain
 
 const CHAIN_TIERS = {
-  Tower:       'expensive',
-  Luxor:       'expensive',
+  Tower:       'cheap',
+  Luxor:       'cheap',
   American:    'mid',
   Worldwide:   'mid',
   Festival:    'mid',
-  Imperial:    'cheap',
-  Continental: 'cheap',
+  Imperial:    'expensive',
+  Continental: 'expensive',
 };
 
 /* ── Price table ───────────────────────────────────────────── */
