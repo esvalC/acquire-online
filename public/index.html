@@ -1,0 +1,1169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acquire – High Adventure in the World of High Finance</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --bg-dark: #0a0f1a;
+    --bg-card: #111827;
+    --bg-card-hover: #1a2332;
+    --border: #1e293b;
+    --border-light: #334155;
+    --text: #e2e8f0;
+    --text-dim: #94a3b8;
+    --text-muted: #64748b;
+    --gold: #f59e0b;
+    --gold-dim: #92631a;
+    --green: #10b981;
+    --red: #ef4444;
+    --blue: #3b82f6;
+    --tower: #e11d48;
+    --luxor: #f97316;
+    --american: #3b82f6;
+    --worldwide: #8b5cf6;
+    --festival: #06b6d4;
+    --imperial: #10b981;
+    --continental: #eab308;
+    --radius: 8px;
+    --transition: all 0.2s ease;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg-dark);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(245,158,11,0.04) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 80%, rgba(16,185,129,0.03) 0%, transparent 50%);
+    pointer-events: none; z-index: 0;
+  }
+
+  .screen { display: none; position: relative; z-index: 1; }
+  .screen.active { display: flex; }
+
+  /* ── Shared Components ────────────────────────── */
+  .btn {
+    background: linear-gradient(135deg, var(--gold), #d97706);
+    color: #000; border: none; border-radius: var(--radius);
+    padding: 12px 24px; font-family: 'DM Sans', sans-serif;
+    font-weight: 600; font-size: 14px; cursor: pointer;
+    transition: var(--transition); text-transform: uppercase;
+    letter-spacing: 1px; width: 100%;
+  }
+  .btn:hover { transform: translateY(-1px); box-shadow: 0 4px 16px rgba(245,158,11,0.3); }
+  .btn:active { transform: translateY(0); }
+  .btn-secondary { background: var(--bg-card); color: var(--text); border: 1px solid var(--border-light); }
+  .btn-secondary:hover { background: var(--bg-card-hover); border-color: var(--gold); }
+  .btn-danger { background: linear-gradient(135deg, var(--red), #dc2626); color: #fff; }
+  .btn-sm { padding: 8px 16px; font-size: 12px; width: auto; }
+
+  input, select {
+    background: var(--bg-dark); border: 1px solid var(--border-light);
+    border-radius: var(--radius); color: var(--text);
+    padding: 12px 16px; font-family: 'DM Sans', sans-serif;
+    font-size: 15px; outline: none; transition: var(--transition);
+  }
+  input:focus, select:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(245,158,11,0.15); }
+
+  .panel-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--text-muted); margin-bottom: 10px;
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── Landing ──────────────────────────────────── */
+  #landing {
+    flex-direction: column; align-items: center; justify-content: flex-start;
+    min-height: 100vh; gap: 24px; padding: 40px 24px 60px;
+  }
+
+  .logo-title {
+    font-family: 'Playfair Display', serif; font-size: 56px; font-weight: 900;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, var(--gold), #fbbf24, var(--gold));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    animation: fadeInUp 0.6s ease-out;
+  }
+
+  .logo-subtitle {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 4px;
+    color: var(--text-muted); margin-top: -10px;
+    animation: fadeInUp 0.6s ease-out 0.1s both;
+  }
+
+  .landing-columns {
+    display: grid; grid-template-columns: 400px 520px;
+    gap: 28px; max-width: 960px; width: 100%;
+    animation: fadeInUp 0.6s ease-out 0.2s both;
+  }
+
+  @media (max-width: 960px) {
+    .landing-columns { grid-template-columns: 1fr; max-width: 520px; }
+  }
+
+  .landing-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 28px;
+  }
+  .landing-card h3 {
+    font-family: 'Playfair Display', serif; font-size: 18px;
+    margin-bottom: 16px; color: var(--gold);
+  }
+
+  .input-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .input-group label { font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--text-muted); }
+
+  .or-divider {
+    text-align: center; color: var(--text-muted); font-size: 11px;
+    text-transform: uppercase; letter-spacing: 2px; margin: 14px 0;
+    position: relative;
+  }
+  .or-divider::before, .or-divider::after {
+    content: ''; position: absolute; top: 50%; width: 36%; height: 1px; background: var(--border);
+  }
+  .or-divider::before { left: 0; } .or-divider::after { right: 0; }
+
+  /* ── Toggle switch ────────────────────────────── */
+  .toggle-switch { position: relative; display: inline-block; width: 40px; height: 22px; flex-shrink: 0; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider {
+    position: absolute; cursor: pointer; inset: 0;
+    background: var(--border-light); border-radius: 22px; transition: var(--transition);
+  }
+  .toggle-slider::before {
+    content: ''; position: absolute; height: 16px; width: 16px;
+    left: 3px; bottom: 3px; background: var(--text);
+    border-radius: 50%; transition: var(--transition);
+  }
+  .toggle-switch input:checked + .toggle-slider { background: var(--gold); }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+
+  /* ── Rules on Landing Page ────────────────────── */
+  .rules-landing {
+    max-height: 600px; overflow-y: auto;
+  }
+
+  .rules-landing h4 {
+    color: var(--gold); font-family: 'Playfair Display', serif;
+    font-size: 15px; margin: 16px 0 8px;
+  }
+  .rules-landing h4:first-child { margin-top: 0; }
+
+  .rules-landing p {
+    font-size: 13px; line-height: 1.65; color: var(--text-dim); margin-bottom: 8px;
+  }
+
+  .rules-landing .chain-legend {
+    display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 12px;
+  }
+
+  .chain-legend-item {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; color: var(--text-dim);
+    padding: 3px 8px; border-radius: 4px;
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+  }
+  .chain-legend-dot { width: 8px; height: 8px; border-radius: 2px; }
+
+  /* ── Lobby ────────────────────────────────────── */
+  #lobby {
+    flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; gap: 20px; padding: 32px;
+  }
+
+  .lobby-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px; width: 100%; max-width: 480px;
+  }
+
+  .room-code {
+    font-family: 'JetBrains Mono', monospace; font-size: 48px; font-weight: 500;
+    color: var(--gold); text-align: center; letter-spacing: 12px; margin: 12px 0 24px;
+  }
+
+  .player-list { list-style: none; display: flex; flex-direction: column; gap: 8px; }
+
+  .player-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px; background: var(--bg-dark);
+    border-radius: var(--radius); border: 1px solid var(--border);
+  }
+
+  .ready-badge {
+    font-size: 11px; padding: 3px 10px; border-radius: 20px;
+    text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
+  }
+  .ready-badge.ready { background: rgba(16,185,129,0.15); color: var(--green); }
+  .ready-badge.waiting { background: rgba(100,116,139,0.15); color: var(--text-muted); }
+
+  /* ── Game Screen ──────────────────────────────── */
+  #game { flex-direction: column; min-height: 100vh; padding: 12px; gap: 12px; }
+
+  .game-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 16px; background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: var(--radius);
+  }
+  .game-title { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--gold); }
+
+  .turn-info { display: flex; align-items: center; gap: 16px; font-size: 13px; }
+
+  .turn-clock {
+    font-family: 'JetBrains Mono', monospace; color: var(--gold); font-size: 14px;
+    background: rgba(245,158,11,0.1); padding: 4px 10px; border-radius: 4px;
+  }
+
+  .game-main { display: grid; grid-template-columns: 1fr 320px; gap: 12px; flex: 1; min-height: 0; }
+  .game-left { display: flex; flex-direction: column; gap: 12px; }
+
+  /* ── Board ────────────────────────────────────── */
+  .board-container {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 8px; overflow: auto;
+  }
+
+  .board { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1px; min-width: 480px; }
+
+  .board-cell {
+    aspect-ratio: 1.3; display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace; font-size: 9px;
+    border-radius: 2px; background: #1a2332; border: 1px solid var(--border);
+    color: var(--text-muted); transition: var(--transition); min-height: 24px;
+    cursor: default; position: relative;
+  }
+  .board-cell.lone { background: #374151; border-color: #4b5563; color: var(--text); }
+  .board-cell.chain-Tower       { background: var(--tower); border-color: var(--tower); color: #fff; }
+  .board-cell.chain-Luxor       { background: var(--luxor); border-color: var(--luxor); color: #fff; }
+  .board-cell.chain-American    { background: var(--american); border-color: var(--american); color: #fff; }
+  .board-cell.chain-Worldwide   { background: var(--worldwide); border-color: var(--worldwide); color: #fff; }
+  .board-cell.chain-Festival    { background: var(--festival); border-color: var(--festival); color: #fff; }
+  .board-cell.chain-Imperial    { background: var(--imperial); border-color: var(--imperial); color: #fff; }
+  .board-cell.chain-Continental { background: var(--continental); border-color: var(--continental); color: #000; }
+
+  .board-cell.playable {
+    cursor: pointer; animation: pulse 1.5s ease-in-out infinite;
+    border-color: var(--gold) !important; box-shadow: 0 0 8px rgba(245,158,11,0.4);
+  }
+  .board-cell.playable:hover { background: rgba(245,158,11,0.3); transform: scale(1.05); }
+  .board-cell.in-hand { border-color: var(--gold-dim) !important; background: rgba(245,158,11,0.08); }
+  .board-cell.unplayable-hand { border-color: var(--red) !important; background: rgba(239,68,68,0.08); }
+
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 4px rgba(245,158,11,0.3); }
+    50% { box-shadow: 0 0 12px rgba(245,158,11,0.6); }
+  }
+
+  /* ── Hand & Action Panel ──────────────────────── */
+  .hand-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+  .hand-panel, .action-panel {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px; flex: 1; min-width: 260px;
+  }
+  .tile-hand { display: flex; gap: 6px; flex-wrap: wrap; }
+  .hand-tile {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    padding: 8px 12px; border-radius: 4px; background: var(--bg-dark);
+    border: 1px solid var(--border-light); color: var(--text);
+    cursor: pointer; transition: var(--transition);
+  }
+  .hand-tile.playable { border-color: var(--gold); background: rgba(245,158,11,0.1); color: var(--gold); }
+  .hand-tile.playable:hover { background: rgba(245,158,11,0.2); transform: translateY(-2px); }
+  .hand-tile.unplayable { border-color: var(--red); opacity: 0.4; cursor: not-allowed; text-decoration: line-through; }
+
+  /* ── Right Sidebar ────────────────────────────── */
+  .game-right { display: flex; flex-direction: column; gap: 12px; }
+
+  .sidebar-tabs {
+    display: flex; gap: 2px; background: var(--bg-card);
+    border: 1px solid var(--border); border-radius: var(--radius); padding: 3px;
+  }
+  .sidebar-tab {
+    flex: 1; padding: 8px 4px; text-align: center; font-size: 11px;
+    text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted);
+    cursor: pointer; border-radius: 5px; transition: var(--transition);
+    border: none; background: none; font-family: 'DM Sans', sans-serif; font-weight: 600;
+  }
+  .sidebar-tab.active { background: rgba(245,158,11,0.15); color: var(--gold); }
+  .sidebar-tab:hover:not(.active) { color: var(--text); }
+
+  .sidebar-content { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+  .tab-panel { display: none; flex-direction: column; gap: 12px; flex: 1; min-height: 0; }
+  .tab-panel.active { display: flex; }
+
+  /* ── Stock Market ─────────────────────────────── */
+  .stock-market, .scoreboard {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px;
+  }
+  .chain-row {
+    display: flex; align-items: center; gap: 8px; padding: 6px 0;
+    border-bottom: 1px solid var(--border); font-size: 12px;
+  }
+  .chain-row:last-child { border-bottom: none; }
+  .chain-dot { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+  .chain-name { flex: 1; font-weight: 500; }
+  .chain-size { color: var(--text-muted); width: 28px; text-align: center; }
+  .chain-price { font-family: 'JetBrains Mono', monospace; color: var(--green); width: 48px; text-align: right; }
+  .chain-safe { font-size: 9px; background: rgba(16,185,129,0.15); color: var(--green); padding: 1px 4px; border-radius: 3px; }
+  .chain-inactive { color: var(--text-muted); opacity: 0.4; }
+
+  /* ── Scoreboard ───────────────────────────────── */
+  .score-player { padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .score-player:last-child { border-bottom: none; }
+  .score-player-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+  .score-player-name { font-weight: 600; font-size: 13px; }
+  .score-player-name.current { color: var(--gold); }
+  .score-cash { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--green); }
+  .score-stocks { display: flex; gap: 4px; flex-wrap: wrap; font-size: 10px; }
+  .stock-badge { padding: 1px 5px; border-radius: 3px; font-family: 'JetBrains Mono', monospace; font-weight: 500; }
+  .score-timer { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); }
+
+  /* ── Game Log ─────────────────────────────────── */
+  .game-log {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px;
+    flex: 1; min-height: 120px; max-height: 300px; overflow-y: auto;
+  }
+  .log-entry {
+    font-size: 11px; color: var(--text-dim); padding: 3px 0;
+    border-bottom: 1px solid rgba(30,41,59,0.5); line-height: 1.4;
+  }
+
+  /* ── Chat & Rules shared ──────────────────────── */
+  .chat-rules-panel {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px;
+    flex: 1; min-height: 0; display: flex; flex-direction: column;
+  }
+  .chat-scroll {
+    flex: 1; overflow-y: auto; display: flex; flex-direction: column;
+    gap: 8px; padding: 8px 0; min-height: 200px; max-height: 500px;
+  }
+  .chat-input-row { display: flex; gap: 6px; margin-top: 8px; }
+  .chat-input-row input { flex: 1; padding: 8px 12px; font-size: 12px; }
+  .chat-input-row button { padding: 8px 12px; font-size: 12px; }
+
+  .rules-msg, .chat-msg-bubble {
+    max-width: 90%; padding: 8px 12px; border-radius: 10px;
+    font-size: 12px; line-height: 1.5;
+  }
+  .rules-msg.bot { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); align-self: flex-start; }
+  .rules-msg.user { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.2); align-self: flex-end; color: var(--gold); }
+
+  .rules-quick-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+  .quick-btn {
+    font-size: 10px; padding: 4px 8px; background: var(--bg-dark);
+    border: 1px solid var(--border-light); border-radius: 12px;
+    color: var(--text-dim); cursor: pointer; font-family: 'DM Sans', sans-serif;
+    transition: var(--transition);
+  }
+  .quick-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  .chat-wrap { max-width: 90%; }
+  .chat-wrap.self { align-self: flex-end; }
+  .chat-wrap.other { align-self: flex-start; }
+  .chat-name { font-weight: 600; font-size: 11px; margin-bottom: 2px; color: var(--blue); }
+  .chat-bubble-self {
+    padding: 6px 10px; border-radius: 10px; font-size: 12px; line-height: 1.4;
+    background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.2);
+    word-break: break-word;
+  }
+  .chat-bubble-other {
+    padding: 6px 10px; border-radius: 10px; font-size: 12px; line-height: 1.4;
+    background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.15);
+    word-break: break-word;
+  }
+
+  .tab-badge {
+    display: inline-block; background: var(--red); color: #fff;
+    font-size: 9px; font-weight: 700; min-width: 14px; height: 14px;
+    line-height: 14px; text-align: center; border-radius: 7px;
+    margin-left: 3px; vertical-align: middle;
+  }
+
+  /* ── Action panel specifics ───────────────────── */
+  .chain-choice-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .chain-choice-btn {
+    padding: 10px; border-radius: var(--radius); border: 2px solid var(--border);
+    background: var(--bg-dark); color: var(--text); cursor: pointer;
+    font-family: 'DM Sans', sans-serif; font-size: 12px; font-weight: 600;
+    transition: var(--transition); text-align: center;
+  }
+  .chain-choice-btn:hover { border-color: var(--gold); transform: translateY(-1px); }
+
+  .buy-row { display: flex; align-items: center; gap: 6px; padding: 4px 0; font-size: 12px; }
+  .buy-row .buy-name { flex: 1; }
+  .buy-row .buy-price { font-family: 'JetBrains Mono', monospace; color: var(--text-dim); font-size: 11px; }
+  .buy-counter { display: flex; align-items: center; gap: 4px; }
+  .buy-counter button {
+    width: 22px; height: 22px; border-radius: 3px; border: 1px solid var(--border-light);
+    background: var(--bg-dark); color: var(--text); cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    transition: var(--transition); font-family: 'DM Sans', sans-serif;
+  }
+  .buy-counter button:hover { border-color: var(--gold); }
+  .buy-counter span { width: 18px; text-align: center; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+
+  .merger-sliders label { display: block; font-size: 12px; margin: 6px 0 3px; color: var(--text-dim); }
+  .merger-sliders input[type=range] { width: 100%; accent-color: var(--gold); }
+  .merger-summary { font-size: 11px; color: var(--text-muted); margin-top: 4px; font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Quickstart overlay ───────────────────────── */
+  .quickstart-banner {
+    background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2);
+    border-radius: var(--radius); padding: 10px 16px; font-size: 12px;
+    color: var(--text-dim); display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+  }
+  .qs-tile {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px;
+    background: var(--bg-dark); padding: 3px 8px; border-radius: 4px;
+    border: 1px solid var(--border-light);
+  }
+  .qs-tile.first { border-color: var(--gold); color: var(--gold); }
+
+  /* ── Concede banner ───────────────────────────── */
+  .concede-banner {
+    background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+    border-radius: var(--radius); padding: 12px 16px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  }
+  .concede-banner .text { flex: 1; font-size: 13px; color: var(--red); }
+
+  /* ── Game Over ────────────────────────────────── */
+  .game-over-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.8);
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100; backdrop-filter: blur(8px);
+  }
+  .game-over-card {
+    background: var(--bg-card); border: 2px solid var(--gold);
+    border-radius: 16px; padding: 40px; text-align: center;
+    max-width: 400px; width: 90%; animation: fadeInUp 0.4s ease-out;
+  }
+  .game-over-card h2 { font-family: 'Playfair Display', serif; font-size: 32px; color: var(--gold); margin-bottom: 24px; }
+  .standing-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px; border-radius: var(--radius); margin-bottom: 6px; font-size: 14px;
+  }
+  .standing-row:first-child { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); font-weight: 700; }
+  .standing-row .place { color: var(--text-muted); width: 28px; }
+  .standing-row .sname { flex: 1; text-align: left; }
+  .standing-row .scash { font-family: 'JetBrains Mono', monospace; color: var(--green); }
+
+  .error-toast {
+    position: fixed; bottom: 24px; left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: var(--red); color: #fff; padding: 10px 24px;
+    border-radius: var(--radius); font-size: 13px; z-index: 200;
+    opacity: 0; transition: all 0.3s ease; pointer-events: none;
+  }
+  .error-toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+
+  @media (max-width: 900px) {
+    .game-main { grid-template-columns: 1fr; }
+    .board-cell { font-size: 8px; min-height: 22px; }
+  }
+
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ═══ LANDING ═══ -->
+<div id="landing" class="screen active">
+  <div class="logo-title">ACQUIRE</div>
+  <div class="logo-subtitle">High Adventure in the World of High Finance</div>
+
+  <div class="landing-columns">
+    <!-- Left: Create / Join -->
+    <div style="display:flex; flex-direction:column; gap:20px;">
+      <div class="landing-card">
+        <h3>Create a Table</h3>
+        <div class="input-group">
+          <label>Your Name</label>
+          <input type="text" id="createName" placeholder="Enter your name" maxlength="20" />
+        </div>
+        <div class="input-group">
+          <label>Max Players</label>
+          <select id="maxPlayers">
+            <option value="2">2 Players</option>
+            <option value="3">3 Players</option>
+            <option value="4" selected>4 Players</option>
+            <option value="5">5 Players</option>
+            <option value="6">6 Players</option>
+          </select>
+        </div>
+        <div class="input-group" style="flex-direction:row; align-items:center; gap:12px;">
+          <label style="margin:0; flex:1;">Quickstart Draw</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="quickstartToggle" checked />
+            <span class="toggle-slider"></span>
+          </label>
+          <span style="font-size:11px; color:var(--text-muted);">Draw tiles for turn order</span>
+        </div>
+        <button class="btn" onclick="createRoom()">Create Table</button>
+        <div class="or-divider">or join</div>
+        <div class="input-group">
+          <label>Room Code</label>
+          <input type="text" id="joinCode" placeholder="4-digit code" maxlength="4" />
+        </div>
+        <div class="input-group">
+          <label>Your Name</label>
+          <input type="text" id="joinName" placeholder="Enter your name" maxlength="20" />
+        </div>
+        <button class="btn btn-secondary" onclick="joinRoom()">Join Table</button>
+      </div>
+    </div>
+
+    <!-- Right: Rules -->
+    <div class="landing-card">
+      <h3>How to Play</h3>
+      <div class="rules-landing">
+        <h4>Goal</h4>
+        <p>Become the wealthiest player by buying stock in hotel chains, growing them, and earning bonuses from mergers. At game end, the player with the most cash wins.</p>
+
+        <h4>Setup</h4>
+        <p>Each player draws a tile — the player closest to 1A goes first. Those tiles stay on the board. Each player then receives 6 tiles and $6,000 starting cash.</p>
+
+        <h4>Hotel Chains</h4>
+        <div class="chain-legend">
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#e11d48"></div>Tower ($$)</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#f97316"></div>Luxor ($$)</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#3b82f6"></div>American ($)</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#8b5cf6"></div>Worldwide ($)</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#06b6d4"></div>Festival ($)</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#10b981"></div>Imperial</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#eab308"></div>Continental</div>
+        </div>
+
+        <h4>Your Turn</h4>
+        <p><strong>1. Place a tile</strong> on the board. If it's adjacent to a lone tile, you found a new chain and get 1 free share. If it touches an existing chain, the chain grows. If it touches two chains — merger!</p>
+        <p><strong>2. Buy stock</strong> — up to 3 shares in any active chains you can afford.</p>
+        <p><strong>3. Draw a tile</strong> to refill your hand (automatic).</p>
+
+        <h4>Mergers</h4>
+        <p>The larger chain absorbs the smaller. Majority and minority shareholders of the defunct chain receive cash bonuses. Then each player (starting with the merger maker) chooses to sell, trade (2-for-1 into survivor), or hold their defunct shares.</p>
+
+        <h4>Safe Chains</h4>
+        <p>A chain with 11+ tiles is "safe" — it cannot be taken over. Two safe chains can never merge.</p>
+
+        <h4>Game End</h4>
+        <p>The game ends when a player declares it (if any chain has 41+ tiles or all active chains are safe). Final bonuses are paid, all stock is sold, and the richest player wins!</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ LOBBY ═══ -->
+<div id="lobby" class="screen">
+  <div class="logo-title" style="font-size:36px;">ACQUIRE</div>
+  <div class="lobby-card">
+    <div class="panel-title" style="text-align:center">Room Code</div>
+    <div class="room-code" id="lobbyCode">----</div>
+    <div class="panel-title">Players</div>
+    <ul class="player-list" id="lobbyPlayers"></ul>
+    <div style="margin-top:16px;">
+      <button class="btn" onclick="toggleReady()">Toggle Ready</button>
+    </div>
+    <div style="margin-top:8px; font-size:11px; color:var(--text-muted); text-align:center;">
+      Game starts when all players are ready
+    </div>
+  </div>
+</div>
+
+<!-- ═══ GAME ═══ -->
+<div id="game" class="screen">
+  <div class="game-header">
+    <div class="game-title">ACQUIRE</div>
+    <div class="turn-info">
+      <span id="turnLabel">Turn 1</span>
+      <span id="currentPlayerLabel">—</span>
+      <span class="turn-clock" id="turnClock">0:00</span>
+    </div>
+    <div style="display:flex; gap:6px;">
+      <button class="btn btn-sm btn-secondary" id="btnDeclareEnd" onclick="declareEnd()" style="display:none;">End Game</button>
+      <button class="btn btn-sm btn-danger" onclick="initiateConcedeVote()">Vote End</button>
+    </div>
+  </div>
+
+  <!-- Quickstart draw display -->
+  <div class="quickstart-banner" id="quickstartBanner" style="display:none;">
+    <strong style="color:var(--blue);">Draw:</strong>
+    <span id="quickstartTiles"></span>
+  </div>
+
+  <!-- Concede vote banner -->
+  <div class="concede-banner" id="concedeBanner" style="display:none;">
+    <div class="text" id="concedeText">A vote to end the game is in progress...</div>
+    <button class="btn btn-sm" id="concedeYes" onclick="submitVote(true)">Yes</button>
+    <button class="btn btn-sm btn-secondary" id="concedeNo" onclick="submitVote(false)">No</button>
+  </div>
+
+  <div class="game-main">
+    <div class="game-left">
+      <div class="board-container">
+        <div class="board" id="board"></div>
+      </div>
+      <div class="hand-actions">
+        <div class="hand-panel">
+          <div class="panel-title">Your Tiles</div>
+          <div class="tile-hand" id="tileHand"></div>
+        </div>
+        <div class="action-panel" id="actionPanel">
+          <div class="panel-title" id="actionTitle">Waiting...</div>
+          <div id="actionContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="game-right">
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab active" data-tab="info" onclick="switchTab('info', this)">Market</button>
+        <button class="sidebar-tab" data-tab="log" onclick="switchTab('log', this)">Log</button>
+        <button class="sidebar-tab" data-tab="chat" onclick="switchTab('chat', this)">Chat</button>
+        <button class="sidebar-tab" data-tab="rules" onclick="switchTab('rules', this)">Rules</button>
+      </div>
+      <div class="sidebar-content">
+        <!-- INFO TAB -->
+        <div class="tab-panel active" id="tab-info">
+          <div class="stock-market">
+            <div class="panel-title">Stock Market</div>
+            <div id="stockMarket"></div>
+          </div>
+          <div class="scoreboard">
+            <div class="panel-title">Players</div>
+            <div id="scoreboard"></div>
+          </div>
+        </div>
+        <!-- LOG TAB -->
+        <div class="tab-panel" id="tab-log">
+          <div class="game-log" id="gameLog"></div>
+        </div>
+        <!-- CHAT TAB -->
+        <div class="tab-panel" id="tab-chat">
+          <div class="chat-rules-panel">
+            <div class="panel-title">Player Chat</div>
+            <div class="chat-scroll" id="chatMessages">
+              <div class="rules-msg bot" style="color:var(--text-muted); font-style:italic;">Game chat — say hi!</div>
+            </div>
+            <div class="chat-input-row">
+              <input type="text" id="chatInput" placeholder="Type a message..." maxlength="300" onkeydown="if(event.key==='Enter')sendChat()" />
+              <button class="btn btn-sm" onclick="sendChat()">Send</button>
+            </div>
+          </div>
+        </div>
+        <!-- RULES TAB -->
+        <div class="tab-panel" id="tab-rules">
+          <div class="chat-rules-panel">
+            <div class="panel-title">Rules Assistant</div>
+            <div class="rules-quick-btns">
+              <button class="quick-btn" onclick="askRule('How do I play a tile?')">Tile placement</button>
+              <button class="quick-btn" onclick="askRule('How do mergers work?')">Mergers</button>
+              <button class="quick-btn" onclick="askRule('How do I buy stock?')">Buying stock</button>
+              <button class="quick-btn" onclick="askRule('What ends the game?')">End game</button>
+              <button class="quick-btn" onclick="askRule('How do bonuses work?')">Bonuses</button>
+              <button class="quick-btn" onclick="askRule('What is a safe chain?')">Safe chains</button>
+              <button class="quick-btn" onclick="askRule('How does trading stock work in mergers?')">Trading stock</button>
+            </div>
+            <div class="chat-scroll" id="rulesChat">
+              <div class="rules-msg bot">Hi! I can answer any questions about Acquire rules. Ask me anything, or tap a topic above!</div>
+            </div>
+            <div class="chat-input-row">
+              <input type="text" id="rulesInput" placeholder="Ask a rules question..." onkeydown="if(event.key==='Enter')askRuleFromInput()" />
+              <button class="btn btn-sm" onclick="askRuleFromInput()">Ask</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ GAME OVER OVERLAY ═══ -->
+<div class="game-over-overlay" id="gameOverOverlay" style="display:none;">
+  <div class="game-over-card">
+    <h2>Game Over</h2>
+    <div id="standingsDisplay"></div>
+    <div style="display:flex; gap:8px; justify-content:center; margin-top:20px;">
+      <button class="btn" onclick="playAgain()">Play Again</button>
+    </div>
+  </div>
+</div>
+
+<div class="error-toast" id="errorToast"></div>
+
+<script>
+const socket = io();
+
+let gameState = null;
+let myIdx = -1;
+let buySelections = {};
+let turnClockInterval = null;
+let chatUnread = 0;
+let myName = '';
+
+const chainColors = {
+  Tower: '#e11d48', Luxor: '#f97316', American: '#3b82f6',
+  Worldwide: '#8b5cf6', Festival: '#06b6d4', Imperial: '#10b981', Continental: '#eab308',
+};
+
+/* ── Screen Management ─────────────────────────── */
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function switchTab(tab, btn) {
+  document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  if (tab === 'chat') { chatUnread = 0; updateChatBadge(); }
+}
+
+/* ── Landing Actions ───────────────────────────── */
+function createRoom() {
+  const name = document.getElementById('createName').value.trim();
+  if (!name) return showError('Enter your name');
+  myName = name;
+  const maxPlayers = parseInt(document.getElementById('maxPlayers').value);
+  const quickstart = document.getElementById('quickstartToggle').checked;
+  socket.emit('createRoom', { name, maxPlayers, quickstart }, (res) => {
+    if (res.error) return showError(res.error);
+    document.getElementById('lobbyCode').textContent = res.code;
+    showScreen('lobby');
+  });
+}
+
+function joinRoom() {
+  const name = document.getElementById('joinName').value.trim();
+  const code = document.getElementById('joinCode').value.trim();
+  if (!name) return showError('Enter your name');
+  if (!code || code.length !== 4) return showError('Enter a 4-digit room code');
+  myName = name;
+  socket.emit('joinRoom', { name, code }, (res) => {
+    if (res.error) return showError(res.error);
+    document.getElementById('lobbyCode').textContent = code;
+    showScreen('lobby');
+  });
+}
+
+function toggleReady() { socket.emit('toggleReady'); }
+
+/* ── Lobby Updates ─────────────────────────────── */
+socket.on('lobbyUpdate', (data) => {
+  document.getElementById('lobbyCode').textContent = data.code;
+  const list = document.getElementById('lobbyPlayers');
+  list.innerHTML = data.players.map(p => `
+    <li class="player-item">
+      <span>${escapeHtml(p.name)}</span>
+      <span class="ready-badge ${p.ready ? 'ready' : 'waiting'}">${p.ready ? 'Ready' : 'Waiting'}</span>
+    </li>
+  `).join('');
+});
+
+socket.on('gameStarted', () => { showScreen('game'); startTurnClock(); });
+socket.on('backToLobby', () => {
+  gameState = null;
+  document.getElementById('gameOverOverlay').style.display = 'none';
+  showScreen('lobby');
+  stopTurnClock();
+});
+
+/* ── Game State ────────────────────────────────── */
+socket.on('gameState', (state) => {
+  gameState = state;
+  myIdx = state.myIdx;
+  renderBoard();
+  renderHand();
+  renderActionPanel();
+  renderStockMarket();
+  renderScoreboard();
+  renderLog();
+  renderHeader();
+  renderConcedeBanner();
+  renderQuickstart();
+  if (state.phase === 'gameOver') renderGameOver();
+});
+
+socket.on('actionError', (msg) => showError(msg));
+
+/* ── Turn Clock ────────────────────────────────── */
+function startTurnClock() {
+  stopTurnClock();
+  turnClockInterval = setInterval(updateTurnClock, 1000);
+}
+function stopTurnClock() {
+  if (turnClockInterval) { clearInterval(turnClockInterval); turnClockInterval = null; }
+}
+function updateTurnClock() {
+  if (!gameState) return;
+  const elapsed = Math.floor((Date.now() - gameState.turnStartTime) / 1000);
+  const total = (gameState.turnTimers[gameState.currentPlayerIdx] || 0) + elapsed;
+  const mins = Math.floor(total / 60);
+  const secs = total % 60;
+  document.getElementById('turnClock').textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+}
+
+/* ── Quickstart banner ─────────────────────────── */
+function renderQuickstart() {
+  const banner = document.getElementById('quickstartBanner');
+  const qs = gameState.quickstartTiles;
+  if (!qs || qs.length === 0 || gameState.turnNumber > 3) {
+    banner.style.display = 'none';
+    return;
+  }
+  banner.style.display = 'flex';
+  document.getElementById('quickstartTiles').innerHTML = qs.map((q, i) =>
+    `<span class="qs-tile ${i === 0 ? 'first' : ''}">${escapeHtml(q.name)}: ${q.tile}</span>`
+  ).join('');
+}
+
+/* ── Render Board ──────────────────────────────── */
+function renderBoard() {
+  const board = document.getElementById('board');
+  const st = gameState;
+  let html = '';
+  const myTiles = st.players[myIdx]?.tiles || [];
+  const playable = st.playableTiles || [];
+
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 12; c++) {
+      const tile = `${r + 1}${String.fromCharCode(65 + c)}`;
+      const cell = st.board[r][c];
+      let cls = 'board-cell';
+      if (cell === 'lone') cls += ' lone';
+      else if (cell) cls += ` chain-${cell}`;
+      if (playable.includes(tile)) cls += ' playable';
+      else if (myTiles.includes(tile)) {
+        cls += (st.phase === 'placeTile' && st.currentPlayerIdx === myIdx) ? ' unplayable-hand' : ' in-hand';
+      }
+      const click = playable.includes(tile) ? `onclick="placeTile('${tile}')"` : '';
+      html += `<div class="${cls}" ${click}>${tile}</div>`;
+    }
+  }
+  board.innerHTML = html;
+}
+
+/* ── Render Hand ───────────────────────────────── */
+function renderHand() {
+  const hand = document.getElementById('tileHand');
+  const tiles = gameState.players[myIdx]?.tiles || [];
+  const playable = gameState.playableTiles || [];
+  const isMyTurn = gameState.currentPlayerIdx === myIdx && gameState.phase === 'placeTile';
+
+  hand.innerHTML = tiles.map(t => {
+    const isP = playable.includes(t);
+    const cls = isMyTurn ? (isP ? 'hand-tile playable' : 'hand-tile unplayable') : 'hand-tile';
+    const click = isP ? `onclick="placeTile('${t}')"` : '';
+    return `<div class="${cls}" ${click}>${t}</div>`;
+  }).join('');
+}
+
+/* ── Render Action Panel ───────────────────────── */
+function renderActionPanel() {
+  const st = gameState;
+  const title = document.getElementById('actionTitle');
+  const content = document.getElementById('actionContent');
+
+  if (st.phase === 'placeTile' && st.currentPlayerIdx !== myIdx) {
+    title.textContent = 'Waiting';
+    content.innerHTML = `<div style="color:var(--text-muted);font-size:12px">${escapeHtml(st.players[st.currentPlayerIdx].name)}'s turn to place a tile</div>`;
+    return;
+  }
+  if (st.phase === 'placeTile' && st.currentPlayerIdx === myIdx) {
+    title.textContent = 'Place a Tile';
+    content.innerHTML = `<div style="color:var(--text-dim);font-size:12px">Click a highlighted tile on the board or in your hand</div>`;
+    return;
+  }
+  if (st.phase === 'chooseChain' && st.currentPlayerIdx === myIdx) {
+    title.textContent = 'Found a Hotel Chain';
+    let h = '<div class="chain-choice-grid">';
+    for (const ch of st.availableChains) h += `<button class="chain-choice-btn" style="border-color:${chainColors[ch]}" onclick="chooseChain('${ch}')">${ch}</button>`;
+    h += '</div>';
+    content.innerHTML = h;
+    return;
+  }
+  if (st.phase === 'chooseMergerSurvivor' && st.currentPlayerIdx === myIdx) {
+    title.textContent = 'Choose Surviving Chain';
+    const tied = st.pendingMerger?.tiedChains || [];
+    let h = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">These chains are tied. Pick the survivor:</div><div class="chain-choice-grid">';
+    for (const ch of tied) h += `<button class="chain-choice-btn" style="border-color:${chainColors[ch]}" onclick="chooseMergerSurvivor('${ch}')">${ch}</button>`;
+    h += '</div>';
+    content.innerHTML = h;
+    return;
+  }
+  if (st.phase === 'mergerDecision') {
+    const pm = st.pendingMerger;
+    if (pm && pm.decidingPlayer === myIdx) {
+      const dc = pm.defunctChains[pm.currentDefunctIdx];
+      const held = st.players[myIdx].stocks[dc] || 0;
+      title.textContent = `Merger: ${dc} Stock`;
+      let h = `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">You hold <strong>${held}</strong> shares of <span style="color:${chainColors[dc]}">${dc}</span>. Survivor: <span style="color:${chainColors[pm.survivor]}">${pm.survivor}</span></div>`;
+      h += `<div class="merger-sliders"><label>Sell: <span id="sellVal">0</span></label><input type="range" id="sellSlider" min="0" max="${held}" value="0" oninput="updateMergerSliders()"/>`;
+      h += `<label>Trade (2→1): <span id="tradeVal">0</span></label><input type="range" id="tradeSlider" min="0" max="${held}" value="0" step="2" oninput="updateMergerSliders()"/>`;
+      h += `<div class="merger-summary" id="mergerSummary">Keep: ${held}</div></div>`;
+      h += `<button class="btn" style="margin-top:10px" onclick="submitMergerDecision(${held})">Confirm</button>`;
+      content.innerHTML = h;
+      return;
+    } else {
+      title.textContent = 'Merger in Progress';
+      content.innerHTML = `<div style="color:var(--text-dim);font-size:12px">${escapeHtml(st.players[pm?.decidingPlayer]?.name || '?')} is deciding...</div>`;
+      return;
+    }
+  }
+  if (st.phase === 'buyStock' && st.currentPlayerIdx === myIdx) {
+    title.textContent = 'Buy Stock (up to 3)';
+    buySelections = {};
+    const cash = st.players[myIdx].cash;
+    let h = '';
+    for (const ch of Object.keys(st.chains)) {
+      const info = st.chains[ch];
+      if (!info.active) continue;
+      const totalIssued = st.players.reduce((s, p) => s + (p.stocks[ch] || 0), 0);
+      if (25 - totalIssued <= 0) continue;
+      h += `<div class="buy-row"><div class="chain-dot" style="background:${chainColors[ch]}"></div><div class="buy-name">${ch}</div><div class="buy-price">$${info.price}</div><div class="buy-counter"><button onclick="adjustBuy('${ch}',-1,${info.price},${cash})">−</button><span id="buy-${ch}">0</span><button onclick="adjustBuy('${ch}',1,${info.price},${cash})">+</button></div></div>`;
+    }
+    h += `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Total: <span id="buyTotal">$0</span> / <span id="buyCount">0</span> of 3</div>`;
+    h += `<button class="btn" style="margin-top:8px" onclick="confirmBuy()">Confirm Purchase</button>`;
+    h += `<button class="btn btn-secondary" style="margin-top:4px" onclick="confirmBuy(true)">Skip</button>`;
+    content.innerHTML = h;
+    return;
+  }
+  if (st.phase === 'buyStock' && st.currentPlayerIdx !== myIdx) {
+    title.textContent = 'Waiting';
+    content.innerHTML = `<div style="color:var(--text-muted);font-size:12px">${escapeHtml(st.players[st.currentPlayerIdx].name)} is buying stock...</div>`;
+    return;
+  }
+  if (st.phase === 'gameOver') { title.textContent = 'Game Over'; content.innerHTML = ''; return; }
+  title.textContent = 'Waiting...'; content.innerHTML = '';
+}
+
+/* ── Buy helpers ───────────────────────────────── */
+function adjustBuy(chain, delta, price, cash) {
+  const current = buySelections[chain] || 0;
+  const newVal = current + delta;
+  if (newVal < 0) return;
+  const totalCount = Object.values(buySelections).reduce((s, v) => s + v, 0) + delta;
+  if (totalCount > 3) return;
+  const totalCost = Object.entries(buySelections).reduce((s, [ch, cnt]) => s + (ch === chain ? 0 : cnt * gameState.chains[ch].price), 0) + newVal * price;
+  if (totalCost > cash) return;
+  buySelections[chain] = newVal;
+  document.getElementById(`buy-${chain}`).textContent = newVal;
+  document.getElementById('buyTotal').textContent = '$' + totalCost;
+  document.getElementById('buyCount').textContent = Object.values(buySelections).reduce((s, v) => s + v, 0);
+}
+
+function confirmBuy(skip) {
+  socket.emit('buyStock', { purchases: skip ? {} : Object.fromEntries(Object.entries(buySelections).filter(([,v]) => v > 0)) });
+  buySelections = {};
+}
+
+/* ── Merger slider helpers ─────────────────────── */
+function updateMergerSliders() {
+  let sell = parseInt(document.getElementById('sellSlider').value);
+  let trade = parseInt(document.getElementById('tradeSlider').value);
+  const pm = gameState.pendingMerger;
+  const dc = pm.defunctChains[pm.currentDefunctIdx];
+  const held = gameState.players[myIdx].stocks[dc] || 0;
+  if (sell + trade > held) {
+    trade = Math.floor((held - sell) / 2) * 2;
+    if (trade < 0) { trade = 0; sell = held; }
+    document.getElementById('tradeSlider').value = trade;
+    document.getElementById('sellSlider').value = sell;
+  }
+  document.getElementById('sellVal').textContent = sell;
+  document.getElementById('tradeVal').textContent = trade;
+  document.getElementById('mergerSummary').textContent = `Sell: ${sell} | Trade: ${trade} → ${Math.floor(trade/2)} ${pm.survivor} | Keep: ${held - sell - trade}`;
+}
+
+function submitMergerDecision(held) {
+  const sell = parseInt(document.getElementById('sellSlider').value);
+  const trade = parseInt(document.getElementById('tradeSlider').value);
+  if (sell + trade > held) return showError('Sell + trade exceeds holdings');
+  socket.emit('mergerDecision', { sell, trade });
+}
+
+/* ── Stock Market ──────────────────────────────── */
+function renderStockMarket() {
+  const el = document.getElementById('stockMarket');
+  el.innerHTML = Object.entries(gameState.chains).map(([name, info]) => {
+    if (!info.active) return `<div class="chain-row chain-inactive"><div class="chain-dot" style="background:${chainColors[name]};opacity:0.3"></div><div class="chain-name">${name}</div><div class="chain-size">—</div><div class="chain-price">—</div></div>`;
+    return `<div class="chain-row"><div class="chain-dot" style="background:${chainColors[name]}"></div><div class="chain-name">${name}</div><div class="chain-size">${info.size}</div><div class="chain-price">$${info.price}</div>${info.safe ? '<span class="chain-safe">SAFE</span>' : ''}</div>`;
+  }).join('');
+}
+
+/* ── Scoreboard ────────────────────────────────── */
+function renderScoreboard() {
+  const el = document.getElementById('scoreboard');
+  el.innerHTML = gameState.players.map((p, i) => {
+    const cur = i === gameState.currentPlayerIdx;
+    const badges = Object.entries(p.stocks||{}).filter(([,v])=>v>0).map(([ch,v])=>`<span class="stock-badge" style="background:${chainColors[ch]}22;color:${chainColors[ch]}">${ch.slice(0,3)} ${v}</span>`).join('');
+    const timer = (gameState.turnTimers[i]||0) + (cur ? Math.floor((Date.now()-gameState.turnStartTime)/1000) : 0);
+    return `<div class="score-player"><div class="score-player-header"><span class="score-player-name ${cur?'current':''}">${cur?'▸ ':''}${escapeHtml(p.name)}${i===myIdx?' (you)':''}</span><span class="score-cash">$${p.cash.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="score-stocks">${badges||'<span style="color:var(--text-muted);font-size:10px">No stock</span>'}</div><span class="score-timer">${Math.floor(timer/60)}:${String(timer%60).padStart(2,'0')}</span></div></div>`;
+  }).join('');
+}
+
+/* ── Game Log ──────────────────────────────────── */
+function renderLog() {
+  const el = document.getElementById('gameLog');
+  el.innerHTML = (gameState.log||[]).map(l=>`<div class="log-entry">${escapeHtml(l)}</div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+/* ── Header ────────────────────────────────────── */
+function renderHeader() {
+  document.getElementById('turnLabel').textContent = `Turn ${gameState.turnNumber}`;
+  document.getElementById('currentPlayerLabel').textContent = gameState.players[gameState.currentPlayerIdx]?.name || '';
+  document.getElementById('btnDeclareEnd').style.display = (gameState.canDeclareEnd && gameState.currentPlayerIdx === myIdx) ? 'inline-block' : 'none';
+}
+
+/* ── Concede Banner ────────────────────────────── */
+function renderConcedeBanner() {
+  const banner = document.getElementById('concedeBanner');
+  if (!gameState.concedeActive) { banner.style.display = 'none'; return; }
+  banner.style.display = 'flex';
+  const votes = gameState.concedeVotes || {};
+  const yes = Object.values(votes).filter(v=>v).length;
+  const total = gameState.players.length;
+  const needed = total <= 2 ? total : total - 1;
+  document.getElementById('concedeText').textContent = `${escapeHtml(gameState.players[gameState.concedeInitiator]?.name||'?')} called a vote. ${yes}/${needed} needed. (${Object.keys(votes).length}/${total} voted)`;
+  const voted = votes[myIdx] !== undefined;
+  document.getElementById('concedeYes').style.display = voted ? 'none' : '';
+  document.getElementById('concedeNo').style.display = voted ? 'none' : '';
+}
+
+/* ── Game Over ─────────────────────────────────── */
+function renderGameOver() {
+  document.getElementById('gameOverOverlay').style.display = 'flex';
+  const places = ['🥇','🥈','🥉','4th','5th','6th'];
+  document.getElementById('standingsDisplay').innerHTML = (gameState.standings||[]).map((s,i)=>
+    `<div class="standing-row"><span class="place">${places[i]||''}</span><span class="sname">${escapeHtml(s.name)}</span><span class="scash">$${s.cash.toLocaleString()}</span></div>`
+  ).join('');
+}
+
+/* ── Socket actions ────────────────────────────── */
+function placeTile(tile) { socket.emit('placeTile', { tile }); }
+function chooseChain(chain) { socket.emit('chooseChain', { chain }); }
+function chooseMergerSurvivor(chain) { socket.emit('chooseMergerSurvivor', { chain }); }
+function declareEnd() { socket.emit('declareGameEnd'); }
+function initiateConcedeVote() { socket.emit('initiateConcedeVote'); }
+function submitVote(vote) { socket.emit('submitConcedeVote', { vote }); }
+function playAgain() { socket.emit('playAgain'); }
+
+/* ── Error toast ───────────────────────────────── */
+function showError(msg) {
+  const el = document.getElementById('errorToast');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 3000);
+}
+
+/* ── Player Chat ───────────────────────────────── */
+function sendChat() {
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+  socket.emit('chatMessage', { message: msg });
+  input.value = '';
+}
+
+socket.on('chatMessage', ({ name, message }) => {
+  const chat = document.getElementById('chatMessages');
+  const isSelf = name === myName;
+  const wrap = document.createElement('div');
+  wrap.className = `chat-wrap ${isSelf ? 'self' : 'other'}`;
+  let h = '';
+  if (!isSelf) h += `<div class="chat-name">${escapeHtml(name)}</div>`;
+  h += `<div class="${isSelf ? 'chat-bubble-self' : 'chat-bubble-other'}">${escapeHtml(message)}</div>`;
+  wrap.innerHTML = h;
+  chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+
+  if (!document.getElementById('tab-chat').classList.contains('active')) {
+    chatUnread++;
+    updateChatBadge();
+  }
+});
+
+function updateChatBadge() {
+  const chatBtn = document.querySelector('.sidebar-tab[data-tab="chat"]');
+  if (!chatBtn) return;
+  let badge = chatBtn.querySelector('.tab-badge');
+  if (chatUnread > 0) {
+    if (!badge) { badge = document.createElement('span'); badge.className = 'tab-badge'; chatBtn.appendChild(badge); }
+    badge.textContent = chatUnread > 9 ? '9+' : chatUnread;
+  } else if (badge) { badge.remove(); }
+}
+
+/* ── Utils ─────────────────────────────────────── */
+function escapeHtml(text) {
+  const d = document.createElement('div'); d.textContent = text; return d.innerHTML;
+}
+
+/* ── Rules Chatbot ─────────────────────────────── */
+const RULES_KB = {
+  'tile placement': `Each turn, you MUST place one tile from your hand onto the matching board space. Placing a tile adjacent to nothing makes it a "lone tile." Adjacent to a lone tile creates a new hotel chain (if one is available). Adjacent to an existing chain expands it. Adjacent to two+ chains triggers a merger. If all 7 chains are on the board, you cannot play a tile that would create a new chain. Tiles that would merge two "safe" chains (11+ tiles each) are permanently unplayable.`,
+  'merger': `When you place a tile touching two or more different chains, a merger happens! The LARGER chain absorbs the smaller one(s). If chains are tied in size, the person who placed the tile chooses the survivor. Before the defunct chain disappears, majority/minority bonuses are paid, then each player (starting with the merger-maker, going clockwise) chooses what to do with their defunct shares: SELL them at current price, TRADE 2-for-1 into the survivor, or HOLD them for later.`,
+  'buy stock': `After placing a tile, you may buy up to 3 shares of stock in any ACTIVE hotel chains. Stock prices depend on the chain's size and tier (cheap/mid/expensive). There are only 25 shares per chain, so they can run out! You don't have to buy anything.`,
+  'end game': `A player can declare the game over if: (a) any chain reaches 41+ tiles, OR (b) all active chains are "safe" (11+ tiles). The game can also end by player vote (all but one must agree). When the game ends, bonuses are paid for all active chains, all stock is sold at current prices, and the richest player wins!`,
+  'bonus': `When a chain is acquired (or at game end), the majority shareholder gets a bonus of 10x the stock price, and the minority shareholder gets 5x the stock price. If there's a tie for majority, they split BOTH bonuses evenly (rounded down to nearest $100). If only one player holds stock, they get both bonuses.`,
+  'safe chain': `A chain with 11 or more tiles is "safe" — it cannot be taken over. Two safe chains can never merge (making such tile placements permanently illegal). Safe chains can still absorb smaller chains.`,
+  'trading stock': `During a merger, you can trade shares of the defunct chain 2-for-1 into the surviving chain. This is optional — you can also sell at current price, or keep shares hoping that chain gets re-founded later. Trading is especially good when the defunct chain was small (cheap shares) and the survivor is large (expensive shares).`,
+  'founding': `When you place a tile adjacent to one or more lone tiles and no existing chain, you found a new chain! Choose from any inactive chain name. The founder receives 1 FREE share. Then you can buy up to 3 more. You cannot found a chain if all 7 are already on the board.`,
+  'chain tiers': `Chains have 3 price tiers. Cheap: Imperial, Continental. Mid: American, Worldwide, Festival. Expensive: Tower, Luxor. Higher tiers cost more per share but also pay bigger bonuses.`,
+  'default': `I'm not sure about that specific question. Try asking about: tile placement, mergers, buying stock, end game conditions, bonuses, safe chains, trading stock, or founding chains!`
+};
+
+function findRuleAnswer(q) {
+  q = q.toLowerCase();
+  if (q.includes('tile') && (q.includes('place')||q.includes('play')||q.includes('put'))) return RULES_KB['tile placement'];
+  if (q.includes('merger')||q.includes('merge')||q.includes('acqui')) return RULES_KB['merger'];
+  if (q.includes('buy')||q.includes('stock')||q.includes('purchase')||q.includes('share')) return RULES_KB['buy stock'];
+  if (q.includes('end')||q.includes('over')||q.includes('win')||q.includes('finish')) return RULES_KB['end game'];
+  if (q.includes('bonus')||q.includes('majority')||q.includes('minority')||q.includes('payout')) return RULES_KB['bonus'];
+  if (q.includes('safe')||q.includes('protect')||q.includes('immune')) return RULES_KB['safe chain'];
+  if (q.includes('trade')||q.includes('trading')||q.includes('swap')||q.includes('exchange')) return RULES_KB['trading stock'];
+  if (q.includes('found')||q.includes('create')||q.includes('new chain')||q.includes('start')) return RULES_KB['founding'];
+  if (q.includes('tier')||q.includes('cheap')||q.includes('expensive')||q.includes('price')) return RULES_KB['chain tiers'];
+  return RULES_KB['default'];
+}
+
+function askRule(question) {
+  const chat = document.getElementById('rulesChat');
+  chat.innerHTML += `<div class="rules-msg user">${escapeHtml(question)}</div>`;
+  chat.innerHTML += `<div class="rules-msg bot">${findRuleAnswer(question)}</div>`;
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function askRuleFromInput() {
+  const input = document.getElementById('rulesInput');
+  const q = input.value.trim();
+  if (!q) return;
+  askRule(q);
+  input.value = '';
+}
+</script>
+</body>
+</html>
