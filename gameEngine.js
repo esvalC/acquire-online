@@ -84,30 +84,38 @@ function createGame(playerNames, options = {}) {
     [allTiles[i], allTiles[j]] = [allTiles[j], allTiles[i]];
   }
 
-  // ── Quickstart: optionally draw tiles for turn order ──
+  // ── Always draw tiles to determine turn order ──
+  // quickstart=true  → tiles stay on the board
+  // quickstart=false → tiles go back in the bag after order is set
   const board = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
   const quickstartLog = [];
   let quickstartTiles = [];
-  let orderedNames;
+
+  const startTiles = allTiles.splice(0, playerNames.length);
+  const scored = playerNames.map((name, idx) => {
+    const { row, col } = tileToCoord(startTiles[idx]);
+    return { name, idx, tile: startTiles[idx], row, col, score: row * COLS + col };
+  });
+  scored.sort((a, b) => a.score - b.score);
+
+  for (const s of scored) {
+    quickstartLog.push(`${s.name} drew ${s.tile}`);
+  }
+  quickstartLog.push(`${scored[0].name} goes first (closest to 1A)`);
+  quickstartTiles = scored.map(s => ({ name: s.name, tile: s.tile }));
+  const orderedNames = scored.map(s => s.name);
 
   if (useQuickstart) {
-    const startTiles = allTiles.splice(0, playerNames.length);
-    const scored = playerNames.map((name, idx) => {
-      const { row, col } = tileToCoord(startTiles[idx]);
-      return { name, idx, tile: startTiles[idx], row, col, score: row * COLS + col };
-    });
-    scored.sort((a, b) => a.score - b.score);
-
+    // Leave tiles on the board as lone tiles
     for (const s of scored) {
       board[s.row][s.col] = 'lone';
-      quickstartLog.push(`${s.name} drew ${s.tile}`);
     }
-    quickstartLog.push(`${scored[0].name} goes first (closest to 1A)`);
-    quickstartTiles = scored.map(s => ({ name: s.name, tile: s.tile }));
-    orderedNames = scored.map(s => s.name);
   } else {
-    orderedNames = [...playerNames]; // keep lobby order
-    quickstartLog.push(`${orderedNames[0]} goes first`);
+    // Return tiles to the bag (shuffled back in at random positions)
+    for (const tile of startTiles) {
+      const pos = Math.floor(Math.random() * (allTiles.length + 1));
+      allTiles.splice(pos, 0, tile);
+    }
   }
 
   const players = orderedNames.map((name, idx) => ({
