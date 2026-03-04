@@ -216,29 +216,31 @@
   .ready-badge.waiting { background: rgba(100,116,139,0.15); color: var(--text-muted); }
 
   /* ── Game Screen ──────────────────────────────── */
-  #game { flex-direction: column; min-height: 100vh; padding: 12px; gap: 12px; }
+  #game { flex-direction: column; height: 100vh; overflow: hidden; padding: 8px; gap: 8px; }
 
   .game-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 8px 16px; background: var(--bg-card);
+    padding: 5px 12px; background: var(--bg-card);
     border: 1px solid var(--border); border-radius: var(--radius);
+    flex-shrink: 0;
   }
-  .game-title { font-family: 'Playfair Display', serif; font-size: 22px; color: var(--gold); }
+  .game-title { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--gold); }
 
-  .turn-info { display: flex; align-items: center; gap: 16px; font-size: 13px; }
+  .turn-info { display: flex; align-items: center; gap: 10px; font-size: 12px; }
 
   .turn-clock {
-    font-family: 'JetBrains Mono', monospace; color: var(--gold); font-size: 14px;
-    background: rgba(245,158,11,0.1); padding: 4px 10px; border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace; color: var(--gold); font-size: 12px;
+    background: rgba(245,158,11,0.1); padding: 3px 8px; border-radius: 4px;
   }
 
-  .game-main { display: grid; grid-template-columns: 1fr 320px; gap: 12px; flex: 1; min-height: 0; }
-  .game-left { display: flex; flex-direction: column; gap: 12px; }
+  .game-main { display: grid; grid-template-columns: 1fr 300px; gap: 8px; flex: 1; min-height: 0; overflow: hidden; }
+  .game-left { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 
   /* ── Board ────────────────────────────────────── */
   .board-container {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 8px; overflow: auto;
+    border-radius: var(--radius); padding: 6px; overflow: auto;
+    flex: 1; min-height: 0;
   }
 
   .board { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1px; min-width: 480px; }
@@ -264,6 +266,18 @@
     border-color: var(--gold) !important; box-shadow: 0 0 8px rgba(245,158,11,0.4);
   }
   .board-cell.playable:hover { background: rgba(245,158,11,0.3); transform: scale(1.05); }
+  .board-cell.playable-found {
+    cursor: pointer; animation: pulseFound 1.5s ease-in-out infinite;
+    border-color: var(--green) !important; box-shadow: 0 0 8px rgba(16,185,129,0.4);
+    background: rgba(16,185,129,0.12);
+  }
+  .board-cell.playable-found:hover { background: rgba(16,185,129,0.28); transform: scale(1.05); }
+  .board-cell.playable-merger {
+    cursor: pointer; animation: pulseMerger 1.5s ease-in-out infinite;
+    border-color: var(--red) !important; box-shadow: 0 0 8px rgba(239,68,68,0.4);
+    background: rgba(239,68,68,0.12);
+  }
+  .board-cell.playable-merger:hover { background: rgba(239,68,68,0.28); transform: scale(1.05); }
   .board-cell.in-hand { border-color: var(--gold-dim) !important; background: rgba(245,158,11,0.08); }
   .board-cell.unplayable-hand { border-color: var(--red) !important; background: rgba(239,68,68,0.08); }
 
@@ -271,12 +285,20 @@
     0%, 100% { box-shadow: 0 0 4px rgba(245,158,11,0.3); }
     50% { box-shadow: 0 0 12px rgba(245,158,11,0.6); }
   }
+  @keyframes pulseFound {
+    0%, 100% { box-shadow: 0 0 4px rgba(16,185,129,0.3); }
+    50% { box-shadow: 0 0 14px rgba(16,185,129,0.7); }
+  }
+  @keyframes pulseMerger {
+    0%, 100% { box-shadow: 0 0 4px rgba(239,68,68,0.3); }
+    50% { box-shadow: 0 0 14px rgba(239,68,68,0.7); }
+  }
 
   /* ── Hand & Action Panel ──────────────────────── */
-  .hand-actions { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+  .hand-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; flex-shrink: 0; overflow-y: auto; }
   .hand-panel, .action-panel {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 14px; flex: 1; min-width: 260px;
+    border-radius: var(--radius); padding: 10px; flex: 1; min-width: 220px;
   }
   .tile-hand { display: flex; gap: 6px; flex-wrap: wrap; }
   .hand-tile {
@@ -287,10 +309,14 @@
   }
   .hand-tile.playable { border-color: var(--gold); background: rgba(245,158,11,0.1); color: var(--gold); }
   .hand-tile.playable:hover { background: rgba(245,158,11,0.2); transform: translateY(-2px); }
+  .hand-tile.playable-found { border-color: var(--green); background: rgba(16,185,129,0.12); color: var(--green); cursor: pointer; }
+  .hand-tile.playable-found:hover { background: rgba(16,185,129,0.22); transform: translateY(-2px); }
+  .hand-tile.playable-merger { border-color: var(--red); background: rgba(239,68,68,0.12); color: #f87171; cursor: pointer; }
+  .hand-tile.playable-merger:hover { background: rgba(239,68,68,0.22); transform: translateY(-2px); }
   .hand-tile.unplayable { border-color: var(--red); opacity: 0.4; cursor: not-allowed; text-decoration: line-through; }
 
   /* ── Right Sidebar ────────────────────────────── */
-  .game-right { display: flex; flex-direction: column; gap: 12px; }
+  .game-right { display: flex; flex-direction: column; gap: 8px; min-height: 0; overflow: hidden; }
 
   .sidebar-tabs {
     display: flex; gap: 2px; background: var(--bg-card);
@@ -312,7 +338,7 @@
   /* ── Stock Market ─────────────────────────────── */
   .stock-market, .scoreboard {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 14px;
+    border-radius: var(--radius); padding: 10px;
   }
   .chain-row {
     display: flex; align-items: center; gap: 8px; padding: 6px 0;
@@ -430,8 +456,9 @@
   /* ── Quickstart overlay ───────────────────────── */
   .quickstart-banner {
     background: rgba(59,130,246,0.08); border: 1px solid rgba(59,130,246,0.2);
-    border-radius: var(--radius); padding: 10px 16px; font-size: 12px;
-    color: var(--text-dim); display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    border-radius: var(--radius); padding: 6px 12px; font-size: 11px;
+    color: var(--text-dim); display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    flex-shrink: 0;
   }
   .qs-tile {
     display: inline-flex; align-items: center; gap: 4px;
@@ -444,8 +471,8 @@
   /* ── Concede banner ───────────────────────────── */
   .concede-banner {
     background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
-    border-radius: var(--radius); padding: 12px 16px;
-    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    border-radius: var(--radius); padding: 6px 12px;
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap; flex-shrink: 0;
   }
   .concede-banner .text { flex: 1; font-size: 13px; color: var(--red); }
 
@@ -487,6 +514,110 @@
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border-light); border-radius: 3px; }
+
+  /* ── Your Turn Banner ──────────────────────────── */
+  #yourTurnBanner {
+    position: fixed; top: 0; left: 0; right: 0;
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #0a0f1a; font-weight: 700; font-size: 14px;
+    text-align: center; padding: 10px; z-index: 150;
+    transform: translateY(-100%); transition: transform 0.3s ease;
+    letter-spacing: 0.5px; pointer-events: none;
+  }
+  #yourTurnBanner.show { transform: translateY(0); }
+
+  /* ── Tile Hover Preview ────────────────────────── */
+  #tilePreview {
+    display: none; position: fixed;
+    background: #1a2332; border: 1px solid var(--border-light);
+    border-radius: 6px; padding: 7px 11px;
+    font-size: 11px; color: var(--text);
+    pointer-events: none; z-index: 300; white-space: nowrap;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  }
+  #tilePreview .tp-action { color: var(--gold); font-weight: 700; font-size: 12px; }
+  #tilePreview .tp-detail { color: var(--text-dim); margin-top: 2px; font-size: 10px; }
+
+  /* ── Board with axis headers ───────────────────── */
+  .board { grid-template-columns: 18px repeat(12, 1fr); }
+  .board-cell.header-cell {
+    background: transparent; border-color: transparent;
+    font-size: 8px; color: var(--text-muted); cursor: default;
+    font-family: 'JetBrains Mono', monospace; font-weight: 500;
+  }
+  .board-cell.header-cell:hover { transform: none; background: transparent; }
+
+  /* ── Action panel highlight when it's your turn ── */
+  .action-panel.your-turn {
+    border-color: rgba(245,158,11,0.5);
+    box-shadow: 0 0 0 1px rgba(245,158,11,0.2), 0 0 20px rgba(245,158,11,0.06);
+  }
+  .action-panel.your-turn .panel-title { color: var(--gold); }
+
+  /* ── Chain founding: tier + price on buttons ────── */
+  .chain-choice-btn { flex-direction: column; gap: 2px; }
+  .chain-btn-tier { font-size: 10px; color: var(--text-muted); font-weight: 400; }
+  .chain-btn-price { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--green); }
+
+  /* ── Merger decision values ─────────────────────── */
+  .merger-context {
+    background: rgba(0,0,0,0.25); border-radius: 6px;
+    padding: 8px 10px; margin-bottom: 10px; font-size: 11px;
+  }
+  .merger-context-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 3px 0;
+  }
+  .merger-context-row + .merger-context-row { border-top: 1px solid var(--border); }
+  .merger-ctx-label { color: var(--text-muted); }
+  .merger-ctx-val { font-family: 'JetBrains Mono', monospace; color: var(--text); font-size: 12px; }
+  .merger-preview {
+    font-size: 11px; color: var(--text-dim);
+    background: rgba(0,0,0,0.2); border-radius: 4px;
+    padding: 5px 8px; margin-top: 6px; font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* ── Buy stock: shares remaining ───────────────── */
+  .buy-shares-left { font-size: 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; min-width: 28px; text-align: right; }
+
+  /* ── Disconnected player ────────────────────────── */
+  .score-player.disconnected .score-player-name { opacity: 0.45; }
+  .offline-dot {
+    display: inline-block; width: 6px; height: 6px;
+    background: var(--red); border-radius: 50%;
+    margin-left: 5px; vertical-align: middle;
+    box-shadow: 0 0 4px rgba(239,68,68,0.6);
+  }
+
+  /* ── Log activity badge ─────────────────────────── */
+  .log-pulse {
+    display: inline-block; width: 7px; height: 7px;
+    background: var(--gold); border-radius: 50%;
+    margin-left: 4px; vertical-align: middle;
+    animation: logPulse 1s ease infinite;
+  }
+  @keyframes logPulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+  /* ── Spectator badge ────────────────────────────── */
+  .spectator-badge {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+    background: rgba(59,130,246,0.15); color: var(--blue);
+    border: 1px solid rgba(59,130,246,0.3); border-radius: 12px;
+    padding: 2px 8px; font-weight: 600;
+  }
+
+  /* ── Last action in header ──────────────────────── */
+  #lastAction {
+    font-size: 11px; color: var(--text-muted); font-style: italic;
+    max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  @media (max-width: 900px) {
+    .game-main { grid-template-columns: 1fr; }
+    .board-cell { font-size: 7px; min-height: 20px; }
+    .board-cell.header-cell { font-size: 7px; min-height: 20px; }
+    #lastAction { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -516,12 +647,11 @@
           </select>
         </div>
         <div class="input-group" style="flex-direction:row; align-items:center; gap:12px;">
-          <label style="margin:0; flex:1;">Starting tiles on board <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(turn off to return order tiles to bag)</span></label>
+          <label style="margin:0; flex:1; font-size:13px;">Quick-start</label>
           <label class="toggle-switch">
             <input type="checkbox" id="quickstartToggle" checked />
             <span class="toggle-slider"></span>
           </label>
-          <span style="font-size:11px; color:var(--text-muted);">Draw tiles for turn order</span>
         </div>
         <button class="btn" onclick="createRoom()">Create Table</button>
         <div class="or-divider">or join</div>
@@ -533,10 +663,7 @@
           <label>Your Name</label>
           <input type="text" id="joinName" placeholder="Enter your name" maxlength="20" />
         </div>
-        <div style="display:flex; gap:8px;">
-          <button class="btn btn-secondary" style="flex:1" onclick="joinRoom(false)">Join Table</button>
-          <button class="btn" style="flex:0 0 auto; background:transparent; border:1px solid var(--border-light); color:var(--text-dim); font-size:12px; padding:8px 14px;" onclick="joinRoom(true)">Spectate</button>
-        </div>
+        <button class="btn btn-secondary" onclick="joinRoom(false)">Join Table</button>
       </div>
     </div>
 
@@ -548,7 +675,8 @@
         <p>Become the wealthiest player by buying stock in hotel chains, growing them, and earning bonuses from mergers. At game end, the player with the most cash wins.</p>
 
         <h4>Setup</h4>
-        <p>Each player draws a tile to determine turn order — the player closest to 1A goes first. By default those tiles stay on the board; the host can turn this off so they go back in the bag instead. Each player then receives 6 tiles and $6,000 starting cash.</p>
+        <p>Each player draws a tile to determine turn order — the player closest to 1A goes first. Each player then receives 6 tiles and $6,000 starting cash.</p>
+        <p><strong>Quick-start</strong> (on by default): the order tiles stay on the board as a head start, giving the board some action from turn one. Turn it off and those tiles go back in the bag, starting with a completely empty board.</p>
 
         <h4>Hotel Chains</h4>
         <div class="chain-legend">
@@ -604,7 +732,9 @@
       <span id="turnLabel">Turn 1</span>
       <span id="currentPlayerLabel">—</span>
       <span class="turn-clock" id="turnClock">0:00</span>
+      <span id="spectatorBadge" style="display:none;" class="spectator-badge">Spectating</span>
     </div>
+    <div id="lastAction"></div>
     <div style="display:flex; gap:6px;">
       <button class="btn btn-sm btn-secondary" id="btnDeclareEnd" onclick="declareEnd()" style="display:none;">End Game</button>
       <button class="btn btn-sm btn-danger" onclick="initiateConcedeVote()">Vote End</button>
@@ -716,6 +846,8 @@
 </div>
 
 <div class="error-toast" id="errorToast"></div>
+<div id="yourTurnBanner">✦ YOUR TURN</div>
+<div id="tilePreview"><div class="tp-action" id="tpAction"></div><div class="tp-detail" id="tpDetail"></div></div>
 
 <script>
 const socket = io();
@@ -726,6 +858,8 @@ let buySelections = {};
 let turnClockInterval = null;
 let chatUnread = 0;
 let myName = '';
+let prevCurrentPlayerIdx = -1;
+let logEntryCount = 0;
 
 const chainColors = {
   Tower: '#e11d48', Luxor: '#f97316', American: '#3b82f6',
@@ -744,6 +878,12 @@ function switchTab(tab, btn) {
   btn.classList.add('active');
   document.getElementById('tab-' + tab).classList.add('active');
   if (tab === 'chat') { chatUnread = 0; updateChatBadge(); }
+  if (tab === 'log') { clearLogPulse(); }
+}
+
+function clearLogPulse() {
+  const logBtn = document.querySelector('.sidebar-tab[data-tab="log"]');
+  if (logBtn) { const dot = logBtn.querySelector('.log-pulse'); if (dot) dot.remove(); }
 }
 
 /* ── Landing Actions ───────────────────────────── */
@@ -821,20 +961,8 @@ function attemptReconnect(code, name, token) {
     return;
   }
 
-  // New device — check room state and adapt the join buttons
+  // New device — pre-fill the code; server will auto-spectate if game is in progress
   document.getElementById('joinCode').value = code;
-  socket.emit('getRoomStatus', { code }, (status) => {
-    if (!status.exists) return; // room gone, leave form as-is
-    if (status.gameInProgress) {
-      // Game already running — swap buttons so it's clear they'll be a spectator
-      const btnRow = document.querySelector('#joinCode')
-        .closest('.landing-card')
-        .querySelector('div[style*="display:flex"]');
-      if (btnRow) {
-        btnRow.innerHTML = `<button class="btn btn-secondary" style="flex:1" onclick="joinRoom(true)">Watch Game</button>`;
-      }
-    }
-  });
 })();
 
 function toggleReady() { socket.emit('toggleReady'); }
@@ -852,6 +980,11 @@ socket.on('lobbyUpdate', (data) => {
 });
 
 socket.on('gameStarted', () => { showScreen('game'); startTurnClock(); });
+socket.on('sessionToken', ({ token }) => {
+  const code = document.getElementById('lobbyCode').textContent;
+  if (code && code !== '----') saveSession(code, myName, token);
+});
+
 socket.on('backToLobby', () => {
   gameState = null;
   document.getElementById('gameOverOverlay').style.display = 'none';
@@ -868,8 +1001,28 @@ socket.on('disconnect', () => {
 
 /* ── Game State ────────────────────────────────── */
 socket.on('gameState', (state) => {
+  const prevIdx = prevCurrentPlayerIdx;
   gameState = state;
   myIdx = state.myIdx;
+
+  // Show your-turn banner when the turn flips to you
+  const isNowMyTurn = state.currentPlayerIdx === myIdx && state.phase !== 'gameOver';
+  const turnChanged = state.currentPlayerIdx !== prevIdx;
+  if (isNowMyTurn && turnChanged) showYourTurnBanner();
+  prevCurrentPlayerIdx = state.currentPlayerIdx;
+
+  // Log activity pulse when log tab isn't visible
+  const newCount = (state.log || []).length;
+  if (newCount > logEntryCount && !document.getElementById('tab-log').classList.contains('active')) {
+    const logBtn = document.querySelector('.sidebar-tab[data-tab="log"]');
+    if (logBtn && !logBtn.querySelector('.log-pulse')) {
+      const dot = document.createElement('span');
+      dot.className = 'log-pulse';
+      logBtn.appendChild(dot);
+    }
+  }
+  logEntryCount = newCount;
+
   renderBoard();
   renderHand();
   renderActionPanel();
@@ -883,6 +1036,12 @@ socket.on('gameState', (state) => {
 });
 
 socket.on('actionError', (msg) => showError(msg));
+
+function showYourTurnBanner() {
+  const banner = document.getElementById('yourTurnBanner');
+  banner.classList.add('show');
+  setTimeout(() => banner.classList.remove('show'), 2500);
+}
 
 /* ── Turn Clock ────────────────────────────────── */
 function startTurnClock() {
@@ -915,30 +1074,109 @@ function renderQuickstart() {
   ).join('');
 }
 
+/* ── Tile placement type (for color coding) ────── */
+function getTilePlacementType(tile) {
+  const st = gameState;
+  const row = parseInt(tile) - 1;
+  const col = tile.replace(/[0-9]/g, '').charCodeAt(0) - 65;
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  const adjChains = new Set(); let adjLone = 0;
+  for (const [dr,dc] of dirs) {
+    const nr = row+dr, nc = col+dc;
+    if (nr<0||nr>8||nc<0||nc>11) continue;
+    const cell = st.board[nr][nc];
+    if (cell === 'lone') adjLone++;
+    else if (cell) adjChains.add(cell);
+  }
+  if (adjChains.size >= 2) return 'merger';
+  if (adjLone > 0 && adjChains.size === 0) return 'found';
+  return 'normal';
+}
+
+/* ── Client-side tile analysis (for hover preview) ── */
+function analyzeTileClient(tile) {
+  const st = gameState;
+  const num = parseInt(tile); const letter = tile.replace(/[0-9]/g, '');
+  const row = num - 1; const col = letter.charCodeAt(0) - 65;
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  const adjChains = new Set(); let adjLone = 0;
+  for (const [dr,dc] of dirs) {
+    const nr = row+dr, nc = col+dc;
+    if (nr<0||nr>8||nc<0||nc>11) continue;
+    const cell = st.board[nr][nc];
+    if (cell === 'lone') adjLone++;
+    else if (cell) adjChains.add(cell);
+  }
+  if (adjChains.size >= 2) {
+    const chains = [...adjChains];
+    const sizes = chains.map(ch => `${ch}(${st.chains[ch].size})`).join(' + ');
+    const safeCount = chains.filter(ch => st.chains[ch].safe).length;
+    if (safeCount >= 2) return { action: 'Unplayable', detail: 'Would merge two safe chains' };
+    return { action: `Merger!`, detail: sizes };
+  }
+  if (adjChains.size === 1) {
+    const ch = [...adjChains][0];
+    return { action: `Expand ${ch}`, detail: `${st.chains[ch].size} → ${st.chains[ch].size + 1} tiles · $${st.chains[ch].price}` };
+  }
+  if (adjLone > 0) return { action: 'Found new chain', detail: 'You pick the name + get 1 free share' };
+  return { action: 'Lone tile', detail: 'No adjacent tiles — just a marker' };
+}
+
 /* ── Render Board ──────────────────────────────── */
 function renderBoard() {
   const board = document.getElementById('board');
   const st = gameState;
-  let html = '';
   const myTiles = st.players[myIdx]?.tiles || [];
   const playable = st.playableTiles || [];
+  const isMyPlaceTurn = st.phase === 'placeTile' && st.currentPlayerIdx === myIdx;
+  let html = '';
+
+  // Corner + column headers (A–L)
+  html += `<div class="board-cell header-cell"></div>`;
+  for (let c = 0; c < 12; c++) html += `<div class="board-cell header-cell">${String.fromCharCode(65+c)}</div>`;
 
   for (let r = 0; r < 9; r++) {
+    // Row header
+    html += `<div class="board-cell header-cell">${r+1}</div>`;
     for (let c = 0; c < 12; c++) {
-      const tile = `${r + 1}${String.fromCharCode(65 + c)}`;
+      const tile = `${r+1}${String.fromCharCode(65+c)}`;
       const cell = st.board[r][c];
       let cls = 'board-cell';
       if (cell === 'lone') cls += ' lone';
       else if (cell) cls += ` chain-${cell}`;
-      if (playable.includes(tile)) cls += ' playable';
-      else if (myTiles.includes(tile)) {
-        cls += (st.phase === 'placeTile' && st.currentPlayerIdx === myIdx) ? ' unplayable-hand' : ' in-hand';
-      }
+      if (playable.includes(tile)) {
+        const type = isMyPlaceTurn ? getTilePlacementType(tile) : 'normal';
+        cls += type === 'merger' ? ' playable-merger' : type === 'found' ? ' playable-found' : ' playable';
+      } else if (myTiles.includes(tile)) cls += isMyPlaceTurn ? ' unplayable-hand' : ' in-hand';
       const click = playable.includes(tile) ? `onclick="placeTile('${tile}')"` : '';
-      html += `<div class="${cls}" ${click}>${tile}</div>`;
+      const hover = playable.includes(tile) ? `onmouseenter="showTilePreview(event,'${tile}')" onmouseleave="hideTilePreview()"` : (cell && cell !== 'lone' ? `onmouseenter="showChainPreview(event,'${cell}')" onmouseleave="hideTilePreview()"` : '');
+      html += `<div class="${cls}" ${click} ${hover}>${tile}</div>`;
     }
   }
   board.innerHTML = html;
+}
+
+function showTilePreview(e, tile) {
+  const info = analyzeTileClient(tile);
+  document.getElementById('tpAction').textContent = info.action;
+  document.getElementById('tpDetail').textContent = info.detail;
+  const el = document.getElementById('tilePreview');
+  el.style.display = 'block';
+  positionPreview(e, el);
+}
+function showChainPreview(e, chain) {
+  const info = gameState.chains[chain];
+  document.getElementById('tpAction').textContent = chain;
+  document.getElementById('tpDetail').textContent = `${info.size} tiles · $${info.price}${info.safe ? ' · SAFE' : ''}`;
+  const el = document.getElementById('tilePreview');
+  el.style.display = 'block';
+  positionPreview(e, el);
+}
+function hideTilePreview() { document.getElementById('tilePreview').style.display = 'none'; }
+function positionPreview(e, el) {
+  const x = Math.min(e.clientX + 12, window.innerWidth - el.offsetWidth - 8);
+  const y = Math.max(e.clientY - 40, 8);
+  el.style.left = x + 'px'; el.style.top = y + 'px';
 }
 
 /* ── Render Hand ───────────────────────────────── */
@@ -950,32 +1188,67 @@ function renderHand() {
 
   hand.innerHTML = tiles.map(t => {
     const isP = playable.includes(t);
-    const cls = isMyTurn ? (isP ? 'hand-tile playable' : 'hand-tile unplayable') : 'hand-tile';
+    let cls = 'hand-tile';
+    if (isMyTurn) {
+      if (isP) {
+        const type = getTilePlacementType(t);
+        cls += type === 'merger' ? ' playable-merger' : type === 'found' ? ' playable-found' : ' playable';
+      } else {
+        cls += ' unplayable';
+      }
+    }
     const click = isP ? `onclick="placeTile('${t}')"` : '';
     return `<div class="${cls}" ${click}>${t}</div>`;
   }).join('');
 }
 
 /* ── Render Action Panel ───────────────────────── */
+const CHAIN_TIER_INFO = {
+  Tower: { tier: '$', label: 'Cheap' }, Luxor: { tier: '$', label: 'Cheap' },
+  American: { tier: '$$', label: 'Mid' }, Worldwide: { tier: '$$', label: 'Mid' }, Festival: { tier: '$$', label: 'Mid' },
+  Imperial: { tier: '$$$', label: 'Expensive' }, Continental: { tier: '$$$', label: 'Expensive' },
+};
+const CHAIN_START_PRICE = { Tower: 200, Luxor: 200, American: 300, Worldwide: 300, Festival: 300, Imperial: 400, Continental: 400 };
+
 function renderActionPanel() {
   const st = gameState;
+  const panel = document.getElementById('actionPanel');
   const title = document.getElementById('actionTitle');
   const content = document.getElementById('actionContent');
+  const isMyActivePhase = st.currentPlayerIdx === myIdx ||
+    (st.phase === 'mergerDecision' && st.pendingMerger?.decidingPlayer === myIdx);
+
+  panel.classList.toggle('your-turn', isMyActivePhase && st.phase !== 'gameOver');
 
   if (st.phase === 'placeTile' && st.currentPlayerIdx !== myIdx) {
+    const cur = st.players[st.currentPlayerIdx];
     title.textContent = 'Waiting';
-    content.innerHTML = `<div style="color:var(--text-muted);font-size:12px">${escapeHtml(st.players[st.currentPlayerIdx].name)}'s turn to place a tile</div>`;
+    content.innerHTML = `<div style="color:var(--text-muted);font-size:12px">
+      <span style="color:var(--gold);font-weight:600">${escapeHtml(cur.name)}</span> is placing a tile
+      <div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Cash: $${cur.cash.toLocaleString()} · ${cur.tileCount} tiles</div>
+    </div>`;
     return;
   }
   if (st.phase === 'placeTile' && st.currentPlayerIdx === myIdx) {
     title.textContent = 'Place a Tile';
-    content.innerHTML = `<div style="color:var(--text-dim);font-size:12px">Click a highlighted tile on the board or in your hand</div>`;
+    const playable = st.playableTiles || [];
+    content.innerHTML = `<div style="color:var(--text-dim);font-size:12px">
+      Click a <span style="color:var(--gold)">highlighted tile</span> on the board or your hand.
+      <div style="margin-top:4px;font-size:11px;color:var(--text-muted)">${playable.length} playable tile${playable.length !== 1 ? 's' : ''} · hover for preview</div>
+    </div>`;
     return;
   }
   if (st.phase === 'chooseChain' && st.currentPlayerIdx === myIdx) {
-    title.textContent = 'Found a Hotel Chain';
-    let h = '<div class="chain-choice-grid">';
-    for (const ch of st.availableChains) h += `<button class="chain-choice-btn" style="border-color:${chainColors[ch]}" onclick="chooseChain('${ch}')">${ch}</button>`;
+    title.textContent = 'Found a Hotel Chain!';
+    let h = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Choose a name — you get 1 free share</div><div class="chain-choice-grid">';
+    for (const ch of st.availableChains) {
+      const ti = CHAIN_TIER_INFO[ch];
+      h += `<button class="chain-choice-btn" style="border-color:${chainColors[ch]}" onclick="chooseChain('${ch}')">
+        <span style="color:${chainColors[ch]};font-weight:600">${ch}</span>
+        <span class="chain-btn-tier">${ti.tier} ${ti.label}</span>
+        <span class="chain-btn-price">from $${CHAIN_START_PRICE[ch]}</span>
+      </button>`;
+    }
     h += '</div>';
     content.innerHTML = h;
     return;
@@ -983,8 +1256,15 @@ function renderActionPanel() {
   if (st.phase === 'chooseMergerSurvivor' && st.currentPlayerIdx === myIdx) {
     title.textContent = 'Choose Surviving Chain';
     const tied = st.pendingMerger?.tiedChains || [];
-    let h = '<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">These chains are tied. Pick the survivor:</div><div class="chain-choice-grid">';
-    for (const ch of tied) h += `<button class="chain-choice-btn" style="border-color:${chainColors[ch]}" onclick="chooseMergerSurvivor('${ch}')">${ch}</button>`;
+    let h = '<div style="font-size:11px;color:var(--text-dim);margin-bottom:8px">These chains are the same size — you pick the survivor:</div><div class="chain-choice-grid">';
+    for (const ch of tied) {
+      const info = st.chains[ch];
+      h += `<button class="chain-choice-btn" style="border-color:${chainColors[ch]}" onclick="chooseMergerSurvivor('${ch}')">
+        <span style="color:${chainColors[ch]};font-weight:600">${ch}</span>
+        <span class="chain-btn-tier">${info.size} tiles</span>
+        <span class="chain-btn-price">$${info.price}</span>
+      </button>`;
+    }
     h += '</div>';
     content.innerHTML = h;
     return;
@@ -994,22 +1274,35 @@ function renderActionPanel() {
     if (pm && pm.decidingPlayer === myIdx) {
       const dc = pm.defunctChains[pm.currentDefunctIdx];
       const held = st.players[myIdx].stocks[dc] || 0;
-      title.textContent = `Merger: ${dc} Stock`;
-      let h = `<div style="font-size:12px;color:var(--text-dim);margin-bottom:8px">You hold <strong>${held}</strong> shares of <span style="color:${chainColors[dc]}">${dc}</span>. Survivor: <span style="color:${chainColors[pm.survivor]}">${pm.survivor}</span></div>`;
+      const dcPrice = st.chains[dc]?.price || 0;
+      const survivorPrice = st.chains[pm.survivor]?.price || 0;
+      title.textContent = `${dc} → ${pm.survivor}`;
+      let h = `<div class="merger-context">
+        <div class="merger-context-row"><span class="merger-ctx-label">You hold</span><span class="merger-ctx-val" style="color:${chainColors[dc]}">${held} ${dc}</span></div>
+        <div class="merger-context-row"><span class="merger-ctx-label">Sell price</span><span class="merger-ctx-val">$${dcPrice} / share</span></div>
+        <div class="merger-context-row"><span class="merger-ctx-label">Survivor</span><span class="merger-ctx-val" style="color:${chainColors[pm.survivor]}">${pm.survivor} · $${survivorPrice}</span></div>
+        <div class="merger-context-row"><span class="merger-ctx-label">Trade rate</span><span class="merger-ctx-val">2 ${dc} → 1 ${pm.survivor}</span></div>
+      </div>`;
       h += `<div class="merger-sliders"><label>Sell: <span id="sellVal">0</span></label><input type="range" id="sellSlider" min="0" max="${held}" value="0" oninput="updateMergerSliders()"/>`;
       h += `<label>Trade (2→1): <span id="tradeVal">0</span></label><input type="range" id="tradeSlider" min="0" max="${held}" value="0" step="2" oninput="updateMergerSliders()"/>`;
-      h += `<div class="merger-summary" id="mergerSummary">Keep: ${held}</div></div>`;
-      h += `<button class="btn" style="margin-top:10px" onclick="submitMergerDecision(${held})">Confirm</button>`;
+      h += `<div class="merger-preview" id="mergerSummary">Keep all ${held}</div></div>`;
+      h += `<button class="btn" style="margin-top:8px;width:100%" onclick="submitMergerDecision(${held})">Confirm</button>`;
       content.innerHTML = h;
       return;
     } else {
+      const deciding = st.players[pm?.decidingPlayer];
       title.textContent = 'Merger in Progress';
-      content.innerHTML = `<div style="color:var(--text-dim);font-size:12px">${escapeHtml(st.players[pm?.decidingPlayer]?.name || '?')} is deciding...</div>`;
+      content.innerHTML = `<div style="color:var(--text-dim);font-size:12px">
+        <span style="color:var(--gold)">${escapeHtml(deciding?.name || '?')}</span> is deciding their shares
+        <div style="margin-top:4px;font-size:11px;color:var(--text-muted)">
+          ${pm.defunctChains[pm.currentDefunctIdx]} → ${pm.survivor}
+        </div>
+      </div>`;
       return;
     }
   }
   if (st.phase === 'buyStock' && st.currentPlayerIdx === myIdx) {
-    title.textContent = 'Buy Stock (up to 3)';
+    title.textContent = 'Buy Stock';
     buySelections = {};
     const cash = st.players[myIdx].cash;
     let h = '';
@@ -1017,18 +1310,34 @@ function renderActionPanel() {
       const info = st.chains[ch];
       if (!info.active) continue;
       const totalIssued = st.players.reduce((s, p) => s + (p.stocks[ch] || 0), 0);
-      if (25 - totalIssued <= 0) continue;
-      h += `<div class="buy-row"><div class="chain-dot" style="background:${chainColors[ch]}"></div><div class="buy-name">${ch}</div><div class="buy-price">$${info.price}</div><div class="buy-counter"><button onclick="adjustBuy('${ch}',-1,${info.price},${cash})">−</button><span id="buy-${ch}">0</span><button onclick="adjustBuy('${ch}',1,${info.price},${cash})">+</button></div></div>`;
+      const remaining = 25 - totalIssued;
+      if (remaining <= 0) continue;
+      h += `<div class="buy-row">
+        <div class="chain-dot" style="background:${chainColors[ch]}"></div>
+        <div class="buy-name">${ch}</div>
+        <div class="buy-price">$${info.price}</div>
+        <div class="buy-shares-left">${remaining} left</div>
+        <div class="buy-counter">
+          <button onclick="adjustBuy('${ch}',-1,${info.price},${cash})">−</button>
+          <span id="buy-${ch}">0</span>
+          <button onclick="adjustBuy('${ch}',1,${info.price},${cash})">+</button>
+        </div>
+      </div>`;
     }
-    h += `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Total: <span id="buyTotal">$0</span> / <span id="buyCount">0</span> of 3</div>`;
-    h += `<button class="btn" style="margin-top:8px" onclick="confirmBuy()">Confirm Purchase</button>`;
-    h += `<button class="btn btn-secondary" style="margin-top:4px" onclick="confirmBuy(true)">Skip</button>`;
+    const canBuy = h !== '';
+    if (canBuy) h += `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Total: <span id="buyTotal" style="color:var(--text)">$0</span> / <span id="buyCount" style="color:var(--text)">0</span> of 3 · $${cash.toLocaleString()} cash</div>`;
+    h += `<div style="display:flex;gap:6px;margin-top:8px;align-items:center">`;
+    if (canBuy) h += `<button class="btn" style="flex:1" onclick="confirmBuy()">Buy Stock</button>`;
+    h += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="confirmBuy(true)">Skip</button></div>`;
     content.innerHTML = h;
     return;
   }
   if (st.phase === 'buyStock' && st.currentPlayerIdx !== myIdx) {
+    const cur = st.players[st.currentPlayerIdx];
     title.textContent = 'Waiting';
-    content.innerHTML = `<div style="color:var(--text-muted);font-size:12px">${escapeHtml(st.players[st.currentPlayerIdx].name)} is buying stock...</div>`;
+    content.innerHTML = `<div style="color:var(--text-muted);font-size:12px">
+      <span style="color:var(--gold);font-weight:600">${escapeHtml(cur.name)}</span> is buying stock...
+    </div>`;
     return;
   }
   if (st.phase === 'gameOver') { title.textContent = 'Game Over'; content.innerHTML = ''; return; }
@@ -1085,7 +1394,9 @@ function renderStockMarket() {
   const el = document.getElementById('stockMarket');
   el.innerHTML = Object.entries(gameState.chains).map(([name, info]) => {
     if (!info.active) return `<div class="chain-row chain-inactive"><div class="chain-dot" style="background:${chainColors[name]};opacity:0.3"></div><div class="chain-name">${name}</div><div class="chain-size">—</div><div class="chain-price">—</div></div>`;
-    return `<div class="chain-row"><div class="chain-dot" style="background:${chainColors[name]}"></div><div class="chain-name">${name}</div><div class="chain-size">${info.size}</div><div class="chain-price">$${info.price}</div>${info.safe ? '<span class="chain-safe">SAFE</span>' : ''}</div>`;
+    const issued = gameState.players.reduce((s, p) => s + (p.stocks[name] || 0), 0);
+    const remaining = 25 - issued;
+    return `<div class="chain-row"><div class="chain-dot" style="background:${chainColors[name]}"></div><div class="chain-name">${name}</div><div class="chain-size">${info.size}</div><div class="chain-price">$${info.price}</div><div class="buy-shares-left">${remaining}</div>${info.safe ? '<span class="chain-safe">SAFE</span>' : ''}</div>`;
   }).join('');
 }
 
@@ -1094,9 +1405,11 @@ function renderScoreboard() {
   const el = document.getElementById('scoreboard');
   el.innerHTML = gameState.players.map((p, i) => {
     const cur = i === gameState.currentPlayerIdx;
+    const dc = !!p.disconnected;
     const badges = Object.entries(p.stocks||{}).filter(([,v])=>v>0).map(([ch,v])=>`<span class="stock-badge" style="background:${chainColors[ch]}22;color:${chainColors[ch]}">${ch.slice(0,3)} ${v}</span>`).join('');
     const timer = (gameState.turnTimers[i]||0) + (cur ? Math.floor((Date.now()-gameState.turnStartTime)/1000) : 0);
-    return `<div class="score-player"><div class="score-player-header"><span class="score-player-name ${cur?'current':''}">${cur?'▸ ':''}${escapeHtml(p.name)}${i===myIdx?' (you)':''}</span><span class="score-cash">$${p.cash.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="score-stocks">${badges||'<span style="color:var(--text-muted);font-size:10px">No stock</span>'}</div><span class="score-timer">${Math.floor(timer/60)}:${String(timer%60).padStart(2,'0')}</span></div></div>`;
+    const nameHtml = `${cur?'▸ ':''}${escapeHtml(p.name)}${i===myIdx?' (you)':''}${dc?'<span class="offline-dot" title="Disconnected"></span>':''}`;
+    return `<div class="score-player${dc?' disconnected':''}"><div class="score-player-header"><span class="score-player-name ${cur?'current':''}">${nameHtml}</span><span class="score-cash">$${p.cash.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="score-stocks">${badges||'<span style="color:var(--text-muted);font-size:10px">No stock</span>'}</div><span class="score-timer">${Math.floor(timer/60)}:${String(timer%60).padStart(2,'0')}</span></div></div>`;
   }).join('');
 }
 
@@ -1112,6 +1425,11 @@ function renderHeader() {
   document.getElementById('turnLabel').textContent = `Turn ${gameState.turnNumber}`;
   document.getElementById('currentPlayerLabel').textContent = gameState.players[gameState.currentPlayerIdx]?.name || '';
   document.getElementById('btnDeclareEnd').style.display = (gameState.canDeclareEnd && gameState.currentPlayerIdx === myIdx) ? 'inline-block' : 'none';
+  // Spectator badge
+  document.getElementById('spectatorBadge').style.display = myIdx === -1 ? '' : 'none';
+  // Last action strip (most recent log entry)
+  const log = gameState.log || [];
+  document.getElementById('lastAction').textContent = log.length ? log[log.length - 1] : '';
 }
 
 /* ── Concede Banner ────────────────────────────── */
