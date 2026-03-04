@@ -2,7 +2,7 @@
 
 A real-time multiplayer implementation of the classic board game **Acquire** (1964, Sid Sackson).
 
-**Live:** http://3.238.134.173
+**Live:** https://playonlineacquire.com
 
 ---
 
