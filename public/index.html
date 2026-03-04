@@ -516,7 +516,7 @@
           </select>
         </div>
         <div class="input-group" style="flex-direction:row; align-items:center; gap:12px;">
-          <label style="margin:0; flex:1;">Quickstart Draw</label>
+          <label style="margin:0; flex:1;">Quickstart Draw <span style="font-size:11px;color:var(--text-muted);font-weight:400;">(turn off to skip starting order tiles)</span></label>
           <label class="toggle-switch">
             <input type="checkbox" id="quickstartToggle" checked />
             <span class="toggle-slider"></span>
@@ -549,13 +549,13 @@
 
         <h4>Hotel Chains</h4>
         <div class="chain-legend">
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#e11d48"></div>Tower ($$)</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#f97316"></div>Luxor ($$)</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#3b82f6"></div>American ($)</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#8b5cf6"></div>Worldwide ($)</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#06b6d4"></div>Festival ($)</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#10b981"></div>Imperial</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#eab308"></div>Continental</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#e11d48"></div>Tower ($)</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#f97316"></div>Luxor ($)</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#3b82f6"></div>American ($$)</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#8b5cf6"></div>Worldwide ($$)</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#06b6d4"></div>Festival ($$)</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#10b981"></div>Imperial ($$$)</div>
+          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#eab308"></div>Continental ($$$)</div>
         </div>
 
         <h4>Your Turn</h4>
@@ -1132,7 +1132,7 @@ const RULES_KB = {
   'safe chain': `A chain with 11 or more tiles is "safe" — it cannot be taken over. Two safe chains can never merge (making such tile placements permanently illegal). Safe chains can still absorb smaller chains.`,
   'trading stock': `During a merger, you can trade shares of the defunct chain 2-for-1 into the surviving chain. This is optional — you can also sell at current price, or keep shares hoping that chain gets re-founded later. Trading is especially good when the defunct chain was small (cheap shares) and the survivor is large (expensive shares).`,
   'founding': `When you place a tile adjacent to one or more lone tiles and no existing chain, you found a new chain! Choose from any inactive chain name. The founder receives 1 FREE share. Then you can buy up to 3 more. You cannot found a chain if all 7 are already on the board.`,
-  'chain tiers': `Chains have 3 price tiers. Cheap: Imperial, Continental. Mid: American, Worldwide, Festival. Expensive: Tower, Luxor. Higher tiers cost more per share but also pay bigger bonuses.`,
+  'chain tiers': `Chains have 3 price tiers. Cheap ($): Tower, Luxor. Mid ($$): American, Worldwide, Festival. Expensive ($$$): Imperial, Continental. Higher tiers cost more per share but also pay bigger bonuses when merged.`,
   'default': `I'm not sure about that specific question. Try asking about: tile placement, mergers, buying stock, end game conditions, bonuses, safe chains, trading stock, or founding chains!`
 };
 
