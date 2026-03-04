@@ -266,12 +266,32 @@
     border-color: var(--gold) !important; box-shadow: 0 0 8px rgba(245,158,11,0.4);
   }
   .board-cell.playable:hover { background: rgba(245,158,11,0.3); transform: scale(1.05); }
+  .board-cell.playable-found {
+    cursor: pointer; animation: pulseFound 1.5s ease-in-out infinite;
+    border-color: var(--green) !important; box-shadow: 0 0 8px rgba(16,185,129,0.4);
+    background: rgba(16,185,129,0.12);
+  }
+  .board-cell.playable-found:hover { background: rgba(16,185,129,0.28); transform: scale(1.05); }
+  .board-cell.playable-merger {
+    cursor: pointer; animation: pulseMerger 1.5s ease-in-out infinite;
+    border-color: var(--red) !important; box-shadow: 0 0 8px rgba(239,68,68,0.4);
+    background: rgba(239,68,68,0.12);
+  }
+  .board-cell.playable-merger:hover { background: rgba(239,68,68,0.28); transform: scale(1.05); }
   .board-cell.in-hand { border-color: var(--gold-dim) !important; background: rgba(245,158,11,0.08); }
   .board-cell.unplayable-hand { border-color: var(--red) !important; background: rgba(239,68,68,0.08); }
 
   @keyframes pulse {
     0%, 100% { box-shadow: 0 0 4px rgba(245,158,11,0.3); }
     50% { box-shadow: 0 0 12px rgba(245,158,11,0.6); }
+  }
+  @keyframes pulseFound {
+    0%, 100% { box-shadow: 0 0 4px rgba(16,185,129,0.3); }
+    50% { box-shadow: 0 0 14px rgba(16,185,129,0.7); }
+  }
+  @keyframes pulseMerger {
+    0%, 100% { box-shadow: 0 0 4px rgba(239,68,68,0.3); }
+    50% { box-shadow: 0 0 14px rgba(239,68,68,0.7); }
   }
 
   /* ── Hand & Action Panel ──────────────────────── */
@@ -289,6 +309,10 @@
   }
   .hand-tile.playable { border-color: var(--gold); background: rgba(245,158,11,0.1); color: var(--gold); }
   .hand-tile.playable:hover { background: rgba(245,158,11,0.2); transform: translateY(-2px); }
+  .hand-tile.playable-found { border-color: var(--green); background: rgba(16,185,129,0.12); color: var(--green); cursor: pointer; }
+  .hand-tile.playable-found:hover { background: rgba(16,185,129,0.22); transform: translateY(-2px); }
+  .hand-tile.playable-merger { border-color: var(--red); background: rgba(239,68,68,0.12); color: #f87171; cursor: pointer; }
+  .hand-tile.playable-merger:hover { background: rgba(239,68,68,0.22); transform: translateY(-2px); }
   .hand-tile.unplayable { border-color: var(--red); opacity: 0.4; cursor: not-allowed; text-decoration: line-through; }
 
   /* ── Right Sidebar ────────────────────────────── */
@@ -956,6 +980,11 @@ socket.on('lobbyUpdate', (data) => {
 });
 
 socket.on('gameStarted', () => { showScreen('game'); startTurnClock(); });
+socket.on('sessionToken', ({ token }) => {
+  const code = document.getElementById('lobbyCode').textContent;
+  if (code && code !== '----') saveSession(code, myName, token);
+});
+
 socket.on('backToLobby', () => {
   gameState = null;
   document.getElementById('gameOverOverlay').style.display = 'none';
@@ -1045,6 +1074,25 @@ function renderQuickstart() {
   ).join('');
 }
 
+/* ── Tile placement type (for color coding) ────── */
+function getTilePlacementType(tile) {
+  const st = gameState;
+  const row = parseInt(tile) - 1;
+  const col = tile.replace(/[0-9]/g, '').charCodeAt(0) - 65;
+  const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
+  const adjChains = new Set(); let adjLone = 0;
+  for (const [dr,dc] of dirs) {
+    const nr = row+dr, nc = col+dc;
+    if (nr<0||nr>8||nc<0||nc>11) continue;
+    const cell = st.board[nr][nc];
+    if (cell === 'lone') adjLone++;
+    else if (cell) adjChains.add(cell);
+  }
+  if (adjChains.size >= 2) return 'merger';
+  if (adjLone > 0 && adjChains.size === 0) return 'found';
+  return 'normal';
+}
+
 /* ── Client-side tile analysis (for hover preview) ── */
 function analyzeTileClient(tile) {
   const st = gameState;
@@ -1096,8 +1144,10 @@ function renderBoard() {
       let cls = 'board-cell';
       if (cell === 'lone') cls += ' lone';
       else if (cell) cls += ` chain-${cell}`;
-      if (playable.includes(tile)) cls += ' playable';
-      else if (myTiles.includes(tile)) cls += isMyPlaceTurn ? ' unplayable-hand' : ' in-hand';
+      if (playable.includes(tile)) {
+        const type = isMyPlaceTurn ? getTilePlacementType(tile) : 'normal';
+        cls += type === 'merger' ? ' playable-merger' : type === 'found' ? ' playable-found' : ' playable';
+      } else if (myTiles.includes(tile)) cls += isMyPlaceTurn ? ' unplayable-hand' : ' in-hand';
       const click = playable.includes(tile) ? `onclick="placeTile('${tile}')"` : '';
       const hover = playable.includes(tile) ? `onmouseenter="showTilePreview(event,'${tile}')" onmouseleave="hideTilePreview()"` : (cell && cell !== 'lone' ? `onmouseenter="showChainPreview(event,'${cell}')" onmouseleave="hideTilePreview()"` : '');
       html += `<div class="${cls}" ${click} ${hover}>${tile}</div>`;
@@ -1138,7 +1188,15 @@ function renderHand() {
 
   hand.innerHTML = tiles.map(t => {
     const isP = playable.includes(t);
-    const cls = isMyTurn ? (isP ? 'hand-tile playable' : 'hand-tile unplayable') : 'hand-tile';
+    let cls = 'hand-tile';
+    if (isMyTurn) {
+      if (isP) {
+        const type = getTilePlacementType(t);
+        cls += type === 'merger' ? ' playable-merger' : type === 'found' ? ' playable-found' : ' playable';
+      } else {
+        cls += ' unplayable';
+      }
+    }
     const click = isP ? `onclick="placeTile('${t}')"` : '';
     return `<div class="${cls}" ${click}>${t}</div>`;
   }).join('');

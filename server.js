@@ -12,7 +12,7 @@ const engine = require('./gameEngine');
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: '*' } });
+const io = new Server(server, { cors: { origin: ['https://playonlineacquire.com', 'http://localhost:3000'] } });
 
 app.use(express.static('public'));
 
@@ -267,7 +267,9 @@ io.on('connection', (socket) => {
 
     while (room.spectators.length > 0 && room.players.length < room.config.maxPlayers) {
       const s = room.spectators.shift();
-      room.players.push({ name: s.name, socketId: s.socketId, ready: false, idx: room.players.length });
+      const token = randomUUID();
+      room.players.push({ name: s.name, socketId: s.socketId, ready: false, idx: room.players.length, token });
+      io.to(s.socketId).emit('sessionToken', { token });
     }
 
     io.to(currentRoom).emit('backToLobby');
