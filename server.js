@@ -81,7 +81,7 @@ io.on('connection', (socket) => {
     broadcastLobby(code);
   });
 
-  socket.on('joinRoom', ({ name, code }, cb) => {
+  socket.on('joinRoom', ({ name, code, spectate }, cb) => {
     const room = rooms[code];
     if (!room) return cb({ error: 'Room not found' });
 
@@ -89,22 +89,17 @@ io.on('connection', (socket) => {
     playerName = name;
     socket.join(code);
 
-    if (room.game) {
+    if (spectate || room.game || room.players.length >= room.config.maxPlayers) {
       room.spectators.push({ name, socketId: socket.id });
       cb({ ok: true, spectator: true });
       broadcastLobby(code);
-      broadcastState(code);
+      if (room.game) broadcastState(code);
       return;
     }
 
-    if (room.players.length >= room.config.maxPlayers) {
-      room.spectators.push({ name, socketId: socket.id });
-      cb({ ok: true, spectator: true });
-    } else {
-      const token = randomUUID();
-      room.players.push({ name, socketId: socket.id, ready: false, idx: room.players.length, token });
-      cb({ ok: true, spectator: false, token });
-    }
+    const token = randomUUID();
+    room.players.push({ name, socketId: socket.id, ready: false, idx: room.players.length, token });
+    cb({ ok: true, spectator: false, token });
     broadcastLobby(code);
   });
 
