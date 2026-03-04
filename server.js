@@ -81,6 +81,17 @@ io.on('connection', (socket) => {
     broadcastLobby(code);
   });
 
+  socket.on('getRoomStatus', ({ code }, cb) => {
+    const room = rooms[code];
+    if (!room) return cb({ exists: false });
+    cb({
+      exists: true,
+      gameInProgress: !!room.game,
+      playerCount: room.players.length,
+      maxPlayers: room.config.maxPlayers,
+    });
+  });
+
   socket.on('joinRoom', ({ name, code, spectate }, cb) => {
     const room = rooms[code];
     if (!room) return cb({ error: 'Room not found' });

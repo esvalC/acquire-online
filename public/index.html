@@ -807,18 +807,34 @@ function attemptReconnect(code, name, token) {
   });
 }
 
-// On page load: if URL contains a room code, pre-fill or auto-reconnect
+// On page load: if URL contains a room code, reconnect or adapt join UI
 (function handleUrlOnLoad() {
   const match = window.location.pathname.match(/^\/(\d{4})$/);
   if (!match) return;
   const code = match[1];
   const token = localStorage.getItem('acquire_token_' + code);
-  const name = localStorage.getItem('acquire_name_' + code);
+  const name  = localStorage.getItem('acquire_name_'  + code);
+
   if (token && name) {
+    // Same device — attempt to reclaim seat
     attemptReconnect(code, name, token);
-  } else {
-    document.getElementById('joinCode').value = code;
+    return;
   }
+
+  // New device — check room state and adapt the join buttons
+  document.getElementById('joinCode').value = code;
+  socket.emit('getRoomStatus', { code }, (status) => {
+    if (!status.exists) return; // room gone, leave form as-is
+    if (status.gameInProgress) {
+      // Game already running — swap buttons so it's clear they'll be a spectator
+      const btnRow = document.querySelector('#joinCode')
+        .closest('.landing-card')
+        .querySelector('div[style*="display:flex"]');
+      if (btnRow) {
+        btnRow.innerHTML = `<button class="btn btn-secondary" style="flex:1" onclick="joinRoom(true)">Watch Game</button>`;
+      }
+    }
+  });
 })();
 
 function toggleReady() { socket.emit('toggleReady'); }
