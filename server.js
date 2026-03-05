@@ -122,7 +122,7 @@ function scheduleBotTurn(code) {
     if (!botPlayer) return;
 
     try {
-      decideBotAction(rooms[code].game, actingBotIdx, botPlayer.personality);
+      decideBotAction(rooms[code].game, actingBotIdx, botPlayer.personality, botPlayer.difficulty);
     } catch (e) {
       console.error(`Bot error in room ${code}:`, e.message);
     }
@@ -156,21 +156,25 @@ io.on('connection', (socket) => {
   });
 
   /* ── Solo: create & start a solo game ── */
-  socket.on('createSoloGame', ({ name, botCount, quickstart, personality }, cb) => {
+  socket.on('createSoloGame', ({ name, botCount, quickstart, botConfigs }, cb) => {
     const code = generateCode();
     currentRoom = code;
     playerName = name;
     const token = randomUUID();
 
     const bots = BOT_ROSTER.slice(0, Math.min(Math.max(botCount || 1, 1), 5));
-    const botPersonality = personality || 'balanced';
 
     const players = [
       { name, socketId: socket.id, ready: true, idx: 0, token, isBot: false },
-      ...bots.map((b, i) => ({
-        name: b.name, socketId: null, ready: true,
-        idx: i + 1, token: null, isBot: true, personality: botPersonality,
-      })),
+      ...bots.map((b, i) => {
+        const cfg = (botConfigs && botConfigs[i]) || {};
+        return {
+          name: b.name, socketId: null, ready: true,
+          idx: i + 1, token: null, isBot: true,
+          personality: cfg.personality || 'balanced',
+          difficulty: cfg.difficulty || 'medium',
+        };
+      }),
     ];
 
     rooms[code] = {

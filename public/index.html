@@ -684,14 +684,17 @@
     border-radius: var(--radius); border: 1px solid var(--border);
   }
   .bot-name { font-weight: 600; font-size: 13px; }
-  .bot-personality {
-    font-size: 10px; padding: 2px 8px; border-radius: 12px;
-    text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
-    background: rgba(245,158,11,0.1); color: var(--gold); border: 1px solid rgba(245,158,11,0.2);
-  }
-  .bot-personality.focused { background: rgba(59,130,246,0.1); color: var(--blue); border-color: rgba(59,130,246,0.2); }
-  .bot-personality.diversified { background: rgba(16,185,129,0.1); color: var(--green); border-color: rgba(16,185,129,0.2); }
   .bot-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .bot-controls { padding-top: 8px; border-top: 1px solid var(--border); }
+  .bot-diff-btns { display: flex; gap: 4px; }
+  .bot-diff-btn {
+    flex: 1; background: var(--bg-card); border: 1px solid var(--border-light);
+    color: var(--text-dim); border-radius: 4px; padding: 4px 0;
+    font-size: 11px; font-family: 'DM Sans', sans-serif; cursor: pointer;
+    font-weight: 500; transition: all 0.15s;
+  }
+  .bot-diff-btn.active { background: rgba(245,158,11,0.15); border-color: var(--gold); color: var(--gold); }
+  .bot-diff-btn:hover:not(.active) { background: var(--bg-card-hover); }
 
   /* ── Bot indicator in scoreboard ─────────────── */
   .bot-badge {
@@ -810,21 +813,6 @@
         <input type="checkbox" id="soloQuickstartToggle" checked />
         <span class="toggle-slider"></span>
       </label>
-    </div>
-    <div class="input-group" style="margin-bottom:12px;">
-      <label style="display:flex;justify-content:space-between;align-items:center;">
-        <span>Bot Style</span>
-        <span id="divStyleLabel" style="color:var(--gold);font-size:12px;">Balanced</span>
-      </label>
-      <div style="position:relative;margin-top:4px;">
-        <input type="range" id="diversificationSlider" min="0" max="10" value="5"
-          oninput="updateDivSlider()" style="width:100%;accent-color:var(--gold);" />
-        <div style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);
-          font-size:9px;color:var(--gold);pointer-events:none;" title="Recommended">★ rec</div>
-      </div>
-      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:2px;">
-        <span>Aggressive</span><span>Spread Out</span>
-      </div>
     </div>
     <div class="panel-title">Bot Roster</div>
     <div class="bot-roster" id="botRoster"></div>
@@ -1095,6 +1083,7 @@ let prevCurrentPlayerIdx = -1;
 let logEntryCount = 0;
 let isSoloGame = false;
 let selectedBotCount = 2;
+let botSettings = []; // per-bot state: { difficulty, useCustomDiv, divVal }
 let prevBoard = null;
 let recentTiles = new Set();
 let recentTileTimer = null;
@@ -1219,24 +1208,73 @@ function adjustBotCount(delta) {
   renderBotRoster();
 }
 
-function renderBotRoster() {
-  const roster = BOT_ROSTER_CLIENT.slice(0, selectedBotCount);
-  const el = document.getElementById('botRoster');
-  el.innerHTML = roster.map(b => `
-    <div class="bot-roster-item">
-      <div style="font-size:20px">🤖</div>
-      <div style="flex:1">
-        <div class="bot-name">${b.name}</div>
-        <div class="bot-desc" style="font-size:11px;color:var(--text-muted)">${b.title}</div>
-      </div>
-    </div>
-  `).join('');
+function ensureBotSettings() {
+  while (botSettings.length < 5) {
+    botSettings.push({ difficulty: 'medium', useCustomDiv: false, divVal: 5 });
+  }
 }
 
-function updateDivSlider() {
-  const val = parseInt(document.getElementById('diversificationSlider').value);
-  const label = val <= 3 ? 'Aggressive' : val <= 7 ? 'Balanced' : 'Spread Out';
-  document.getElementById('divStyleLabel').textContent = label;
+function setBotDifficulty(idx, diff) {
+  botSettings[idx].difficulty = diff;
+  renderBotRoster();
+}
+
+function toggleBotDiv(idx) {
+  botSettings[idx].useCustomDiv = !botSettings[idx].useCustomDiv;
+  renderBotRoster();
+}
+
+function updateBotDivSlider(idx, val) {
+  botSettings[idx].divVal = parseInt(val);
+  const v = parseInt(val);
+  const label = v <= 3 ? 'Concentrated' : v <= 7 ? 'Balanced' : 'Diversified';
+  const el = document.getElementById('botDivLabel_' + idx);
+  if (el) el.textContent = label;
+}
+
+function renderBotRoster() {
+  ensureBotSettings();
+  const roster = BOT_ROSTER_CLIENT.slice(0, selectedBotCount);
+  const el = document.getElementById('botRoster');
+  el.innerHTML = roster.map((b, i) => {
+    const s = botSettings[i];
+    const divLabel = s.divVal <= 3 ? 'Concentrated' : s.divVal <= 7 ? 'Balanced' : 'Diversified';
+    const diffBtns = ['Easy','Medium','Hard'].map(d =>
+      `<button class="bot-diff-btn${s.difficulty === d.toLowerCase() ? ' active' : ''}"
+        onclick="setBotDifficulty(${i},'${d.toLowerCase()}')">${d}</button>`
+    ).join('');
+    const divSlider = s.useCustomDiv ? `
+      <div style="margin-top:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
+          <span style="font-size:10px;color:var(--text-muted)">Style</span>
+          <span id="botDivLabel_${i}" style="font-size:11px;color:var(--gold);">${divLabel}</span>
+        </div>
+        <input type="range" min="0" max="10" value="${s.divVal}"
+          oninput="updateBotDivSlider(${i},this.value)"
+          style="width:100%;accent-color:var(--gold);" />
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:2px;">
+          <span>Concentrated</span><span>Diversified</span>
+        </div>
+      </div>` : '';
+    return `
+      <div class="bot-roster-item" style="flex-direction:column;align-items:stretch;gap:8px;">
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="font-size:20px">🤖</div>
+          <div style="flex:1">
+            <div class="bot-name">${b.name}</div>
+            <div class="bot-desc">${b.title}</div>
+          </div>
+        </div>
+        <div class="bot-controls">
+          <div class="bot-diff-btns">${diffBtns}</div>
+          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);cursor:pointer;margin-top:8px;">
+            <input type="checkbox" ${s.useCustomDiv ? 'checked' : ''} onchange="toggleBotDiv(${i})" />
+            Custom diversification
+          </label>
+          ${divSlider}
+        </div>
+      </div>`;
+  }).join('');
 }
 
 function startSoloGame() {
@@ -1245,9 +1283,15 @@ function startSoloGame() {
   myName = name;
   isSoloGame = true;
   const quickstart = document.getElementById('soloQuickstartToggle').checked;
-  const divVal = parseInt(document.getElementById('diversificationSlider').value);
-  const personality = sliderToPersonality(divVal);
-  socket.emit('createSoloGame', { name, botCount: selectedBotCount, quickstart, personality }, (res) => {
+  ensureBotSettings();
+  const botConfigs = BOT_ROSTER_CLIENT.slice(0, selectedBotCount).map((_, i) => {
+    const s = botSettings[i];
+    return {
+      personality: s.useCustomDiv ? sliderToPersonality(s.divVal) : 'balanced',
+      difficulty: s.difficulty,
+    };
+  });
+  socket.emit('createSoloGame', { name, botCount: selectedBotCount, quickstart, botConfigs }, (res) => {
     if (res.error) return showError(res.error);
     saveSession(res.code, name, res.token);
     showScreen('game');
