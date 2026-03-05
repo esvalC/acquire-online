@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Acquire – High Adventure in the World of High Finance</title>
+<title>Acquire – The Classic Board Game, Digitized</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
@@ -618,14 +618,243 @@
     .board-cell.header-cell { font-size: 7px; min-height: 20px; }
     #lastAction { display: none; }
   }
+
+  /* ── New Landing ─────────────────────────────── */
+  #newLanding {
+    flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; gap: 32px; padding: 40px 24px;
+  }
+  .home-title {
+    font-family: 'Playfair Display', serif; font-size: 64px; font-weight: 900;
+    letter-spacing: -3px;
+    background: linear-gradient(135deg, var(--gold), #fbbf24, var(--gold));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    animation: fadeInUp 0.5s ease-out;
+  }
+  .home-subtitle {
+    font-size: 14px; text-transform: uppercase; letter-spacing: 4px;
+    color: var(--text-muted); margin-top: -18px;
+    animation: fadeInUp 0.5s ease-out 0.1s both;
+  }
+  .mode-cards {
+    display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
+    animation: fadeInUp 0.5s ease-out 0.2s both;
+  }
+  .mode-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px 28px; width: 220px; cursor: pointer;
+    transition: all 0.25s ease; text-align: center; display: flex;
+    flex-direction: column; align-items: center; gap: 12px;
+  }
+  .mode-card:hover {
+    border-color: var(--gold); transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(245,158,11,0.15);
+  }
+  .mode-card-icon { font-size: 36px; }
+  .mode-card-title {
+    font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700;
+    color: var(--gold);
+  }
+  .mode-card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+
+  /* ── Solo Setup ──────────────────────────────── */
+  #soloSetup {
+    flex-direction: column; align-items: center; justify-content: center;
+    min-height: 100vh; gap: 20px; padding: 32px;
+  }
+  .solo-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 32px; width: 100%; max-width: 460px;
+  }
+  .bot-count-row {
+    display: flex; align-items: center; justify-content: center; gap: 16px;
+    margin: 16px 0;
+  }
+  .bot-count-btn {
+    width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--border-light);
+    background: var(--bg-dark); color: var(--text); cursor: pointer;
+    font-size: 18px; display: flex; align-items: center; justify-content: center;
+    transition: var(--transition); font-family: 'DM Sans', sans-serif;
+  }
+  .bot-count-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .bot-count-display {
+    font-family: 'JetBrains Mono', monospace; font-size: 32px; font-weight: 500;
+    color: var(--gold); min-width: 48px; text-align: center;
+  }
+  .bot-roster { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+  .bot-roster-item {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 14px; background: var(--bg-dark);
+    border-radius: var(--radius); border: 1px solid var(--border);
+  }
+  .bot-name { font-weight: 600; font-size: 13px; }
+  .bot-personality {
+    font-size: 10px; padding: 2px 8px; border-radius: 12px;
+    text-transform: uppercase; letter-spacing: 1px; font-weight: 600;
+    background: rgba(245,158,11,0.1); color: var(--gold); border: 1px solid rgba(245,158,11,0.2);
+  }
+  .bot-personality.focused { background: rgba(59,130,246,0.1); color: var(--blue); border-color: rgba(59,130,246,0.2); }
+  .bot-personality.diversified { background: rgba(16,185,129,0.1); color: var(--green); border-color: rgba(16,185,129,0.2); }
+  .bot-desc { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+
+  /* ── Bot indicator in scoreboard ─────────────── */
+  .bot-badge {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
+    background: rgba(59,130,246,0.1); color: var(--blue);
+    border: 1px solid rgba(59,130,246,0.2); border-radius: 10px;
+    padding: 1px 5px; font-weight: 600; margin-left: 4px;
+  }
+
+  /* ── Bot thinking indicator ──────────────────── */
+  .thinking-dots::after {
+    content: '...'; animation: thinkDots 1.2s steps(3, end) infinite;
+  }
+  @keyframes thinkDots { 0% { content: '.'; } 33% { content: '..'; } 66% { content: '...'; } }
+
+  /* ── Rules Page ──────────────────────────────── */
+  #rulesPage {
+    flex-direction: column; align-items: center;
+    min-height: 100vh; padding: 40px 24px 60px; gap: 24px;
+  }
+  .rules-page-content {
+    max-width: 760px; width: 100%;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 36px 40px;
+  }
+  .rules-page-content h2 {
+    font-family: 'Playfair Display', serif; font-size: 28px; color: var(--gold);
+    margin-bottom: 24px;
+  }
+  .rules-page-content h3 {
+    font-family: 'Playfair Display', serif; font-size: 18px; color: var(--gold);
+    margin: 24px 0 10px;
+  }
+  .rules-page-content h3:first-of-type { margin-top: 0; }
+  .rules-page-content p {
+    font-size: 14px; line-height: 1.7; color: var(--text-dim); margin-bottom: 10px;
+  }
+  .rules-page-content .chain-legend {
+    display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 16px;
+  }
+  @media (max-width: 600px) {
+    .mode-card { width: 100%; max-width: 340px; }
+    .rules-page-content { padding: 24px 20px; }
+    .home-title { font-size: 48px; }
+  }
 </style>
 </head>
 <body>
 
-<!-- ═══ LANDING ═══ -->
-<div id="landing" class="screen active">
-  <div class="logo-title">ACQUIRE</div>
-  <div class="logo-subtitle">High Adventure in the World of High Finance</div>
+<!-- ═══ NEW HOME LANDING ═══ -->
+<div id="newLanding" class="screen active">
+  <div class="home-title">ACQUIRE</div>
+  <div class="home-subtitle">The classic board game, digitized</div>
+  <div class="mode-cards">
+    <div class="mode-card" onclick="goSolo()">
+      <div class="mode-card-icon">🤖</div>
+      <div class="mode-card-title">Solo</div>
+      <div class="mode-card-desc">Play against AI opponents with distinct personalities</div>
+    </div>
+    <div class="mode-card" onclick="goMultiplayer()">
+      <div class="mode-card-icon">🌐</div>
+      <div class="mode-card-title">Multiplayer</div>
+      <div class="mode-card-desc">Create or join a table with friends using a 4-digit code</div>
+    </div>
+    <div class="mode-card" onclick="goRules()">
+      <div class="mode-card-icon">📖</div>
+      <div class="mode-card-title">Rules</div>
+      <div class="mode-card-desc">Complete guide to Acquire — strategy, mergers, and more</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ SOLO SETUP ═══ -->
+<div id="soloSetup" class="screen">
+  <div class="logo-title" style="font-size:36px;">ACQUIRE</div>
+  <div class="solo-card">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <h3 style="font-family:'Playfair Display',serif;font-size:18px;color:var(--gold)">Solo Game</h3>
+      <button class="btn btn-sm btn-secondary" onclick="goHome()">← Back</button>
+    </div>
+    <div class="input-group">
+      <label>Your Name</label>
+      <input type="text" id="soloName" placeholder="Enter your name" maxlength="20" />
+    </div>
+    <div style="margin:16px 0 8px;">
+      <div class="panel-title">Opponents</div>
+      <div class="bot-count-row">
+        <button class="bot-count-btn" onclick="adjustBotCount(-1)">−</button>
+        <div class="bot-count-display" id="botCountDisplay">2</div>
+        <button class="bot-count-btn" onclick="adjustBotCount(1)">+</button>
+      </div>
+      <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-bottom:12px;">1 – 5 opponents</div>
+    </div>
+    <div class="panel-title">Bot Roster</div>
+    <div class="bot-roster" id="botRoster"></div>
+    <button class="btn" style="margin-top:16px;" onclick="startSoloGame()">Start Game</button>
+  </div>
+</div>
+
+<!-- ═══ RULES PAGE ═══ -->
+<div id="rulesPage" class="screen">
+  <div style="display:flex;align-items:center;gap:16px;flex-shrink:0;">
+    <div class="logo-title" style="font-size:36px;">ACQUIRE</div>
+    <button class="btn btn-sm btn-secondary" onclick="goHome()">← Home</button>
+  </div>
+  <div class="rules-page-content">
+    <h2>How to Play Acquire</h2>
+    <h3>Objective</h3>
+    <p>Become the wealthiest player by building hotel chains, buying stock, and profiting from mergers. The player with the most cash at game end wins.</p>
+    <h3>Setup</h3>
+    <p>Each player draws a tile to determine turn order — the player whose tile is closest to space 1A goes first. All drawn tiles stay on the board (Quick-start mode). Each player receives 6 tiles and $6,000 starting cash.</p>
+    <h3>Hotel Chains & Prices</h3>
+    <div class="chain-legend">
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#e11d48"></div>Tower — Cheap ($)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#f97316"></div>Luxor — Cheap ($)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#3b82f6"></div>American — Mid ($$)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#8b5cf6"></div>Worldwide — Mid ($$)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#06b6d4"></div>Festival — Mid ($$)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#10b981"></div>Imperial — Expensive ($$$)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#eab308"></div>Continental — Expensive ($$$)</div>
+    </div>
+    <p>Stock prices rise as chains grow. Prices range from $200 (small cheap chain) to $1,000 (large expensive chain). There are 25 shares per chain.</p>
+    <h3>Your Turn</h3>
+    <p><strong>1. Place a tile.</strong> Each turn you must place one tile from your hand onto its matching board space. What happens depends on what's adjacent:</p>
+    <p>• <em>Nothing adjacent</em> — lone tile, just a marker on the board.</p>
+    <p>• <em>Adjacent to lone tile(s) only</em> — you found a new chain! Pick a name from inactive chains. You receive 1 free share.</p>
+    <p>• <em>Adjacent to 1 chain</em> — the chain expands by 1+ tiles.</p>
+    <p>• <em>Adjacent to 2+ chains</em> — merger! The largest chain survives and absorbs the others.</p>
+    <p><strong>2. Buy stock.</strong> After placing, buy up to 3 shares in any active chains. You don't have to buy anything.</p>
+    <p><strong>3. Draw a tile.</strong> Automatic — refills your hand to 6 tiles.</p>
+    <h3>Founding a Chain</h3>
+    <p>When you place a tile next to lone tile(s) with no existing chain adjacent, choose any inactive chain name. You get 1 free share automatically. There are 7 chains; if all are active you cannot found new ones.</p>
+    <h3>Mergers</h3>
+    <p>The larger chain absorbs the smaller. If tied in size, the player who triggered the merger chooses the survivor.</p>
+    <p><strong>Bonuses (paid before decisions):</strong> The majority shareholder of the defunct chain receives 10× the stock price as a bonus. The minority shareholder receives 5×. Ties split the combined bonus evenly (rounded down to $100).</p>
+    <p><strong>Decisions:</strong> Starting with the player who triggered the merger and going clockwise, each shareholder of the defunct chain chooses:</p>
+    <p>• <em>Sell</em> — sell shares at current defunct chain price.</p>
+    <p>• <em>Trade</em> — trade 2 defunct shares for 1 survivor share (limited by survivor availability).</p>
+    <p>• <em>Hold</em> — keep shares; they're worth nothing unless that chain is re-founded later.</p>
+    <h3>Safe Chains</h3>
+    <p>A chain with 11 or more tiles is "safe" — it cannot be taken over in a merger. Two safe chains can never merge (such tile placements are permanently unplayable).</p>
+    <h3>Game End</h3>
+    <p>The current player may declare the game over if: (a) any chain has 41+ tiles, OR (b) all active chains are safe. When declared, final majority/minority bonuses are paid for all active chains, all stock is sold at current prices, and the richest player wins.</p>
+    <p>Players may also call a vote to concede — if all but one player agree, the game ends immediately.</p>
+    <h3>Strategy Tips</h3>
+    <p>• Buy stock early in small chains — prices are cheap and bonuses are relative to size later.</p>
+    <p>• Be the majority shareholder when a chain gets absorbed for maximum bonus payout.</p>
+    <p>• Trade defunct shares into a large survivor — it's often the best move.</p>
+    <p>• Safe chains lock up board real estate; found them strategically.</p>
+  </div>
+</div>
+
+<!-- ═══ MULTIPLAYER LANDING ═══ -->
+<div id="landing" class="screen">
+  <div style="display:flex;align-items:center;gap:16px;">
+    <div class="logo-title">ACQUIRE</div>
+    <button class="btn btn-sm btn-secondary" style="width:auto;align-self:flex-end;margin-bottom:4px;" onclick="goHome()">← Home</button>
+  </div>
+  <div class="logo-subtitle">The classic board game, digitized</div>
 
   <div class="landing-columns">
     <!-- Left: Create / Join -->
@@ -841,6 +1070,7 @@
     <div id="standingsDisplay"></div>
     <div style="display:flex; gap:8px; justify-content:center; margin-top:20px;">
       <button class="btn" onclick="playAgain()">Play Again</button>
+      <button class="btn btn-secondary btn-sm" style="width:auto" onclick="goHome()">Main Menu</button>
     </div>
   </div>
 </div>
@@ -860,6 +1090,16 @@ let chatUnread = 0;
 let myName = '';
 let prevCurrentPlayerIdx = -1;
 let logEntryCount = 0;
+let isSoloGame = false;
+let selectedBotCount = 2;
+
+const BOT_ROSTER_CLIENT = [
+  { name: 'Aria',  personality: 'balanced',    desc: 'Spreads buys evenly across chains' },
+  { name: 'Rex',   personality: 'focused',     desc: 'Concentrates on a single chain' },
+  { name: 'Nova',  personality: 'diversified', desc: 'Maximum chain diversification' },
+  { name: 'Colt',  personality: 'focused',     desc: 'Single-chain specialist' },
+  { name: 'Vera',  personality: 'balanced',    desc: 'Balanced portfolio approach' },
+];
 
 const chainColors = {
   Tower: '#e11d48', Luxor: '#f97316', American: '#3b82f6',
@@ -870,6 +1110,24 @@ const chainColors = {
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+}
+
+function goHome() {
+  history.pushState({}, '', '/');
+  showScreen('newLanding');
+}
+function goSolo() {
+  history.pushState({}, '', '/solo');
+  renderBotRoster();
+  showScreen('soloSetup');
+}
+function goMultiplayer() {
+  history.pushState({}, '', '/multiplayer');
+  showScreen('landing');
+}
+function goRules() {
+  history.pushState({}, '', '/rules');
+  showScreen('rulesPage');
 }
 
 function switchTab(tab, btn) {
@@ -891,12 +1149,13 @@ function createRoom() {
   const name = document.getElementById('createName').value.trim();
   if (!name) return showError('Enter your name');
   myName = name;
+  isSoloGame = false;
   const maxPlayers = parseInt(document.getElementById('maxPlayers').value);
   const quickstart = document.getElementById('quickstartToggle').checked;
   socket.emit('createRoom', { name, maxPlayers, quickstart }, (res) => {
     if (res.error) return showError(res.error);
     saveSession(res.code, name, res.token);
-    history.pushState({}, '', '/' + res.code);
+    history.pushState({}, '', '/multiplayer/' + res.code);
     document.getElementById('lobbyCode').textContent = res.code;
     showScreen('lobby');
   });
@@ -908,12 +1167,48 @@ function joinRoom(spectate = false) {
   if (!name) return showError('Enter your name');
   if (!code || code.length !== 4) return showError('Enter a 4-digit room code');
   myName = name;
+  isSoloGame = false;
   socket.emit('joinRoom', { name, code, spectate }, (res) => {
     if (res.error) return showError(res.error);
     if (res.token) saveSession(code, name, res.token);
-    history.pushState({}, '', '/' + code);
+    history.pushState({}, '', '/multiplayer/' + code);
     document.getElementById('lobbyCode').textContent = code;
     showScreen('lobby');
+  });
+}
+
+/* ── Solo Actions ──────────────────────────────── */
+function adjustBotCount(delta) {
+  selectedBotCount = Math.min(5, Math.max(1, selectedBotCount + delta));
+  document.getElementById('botCountDisplay').textContent = selectedBotCount;
+  renderBotRoster();
+}
+
+function renderBotRoster() {
+  const roster = BOT_ROSTER_CLIENT.slice(0, selectedBotCount);
+  const el = document.getElementById('botRoster');
+  el.innerHTML = roster.map(b => `
+    <div class="bot-roster-item">
+      <div style="font-size:20px">🤖</div>
+      <div style="flex:1">
+        <div class="bot-name">${b.name}</div>
+        <div class="bot-desc">${b.desc}</div>
+      </div>
+      <div class="bot-personality ${b.personality}">${b.personality}</div>
+    </div>
+  `).join('');
+}
+
+function startSoloGame() {
+  const name = document.getElementById('soloName').value.trim();
+  if (!name) return showError('Enter your name');
+  myName = name;
+  isSoloGame = true;
+  socket.emit('createSoloGame', { name, botCount: selectedBotCount }, (res) => {
+    if (res.error) return showError(res.error);
+    saveSession(res.code, name, res.token);
+    showScreen('game');
+    startTurnClock();
   });
 }
 
@@ -929,14 +1224,17 @@ function clearSession(code) {
 
 function attemptReconnect(code, name, token) {
   myName = name;
+  isSoloGame = false;
   socket.emit('rejoinRoom', { code, token, name }, (res) => {
     if (res.error) {
-      // Session expired or room gone — show join form pre-filled
+      // Session expired or room gone — show multiplayer join form pre-filled
       clearSession(code);
+      showScreen('landing');
       document.getElementById('joinCode').value = code;
       document.getElementById('joinName').value = name;
       return;
     }
+    isSoloGame = res.isSolo || false;
     document.getElementById('lobbyCode').textContent = code;
     if (res.inGame) {
       showScreen('game');
@@ -947,22 +1245,56 @@ function attemptReconnect(code, name, token) {
   });
 }
 
-// On page load: if URL contains a room code, reconnect or adapt join UI
+// On page load: route based on URL path
 (function handleUrlOnLoad() {
-  const match = window.location.pathname.match(/^\/(\d{4})$/);
-  if (!match) return;
-  const code = match[1];
-  const token = localStorage.getItem('acquire_token_' + code);
-  const name  = localStorage.getItem('acquire_name_'  + code);
+  const path = window.location.pathname;
 
-  if (token && name) {
-    // Same device — attempt to reclaim seat
-    attemptReconnect(code, name, token);
+  // /solo
+  if (path === '/solo') {
+    renderBotRoster();
+    showScreen('soloSetup');
     return;
   }
-
-  // New device — pre-fill the code; server will auto-spectate if game is in progress
-  document.getElementById('joinCode').value = code;
+  // /rules
+  if (path === '/rules') {
+    showScreen('rulesPage');
+    return;
+  }
+  // /multiplayer
+  if (path === '/multiplayer') {
+    showScreen('landing');
+    return;
+  }
+  // /multiplayer/XXXX
+  const mpMatch = path.match(/^\/multiplayer\/(\d{4})$/);
+  if (mpMatch) {
+    const code = mpMatch[1];
+    const token = localStorage.getItem('acquire_token_' + code);
+    const name  = localStorage.getItem('acquire_name_'  + code);
+    showScreen('landing');
+    if (token && name) {
+      attemptReconnect(code, name, token);
+    } else {
+      document.getElementById('joinCode').value = code;
+    }
+    return;
+  }
+  // Legacy: /XXXX
+  const legacyMatch = path.match(/^\/(\d{4})$/);
+  if (legacyMatch) {
+    const code = legacyMatch[1];
+    history.replaceState({}, '', '/multiplayer/' + code);
+    const token = localStorage.getItem('acquire_token_' + code);
+    const name  = localStorage.getItem('acquire_name_'  + code);
+    showScreen('landing');
+    if (token && name) {
+      attemptReconnect(code, name, token);
+    } else {
+      document.getElementById('joinCode').value = code;
+    }
+    return;
+  }
+  // Default: / → newLanding (already active by default)
 })();
 
 function toggleReady() { socket.emit('toggleReady'); }
@@ -979,7 +1311,11 @@ socket.on('lobbyUpdate', (data) => {
   `).join('');
 });
 
-socket.on('gameStarted', () => { showScreen('game'); startTurnClock(); });
+socket.on('gameStarted', () => {
+  document.getElementById('gameOverOverlay').style.display = 'none';
+  showScreen('game');
+  startTurnClock();
+});
 socket.on('sessionToken', ({ token }) => {
   const code = document.getElementById('lobbyCode').textContent;
   if (code && code !== '----') saveSession(code, myName, token);
@@ -992,8 +1328,13 @@ socket.on('backToLobby', () => {
   stopTurnClock();
 });
 
+socket.on('soloRestart', () => {
+  // Server restarted solo game — we'll receive gameStarted next
+  document.getElementById('gameOverOverlay').style.display = 'none';
+  stopTurnClock();
+});
+
 socket.on('disconnect', () => {
-  // If kicked back to landing, reset URL
   if (window.location.pathname !== '/') {
     history.replaceState({}, '', '/');
   }
@@ -1222,9 +1563,10 @@ function renderActionPanel() {
 
   if (st.phase === 'placeTile' && st.currentPlayerIdx !== myIdx) {
     const cur = st.players[st.currentPlayerIdx];
-    title.textContent = 'Waiting';
+    const bot = isBot(st.currentPlayerIdx);
+    title.textContent = bot ? 'Bot Thinking' : 'Waiting';
     content.innerHTML = `<div style="color:var(--text-muted);font-size:12px">
-      <span style="color:var(--gold);font-weight:600">${escapeHtml(cur.name)}</span> is placing a tile
+      <span style="color:var(--gold);font-weight:600">${escapeHtml(cur.name)}</span> is ${bot ? '<span class="thinking-dots">thinking</span>' : 'placing a tile'}
       <div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Cash: $${cur.cash.toLocaleString()} · ${cur.tileCount} tiles</div>
     </div>`;
     return;
@@ -1334,9 +1676,10 @@ function renderActionPanel() {
   }
   if (st.phase === 'buyStock' && st.currentPlayerIdx !== myIdx) {
     const cur = st.players[st.currentPlayerIdx];
-    title.textContent = 'Waiting';
+    const bot = isBot(st.currentPlayerIdx);
+    title.textContent = bot ? 'Bot Thinking' : 'Waiting';
     content.innerHTML = `<div style="color:var(--text-muted);font-size:12px">
-      <span style="color:var(--gold);font-weight:600">${escapeHtml(cur.name)}</span> is buying stock...
+      <span style="color:var(--gold);font-weight:600">${escapeHtml(cur.name)}</span> is ${bot ? '<span class="thinking-dots">thinking</span>' : 'buying stock...'}
     </div>`;
     return;
   }
@@ -1406,9 +1749,11 @@ function renderScoreboard() {
   el.innerHTML = gameState.players.map((p, i) => {
     const cur = i === gameState.currentPlayerIdx;
     const dc = !!p.disconnected;
+    const bot = isBot(i);
     const badges = Object.entries(p.stocks||{}).filter(([,v])=>v>0).map(([ch,v])=>`<span class="stock-badge" style="background:${chainColors[ch]}22;color:${chainColors[ch]}">${ch.slice(0,3)} ${v}</span>`).join('');
     const timer = (gameState.turnTimers[i]||0) + (cur ? Math.floor((Date.now()-gameState.turnStartTime)/1000) : 0);
-    const nameHtml = `${cur?'▸ ':''}${escapeHtml(p.name)}${i===myIdx?' (you)':''}${dc?'<span class="offline-dot" title="Disconnected"></span>':''}`;
+    const botBadge = bot ? '<span class="bot-badge">BOT</span>' : '';
+    const nameHtml = `${cur?'▸ ':''}${escapeHtml(p.name)}${i===myIdx?' (you)':''}${botBadge}${dc?'<span class="offline-dot" title="Disconnected"></span>':''}`;
     return `<div class="score-player${dc?' disconnected':''}"><div class="score-player-header"><span class="score-player-name ${cur?'current':''}">${nameHtml}</span><span class="score-cash">$${p.cash.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="score-stocks">${badges||'<span style="color:var(--text-muted);font-size:10px">No stock</span>'}</div><span class="score-timer">${Math.floor(timer/60)}:${String(timer%60).padStart(2,'0')}</span></div></div>`;
   }).join('');
 }
@@ -1463,7 +1808,23 @@ function chooseMergerSurvivor(chain) { socket.emit('chooseMergerSurvivor', { cha
 function declareEnd() { socket.emit('declareGameEnd'); }
 function initiateConcedeVote() { socket.emit('initiateConcedeVote'); }
 function submitVote(vote) { socket.emit('submitConcedeVote', { vote }); }
-function playAgain() { socket.emit('playAgain'); }
+function playAgain() {
+  if (isSoloGame) {
+    socket.emit('soloPlayAgain');
+    document.getElementById('gameOverOverlay').style.display = 'none';
+  } else {
+    socket.emit('playAgain');
+  }
+}
+
+/* ── Bot helpers ───────────────────────────────── */
+function isBot(playerIdx) {
+  if (!gameState || !gameState.playerList) return false;
+  const p = gameState.players[playerIdx];
+  if (!p) return false;
+  const pl = gameState.playerList.find(x => x.name === p.name);
+  return pl ? pl.isBot : false;
+}
 
 /* ── Error toast ───────────────────────────────── */
 function showError(msg) {

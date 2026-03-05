@@ -1,6 +1,6 @@
 # Acquire – Online Multiplayer
 
-A real-time multiplayer implementation of the classic board game **Acquire** (1964, Sid Sackson).
+A real-time multiplayer implementation of the classic board game **Acquire** (1964, Sid Sackson), with solo play against AI bots.
 
 **Live:** https://playonlineacquire.com
 
@@ -17,22 +17,40 @@ Open `http://localhost:3000`. Share your local IP (e.g. `http://192.168.1.x:3000
 
 ## How to Play
 
-1. **Create a Table** – pick your name and max players (2–6), get a 4-digit room code
-2. **Join a Table** – enter the code and your name
-3. **Ready Up** – game starts when all players are ready
-4. **Quickstart Draw** – each player automatically draws a tile; closest to 1A goes first; tiles stay on the board
-5. **Play!** – place tiles, found chains, buy stock, trigger mergers, get rich
+Visit the landing page to choose your mode:
+
+### Solo (vs. Bots)
+1. **Choose Solo** on the landing page
+2. **Enter your name** and select 1–5 bot opponents
+3. **Start Game** — bots play automatically with a short delay (0.7–1.4s per move)
+4. **Play!** — place tiles, found chains, buy stock, trigger mergers, get rich
+
+**Bot Personalities:**
+- **Focused** (Rex, Colt): Concentrates all stock purchases in one chain
+- **Balanced** (Aria, Vera): Splits purchases across two chains
+- **Diversified** (Nova): Buys one share each in multiple chains
+- All bots never hold more than 13 of 25 shares in any single chain
+
+### Multiplayer
+1. **Choose Multiplayer** on the landing page
+2. **Create a Table** — pick your name and max players (2–6), get a 4-digit room code
+3. **Join a Table** — enter the code and your name
+4. **Ready Up** — game starts when all players are ready
+5. **Quickstart Draw** — each player automatically draws a tile; closest to 1A goes first; tiles stay on the board
+6. **Play!** — place tiles, found chains, buy stock, trigger mergers, get rich
 
 ### In-Game Features
-- **Rules on landing page** – full rules summary with chain legend visible before joining a game
-- **Board** – color-coded chains, highlighted playable tiles, your hand tiles shown on the grid
-- **Stock Market** – live prices, chain sizes, safe indicators
-- **Player Chat** – sidebar tab for in-game messaging with unread badge
-- **Rules Assistant** – sidebar tab with quick-topic buttons and free-text Q&A
-- **Turn Clock** – per-player cumulative timer (not enforced, just for tracking)
-- **Vote to End** – any player can call a vote to concede (requires N-1 of N votes)
-- **Declare End** – when official end conditions are met, current player sees end game button
-- **Play Again** – after game over, sends everyone back to the lobby
+- **Board** — color-coded chains, highlighted playable tiles, your hand tiles shown on the grid
+  - Green glow: tile would found a chain
+  - Red glow: tile would trigger a merger
+  - Gold glow: tile expands an existing chain
+- **Stock Market** — live prices, chain sizes, shares remaining, safe indicators
+- **Player Chat** — sidebar tab for in-game messaging with unread badge
+- **Rules Assistant** — sidebar tab with quick-topic buttons and free-text Q&A
+- **Turn Clock** — per-player cumulative timer (not enforced, just for tracking)
+- **Vote to End** — any player can call a vote to concede (requires N-1 of N votes)
+- **Declare End** — when official end conditions are met, current player sees End Game button
+- **Play Again** — after game over, sends everyone back (solo restarts instantly)
 
 ---
 
@@ -41,6 +59,7 @@ Open `http://localhost:3000`. Share your local IP (e.g. `http://192.168.1.x:3000
 ```
 acquire-online/
 ├── gameEngine.js          # Pure game logic (no I/O, no networking)
+├── botAI.js               # Bot AI logic and personalities (solo mode)
 ├── server.js              # Express + Socket.IO server
 ├── public/
 │   └── index.html         # Single-file frontend (HTML + CSS + JS)
@@ -51,9 +70,20 @@ acquire-online/
 ```
 
 - **Server owns all game state.** Clients send actions, server validates and broadcasts the new state to everyone in the room.
+- **Bot moves run server-side.** `botAI.js` exposes `decideBotAction(game, idx, personality)` — called by a `setTimeout` in `server.js` after each state broadcast for solo rooms. No client changes are needed to support bots.
 - **Socket.IO rooms** isolate each table — players in room A never see events from room B.
 - **Tiles are private per-player.** Other players only see your tile count, not which tiles you hold.
-- **In-memory state.** All game data lives in the server process. If the server restarts, active games are lost (persistence is on the roadmap).
+- **In-memory state.** All game data lives in the server process. If the server restarts, active games are lost.
+
+### URL Structure
+
+| URL | Description |
+|---|---|
+| `/` | Landing page — choose Solo, Multiplayer, or Rules |
+| `/solo` | Solo game setup screen |
+| `/multiplayer` | Create or join a multiplayer room |
+| `/multiplayer/1234` | Join a specific room (auto-reconnects if session exists) |
+| `/rules` | Full standalone rules guide |
 
 ---
 
@@ -124,8 +154,6 @@ You can watch it run live at: https://github.com/esvalC/acquire-online/actions
 
 ### Manual Deploy (if needed)
 
-If you need to deploy without pushing code, use the AWS CLI:
-
 ```bash
 aws ssm send-command \
   --instance-ids i-0bbc6c13fd3dfe6ab \
@@ -138,16 +166,6 @@ aws ssm send-command \
   ]'
 ```
 
-### Checking Server Status
-
-```bash
-# Check if the app process is running
-aws ssm send-command \
-  --instance-ids i-0bbc6c13fd3dfe6ab \
-  --document-name "AWS-RunShellScript" \
-  --parameters 'commands=["sudo -u ubuntu pm2 list"]'
-```
-
 ---
 
 ## Security Model
@@ -158,30 +176,27 @@ aws ssm send-command \
 | Leaked AWS credentials | No credentials exist. OIDC uses short-lived tokens. |
 | Leaked secrets in code | `.gitignore` covers `.env`. No hardcoded secrets in codebase. |
 | Overprivileged CI/CD | GitHub Actions role can only SSM into this one instance. |
-| Public source code | Repo is private until a full security review is done before open-sourcing. |
-
-### Before Going Public (Open Source Checklist)
-- [ ] Add SSL/HTTPS via Let's Encrypt (encrypts traffic in transit)
-- [ ] Add rate limiting on the server (prevent abuse)
-- [ ] Audit `gameEngine.js` for cheating vectors (server already validates all moves)
-- [ ] Review all Socket.IO event handlers for injection / unexpected input
-- [ ] Enable AWS CloudTrail for audit logging
+| CORS | Locked to `playonlineacquire.com` and `localhost:3000` only. |
+| Bot cheating | Bots run server-side with the same validated game engine as human players. |
 
 ---
 
-## Roadmap
+## Roadmap / Issues
+
+Open GitHub Issues track future work:
+- **#2** – Settings page (tile confirmation toggle, new player mode hints)
+- **#3** – New player mode (contextual hints and suggestions)
+- **#4** – AI opponent improvements (already partially implemented in v1.3)
+- **#5** – Mobile layout improvements
+- **#6** – Public lobby listing (see tables looking for players)
+- **#7** – No-scroll card layout (all game cards size to content)
 
 ### Data & AI
-- Store game turn data for every game to eventually train an AI player
+- Store game turn data for every game to eventually train a stronger AI player
 - Schema: per-turn snapshots with board state, player holdings, and action taken
 
-### Visual Polish
-- Smoother animations – tile placements animate into position, chain expansions ripple, mergers collapse
-- Card visuals – show tile backs for other players' hands (count visible, tiles hidden)
-
 ### Resilience & Accounts
-- Reconnection – rejoin with same name/room code after disconnect
-- User accounts – persistent identity, game history, stats, ELO
+- User accounts — persistent identity, game history, stats
 - Spectator improvements
 
 ### Infrastructure (Future)
