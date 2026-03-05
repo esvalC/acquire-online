@@ -75,8 +75,13 @@ function chooseBotTile(game, botIdx, difficulty) {
   if (!playable || playable.length === 0) return null;
 
   if (difficulty === 'easy') {
-    // Random legal tile — no strategy
-    return playable[Math.floor(Math.random() * playable.length)];
+    // Prefer tiles that found or expand chains, but pick randomly among them
+    const actionable = playable.filter(t => {
+      const a = engine.analyzeTilePlacement(game, t);
+      return a.type === 'found' || a.type === 'expand';
+    });
+    const pool = actionable.length > 0 ? actionable : playable;
+    return pool[Math.floor(Math.random() * pool.length)];
   }
 
   let bestTile = null;
@@ -98,12 +103,23 @@ function chooseBotChain(game, botIdx, difficulty) {
     return available[Math.floor(Math.random() * available.length)];
   }
 
-  // Prefer chains we already have stock in, then by tier value
+  // 1. Chains we own the most stock in
+  // 2. Chains where we already lead (own more than any opponent)
+  // 3. Chains with fewer opponent shares (lower competition)
+  // 4. Higher-tier chains as a final tiebreaker
   const tierOrder = { Continental: 3, Imperial: 3, Festival: 2, Worldwide: 2, American: 2, Tower: 1, Luxor: 1 };
   return available.slice().sort((a, b) => {
     const aOwned = player.stocks[a] || 0;
     const bOwned = player.stocks[b] || 0;
     if (bOwned !== aOwned) return bOwned - aOwned;
+    const aMaxOpp = game.players.filter((_, i) => i !== botIdx)
+      .reduce((m, p) => Math.max(m, p.stocks[a] || 0), 0);
+    const bMaxOpp = game.players.filter((_, i) => i !== botIdx)
+      .reduce((m, p) => Math.max(m, p.stocks[b] || 0), 0);
+    const aLeads = aOwned > aMaxOpp;
+    const bLeads = bOwned > bMaxOpp;
+    if (aLeads !== bLeads) return aLeads ? -1 : 1;
+    if (aMaxOpp !== bMaxOpp) return aMaxOpp - bMaxOpp; // less opponent presence = better
     return (tierOrder[b] || 1) - (tierOrder[a] || 1);
   })[0];
 }
@@ -197,25 +213,31 @@ function decideBotBuyStock(game, botIdx, personality, difficulty) {
     return purchases;
   }
 
-  if (difficulty === 'hard') {
-    // Re-sort: chains where we lead first, near-safe-size bonus, then own share count
-    candidates.sort((a, b) => {
-      const aMaxOpp = game.players.filter((_, i) => i !== botIdx)
-        .reduce((m, p) => Math.max(m, p.stocks[a.chain] || 0), 0);
-      const bMaxOpp = game.players.filter((_, i) => i !== botIdx)
-        .reduce((m, p) => Math.max(m, p.stocks[b.chain] || 0), 0);
-      const aLeading = a.myShares > aMaxOpp;
-      const bLeading = b.myShares > bMaxOpp;
-      if (aLeading !== bLeading) return aLeading ? -1 : 1;
+  // medium and hard: sort by strategic value first
+  // 1. Chains we lead (own more than any opponent)
+  // 2. Chains we could take the lead in with a few more buys
+  // 3. Chains we own any stock in
+  // 4. Price (ascending)
+  // Hard adds: near-safe-size bonus on top of this
+  candidates.sort((a, b) => {
+    const aMaxOpp = game.players.filter((_, i) => i !== botIdx)
+      .reduce((m, p) => Math.max(m, p.stocks[a.chain] || 0), 0);
+    const bMaxOpp = game.players.filter((_, i) => i !== botIdx)
+      .reduce((m, p) => Math.max(m, p.stocks[b.chain] || 0), 0);
+    const aLeading = a.myShares > aMaxOpp;
+    const bLeading = b.myShares > bMaxOpp;
+    if (aLeading !== bLeading) return aLeading ? -1 : 1;
+    const aCouldLead = a.myShares > 0 && (a.myShares + MAX_BUY) > aMaxOpp;
+    const bCouldLead = b.myShares > 0 && (b.myShares + MAX_BUY) > bMaxOpp;
+    if (aCouldLead !== bCouldLead) return aCouldLead ? -1 : 1;
+    if (difficulty === 'hard') {
       const aNearSafe = (a.size >= 8 && a.size < 11) ? 1 : 0;
       const bNearSafe = (b.size >= 8 && b.size < 11) ? 1 : 0;
       if (aNearSafe !== bNearSafe) return bNearSafe - aNearSafe;
-      return b.myShares - a.myShares;
-    });
-  } else {
-    // medium: sort by ascending price
-    candidates.sort((a, b) => a.price - b.price);
-  }
+    }
+    if (a.myShares !== b.myShares) return b.myShares - a.myShares;
+    return a.price - b.price;
+  });
 
   // Apply personality on the sorted candidates
   if (personality === 'focused') {
