@@ -111,13 +111,9 @@
   }
 
   .landing-columns {
-    display: grid; grid-template-columns: 400px 520px;
-    gap: 28px; max-width: 960px; width: 100%;
+    display: flex; flex-direction: column;
+    gap: 16px; max-width: 480px; width: 100%;
     animation: fadeInUp 0.6s ease-out 0.2s both;
-  }
-
-  @media (max-width: 960px) {
-    .landing-columns { grid-template-columns: 1fr; max-width: 520px; }
   }
 
   .landing-card {
@@ -705,12 +701,6 @@
     padding: 1px 5px; font-weight: 600; margin-left: 4px;
   }
 
-  /* ── Bot thinking indicator ──────────────────── */
-  .thinking-dots::after {
-    content: '...'; animation: thinkDots 1.2s steps(3, end) infinite;
-  }
-  @keyframes thinkDots { 0% { content: '.'; } 33% { content: '..'; } 66% { content: '...'; } }
-
   /* ── Rules Page ──────────────────────────────── */
   #rulesPage {
     flex-direction: column; align-items: center;
@@ -741,6 +731,19 @@
     .rules-page-content { padding: 24px 20px; }
     .home-title { font-size: 48px; }
   }
+
+  /* ── Recent tile flash ───────────────────────────── */
+  @keyframes recentFlash {
+    0%   { box-shadow: 0 0 0 3px rgba(255,255,255,0.85), 0 0 14px rgba(245,158,11,0.7); }
+    100% { box-shadow: 0 0 0 0 transparent; }
+  }
+  .board-cell.recent-tile { animation: recentFlash 2.5s ease-out forwards; }
+
+  /* ── Bot thinking indicator ──────────────────────── */
+  .thinking-dots::after {
+    content: '...'; animation: thinkDots 1.2s steps(3, end) infinite;
+  }
+  @keyframes thinkDots { 0% { content: '.'; } 33% { content: '..'; } 66% { content: '...'; } }
 </style>
 </head>
 <body>
@@ -788,6 +791,13 @@
         <button class="bot-count-btn" onclick="adjustBotCount(1)">+</button>
       </div>
       <div style="text-align:center;font-size:11px;color:var(--text-muted);margin-bottom:12px;">1 – 5 opponents</div>
+    </div>
+    <div class="input-group" style="flex-direction:row; align-items:center; gap:12px; margin-bottom:8px;">
+      <label style="margin:0; flex:1; font-size:13px;">Quick-start</label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="soloQuickstartToggle" checked />
+        <span class="toggle-slider"></span>
+      </label>
     </div>
     <div class="panel-title">Bot Roster</div>
     <div class="bot-roster" id="botRoster"></div>
@@ -895,43 +905,9 @@
         <button class="btn btn-secondary" onclick="joinRoom(false)">Join Table</button>
       </div>
     </div>
-
-    <!-- Right: Rules -->
-    <div class="landing-card">
-      <h3>How to Play</h3>
-      <div class="rules-landing">
-        <h4>Goal</h4>
-        <p>Become the wealthiest player by buying stock in hotel chains, growing them, and earning bonuses from mergers. At game end, the player with the most cash wins.</p>
-
-        <h4>Setup</h4>
-        <p>Each player draws a tile to determine turn order — the player closest to 1A goes first. Each player then receives 6 tiles and $6,000 starting cash.</p>
-        <p><strong>Quick-start</strong> (on by default): the order tiles stay on the board as a head start, giving the board some action from turn one. Turn it off and those tiles go back in the bag, starting with a completely empty board.</p>
-
-        <h4>Hotel Chains</h4>
-        <div class="chain-legend">
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#e11d48"></div>Tower ($)</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#f97316"></div>Luxor ($)</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#3b82f6"></div>American ($$)</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#8b5cf6"></div>Worldwide ($$)</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#06b6d4"></div>Festival ($$)</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#10b981"></div>Imperial ($$$)</div>
-          <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#eab308"></div>Continental ($$$)</div>
-        </div>
-
-        <h4>Your Turn</h4>
-        <p><strong>1. Place a tile</strong> on the board. If it's adjacent to a lone tile, you found a new chain and get 1 free share. If it touches an existing chain, the chain grows. If it touches two chains — merger!</p>
-        <p><strong>2. Buy stock</strong> — up to 3 shares in any active chains you can afford.</p>
-        <p><strong>3. Draw a tile</strong> to refill your hand (automatic).</p>
-
-        <h4>Mergers</h4>
-        <p>The larger chain absorbs the smaller. Majority and minority shareholders of the defunct chain receive cash bonuses. Then each player (starting with the merger maker) chooses to sell, trade (2-for-1 into survivor), or hold their defunct shares.</p>
-
-        <h4>Safe Chains</h4>
-        <p>A chain with 11+ tiles is "safe" — it cannot be taken over. Two safe chains can never merge.</p>
-
-        <h4>Game End</h4>
-        <p>The game ends when a player declares it (if any chain has 41+ tiles or all active chains are safe). Final bonuses are paid, all stock is sold, and the richest player wins!</p>
-      </div>
+    <div style="text-align:center;margin-top:8px;">
+      <span style="font-size:12px;color:var(--text-muted);">New to Acquire? </span>
+      <button class="btn btn-sm btn-secondary" style="width:auto;font-size:11px;" onclick="goRules()">View Rules →</button>
     </div>
   </div>
 </div>
@@ -1092,6 +1068,9 @@ let prevCurrentPlayerIdx = -1;
 let logEntryCount = 0;
 let isSoloGame = false;
 let selectedBotCount = 2;
+let prevBoard = null;
+let recentTiles = new Set();
+let recentTileTimer = null;
 
 const BOT_ROSTER_CLIENT = [
   { name: 'Aria',  personality: 'balanced',    desc: 'Spreads buys evenly across chains' },
@@ -1204,7 +1183,8 @@ function startSoloGame() {
   if (!name) return showError('Enter your name');
   myName = name;
   isSoloGame = true;
-  socket.emit('createSoloGame', { name, botCount: selectedBotCount }, (res) => {
+  const quickstart = document.getElementById('soloQuickstartToggle').checked;
+  socket.emit('createSoloGame', { name, botCount: selectedBotCount, quickstart }, (res) => {
     if (res.error) return showError(res.error);
     saveSession(res.code, name, res.token);
     showScreen('game');
@@ -1343,6 +1323,25 @@ socket.on('disconnect', () => {
 /* ── Game State ────────────────────────────────── */
 socket.on('gameState', (state) => {
   const prevIdx = prevCurrentPlayerIdx;
+
+  // Detect newly placed tiles by diffing boards
+  if (prevBoard && state.board) {
+    const newRecent = new Set();
+    for (let r = 0; r < 9; r++) {
+      for (let c = 0; c < 12; c++) {
+        if (prevBoard[r][c] !== state.board[r][c] && state.board[r][c]) {
+          newRecent.add(`${r+1}${String.fromCharCode(65+c)}`);
+        }
+      }
+    }
+    if (newRecent.size > 0) {
+      recentTiles = newRecent;
+      clearTimeout(recentTileTimer);
+      recentTileTimer = setTimeout(() => { recentTiles = new Set(); renderBoard(); }, 2500);
+    }
+  }
+  prevBoard = state.board ? state.board.map(row => [...row]) : null;
+
   gameState = state;
   myIdx = state.myIdx;
 
@@ -1489,6 +1488,7 @@ function renderBoard() {
         const type = isMyPlaceTurn ? getTilePlacementType(tile) : 'normal';
         cls += type === 'merger' ? ' playable-merger' : type === 'found' ? ' playable-found' : ' playable';
       } else if (myTiles.includes(tile)) cls += isMyPlaceTurn ? ' unplayable-hand' : ' in-hand';
+      if (recentTiles.has(tile)) cls += ' recent-tile';
       const click = playable.includes(tile) ? `onclick="placeTile('${tile}')"` : '';
       const hover = playable.includes(tile) ? `onmouseenter="showTilePreview(event,'${tile}')" onmouseleave="hideTilePreview()"` : (cell && cell !== 'lone' ? `onmouseenter="showChainPreview(event,'${cell}')" onmouseleave="hideTilePreview()"` : '');
       html += `<div class="${cls}" ${click} ${hover}>${tile}</div>`;
@@ -1625,8 +1625,15 @@ function renderActionPanel() {
         <div class="merger-context-row"><span class="merger-ctx-label">Survivor</span><span class="merger-ctx-val" style="color:${chainColors[pm.survivor]}">${pm.survivor} · $${survivorPrice}</span></div>
         <div class="merger-context-row"><span class="merger-ctx-label">Trade rate</span><span class="merger-ctx-val">2 ${dc} → 1 ${pm.survivor}</span></div>
       </div>`;
+      const survivorIssued = st.players.reduce((s, p) => s + (p.stocks[pm.survivor] || 0), 0);
+      const survivorRoom = 25 - survivorIssued;
       h += `<div class="merger-sliders"><label>Sell: <span id="sellVal">0</span></label><input type="range" id="sellSlider" min="0" max="${held}" value="0" oninput="updateMergerSliders()"/>`;
-      h += `<label>Trade (2→1): <span id="tradeVal">0</span></label><input type="range" id="tradeSlider" min="0" max="${held}" value="0" step="2" oninput="updateMergerSliders()"/>`;
+      if (survivorRoom > 0) {
+        const maxTrade = Math.min(Math.floor(held / 2) * 2, survivorRoom * 2);
+        h += `<label>Trade (2→1): <span id="tradeVal">0</span></label><input type="range" id="tradeSlider" min="0" max="${maxTrade}" value="0" step="2" oninput="updateMergerSliders()"/>`;
+      } else {
+        h += `<div style="font-size:11px;color:var(--text-muted);padding:4px 0;">Trade unavailable — ${pm.survivor} has no shares left</div><input type="hidden" id="tradeSlider" value="0"/>`;
+      }
       h += `<div class="merger-preview" id="mergerSummary">Keep all ${held}</div></div>`;
       h += `<button class="btn" style="margin-top:8px;width:100%" onclick="submitMergerDecision(${held})">Confirm</button>`;
       content.innerHTML = h;

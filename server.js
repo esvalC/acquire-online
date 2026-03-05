@@ -156,7 +156,7 @@ io.on('connection', (socket) => {
   });
 
   /* ── Solo: create & start a solo game ── */
-  socket.on('createSoloGame', ({ name, botCount }, cb) => {
+  socket.on('createSoloGame', ({ name, botCount, quickstart }, cb) => {
     const code = generateCode();
     currentRoom = code;
     playerName = name;
@@ -177,7 +177,7 @@ io.on('connection', (socket) => {
       spectators: [],
       game: null,
       isSolo: true,
-      config: { maxPlayers: players.length, quickstart: true },
+      config: { maxPlayers: players.length, quickstart: quickstart !== false },
     };
 
     socket.join(code);
@@ -325,6 +325,15 @@ io.on('connection', (socket) => {
     if (!p) return;
     const result = engine.initiateConcedeVote(room.game, p.idx);
     if (result.error) return socket.emit('actionError', result.error);
+    // In solo games, bots automatically vote yes
+    if (room.isSolo && room.game.concedeActive) {
+      for (const bp of room.players) {
+        if (bp.isBot && room.game.concedeVotes[bp.idx] === undefined) {
+          engine.submitConcedeVote(room.game, bp.idx, true);
+          if (!room.game.concedeActive) break; // vote passed, stop
+        }
+      }
+    }
     broadcastState(currentRoom);
   });
 
