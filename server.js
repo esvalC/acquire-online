@@ -156,19 +156,20 @@ io.on('connection', (socket) => {
   });
 
   /* ── Solo: create & start a solo game ── */
-  socket.on('createSoloGame', ({ name, botCount, quickstart }, cb) => {
+  socket.on('createSoloGame', ({ name, botCount, quickstart, personality }, cb) => {
     const code = generateCode();
     currentRoom = code;
     playerName = name;
     const token = randomUUID();
 
     const bots = BOT_ROSTER.slice(0, Math.min(Math.max(botCount || 1, 1), 5));
+    const botPersonality = personality || 'balanced';
 
     const players = [
       { name, socketId: socket.id, ready: true, idx: 0, token, isBot: false },
       ...bots.map((b, i) => ({
         name: b.name, socketId: null, ready: true,
-        idx: i + 1, token: null, isBot: true, personality: b.personality,
+        idx: i + 1, token: null, isBot: true, personality: botPersonality,
       })),
     ];
 
@@ -393,6 +394,14 @@ io.on('connection', (socket) => {
     room.game = null;
     room.players.forEach(p => { p.ready = true; });
     startGame(currentRoom);
+  });
+
+  /* ── Leave room (e.g. solo player goes back to setup) ── */
+  socket.on('leaveRoom', () => {
+    if (currentRoom && rooms[currentRoom]) {
+      delete rooms[currentRoom];
+    }
+    currentRoom = null;
   });
 
   /* ── Disconnect ───────────────────────────────── */

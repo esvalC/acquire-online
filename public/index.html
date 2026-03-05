@@ -732,6 +732,18 @@
     .home-title { font-size: 48px; }
   }
 
+  /* ── Stock purchase flash ────────────────────────── */
+  @keyframes stockPop {
+    0%   { opacity: 0; transform: translateY(-4px); }
+    15%  { opacity: 1; transform: translateY(0); }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+  .stock-flash-label {
+    font-size: 10px; color: var(--green); font-family: 'JetBrains Mono', monospace;
+    font-weight: 700; animation: stockPop 3s ease-out forwards;
+  }
+
   /* ── Recent tile flash ───────────────────────────── */
   @keyframes recentFlash {
     0%   { box-shadow: 0 0 0 3px rgba(255,255,255,0.85), 0 0 14px rgba(245,158,11,0.7); }
@@ -798,6 +810,21 @@
         <input type="checkbox" id="soloQuickstartToggle" checked />
         <span class="toggle-slider"></span>
       </label>
+    </div>
+    <div class="input-group" style="margin-bottom:12px;">
+      <label style="display:flex;justify-content:space-between;align-items:center;">
+        <span>Bot Style</span>
+        <span id="divStyleLabel" style="color:var(--gold);font-size:12px;">Balanced</span>
+      </label>
+      <div style="position:relative;margin-top:4px;">
+        <input type="range" id="diversificationSlider" min="0" max="10" value="5"
+          oninput="updateDivSlider()" style="width:100%;accent-color:var(--gold);" />
+        <div style="position:absolute;top:-14px;left:50%;transform:translateX(-50%);
+          font-size:9px;color:var(--gold);pointer-events:none;" title="Recommended">★ rec</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:2px;">
+        <span>Aggressive</span><span>Spread Out</span>
+      </div>
     </div>
     <div class="panel-title">Bot Roster</div>
     <div class="bot-roster" id="botRoster"></div>
@@ -1071,14 +1098,29 @@ let selectedBotCount = 2;
 let prevBoard = null;
 let recentTiles = new Set();
 let recentTileTimer = null;
+let prevPlayerStocks = null;
+let recentStockBuys = new Map(); // playerIdx → "+N Chain" string
+let stockFlashTimers = new Map();
 
 const BOT_ROSTER_CLIENT = [
-  { name: 'Aria',  personality: 'balanced',    desc: 'Spreads buys evenly across chains' },
-  { name: 'Rex',   personality: 'focused',     desc: 'Concentrates on a single chain' },
-  { name: 'Nova',  personality: 'diversified', desc: 'Maximum chain diversification' },
-  { name: 'Colt',  personality: 'focused',     desc: 'Single-chain specialist' },
-  { name: 'Vera',  personality: 'balanced',    desc: 'Balanced portfolio approach' },
+  { name: 'Aria',  title: 'The Broker'    },
+  { name: 'Rex',   title: 'The Shark'     },
+  { name: 'Nova',  title: 'The Maverick'  },
+  { name: 'Colt',  title: 'The Tycoon'   },
+  { name: 'Vera',  title: 'The Mogul'    },
 ];
+
+const HUMAN_TITLES = ['The Investor', 'The CEO', 'The Visionary', 'The Magnate', 'The Strategist'];
+function getHumanTitle(name) {
+  // Deterministic but fun — based on name length
+  return HUMAN_TITLES[name.length % HUMAN_TITLES.length];
+}
+
+function sliderToPersonality(val) {
+  if (val <= 3) return 'focused';
+  if (val <= 7) return 'balanced';
+  return 'diversified';
+}
 
 const chainColors = {
   Tower: '#e11d48', Luxor: '#f97316', American: '#3b82f6',
@@ -1092,10 +1134,24 @@ function showScreen(id) {
 }
 
 function goHome() {
+  document.getElementById('gameOverOverlay').style.display = 'none';
+  stopTurnClock();
+  gameState = null;
+  prevBoard = null;
+  recentTiles = new Set();
+  if (isSoloGame) socket.emit('leaveRoom');
+  isSoloGame = false;
   history.pushState({}, '', '/');
   showScreen('newLanding');
 }
 function goSolo() {
+  document.getElementById('gameOverOverlay').style.display = 'none';
+  stopTurnClock();
+  if (isSoloGame) socket.emit('leaveRoom');
+  isSoloGame = false;
+  gameState = null;
+  prevBoard = null;
+  recentTiles = new Set();
   history.pushState({}, '', '/solo');
   renderBotRoster();
   showScreen('soloSetup');
@@ -1171,11 +1227,16 @@ function renderBotRoster() {
       <div style="font-size:20px">🤖</div>
       <div style="flex:1">
         <div class="bot-name">${b.name}</div>
-        <div class="bot-desc">${b.desc}</div>
+        <div class="bot-desc" style="font-size:11px;color:var(--text-muted)">${b.title}</div>
       </div>
-      <div class="bot-personality ${b.personality}">${b.personality}</div>
     </div>
   `).join('');
+}
+
+function updateDivSlider() {
+  const val = parseInt(document.getElementById('diversificationSlider').value);
+  const label = val <= 3 ? 'Aggressive' : val <= 7 ? 'Balanced' : 'Spread Out';
+  document.getElementById('divStyleLabel').textContent = label;
 }
 
 function startSoloGame() {
@@ -1184,7 +1245,9 @@ function startSoloGame() {
   myName = name;
   isSoloGame = true;
   const quickstart = document.getElementById('soloQuickstartToggle').checked;
-  socket.emit('createSoloGame', { name, botCount: selectedBotCount, quickstart }, (res) => {
+  const divVal = parseInt(document.getElementById('diversificationSlider').value);
+  const personality = sliderToPersonality(divVal);
+  socket.emit('createSoloGame', { name, botCount: selectedBotCount, quickstart, personality }, (res) => {
     if (res.error) return showError(res.error);
     saveSession(res.code, name, res.token);
     showScreen('game');
@@ -1341,6 +1404,27 @@ socket.on('gameState', (state) => {
     }
   }
   prevBoard = state.board ? state.board.map(row => [...row]) : null;
+
+  // Detect stock purchases: compare against previous stocks
+  if (prevPlayerStocks && state.players) {
+    state.players.forEach((p, i) => {
+      const prev = prevPlayerStocks[i] || {};
+      const parts = [];
+      for (const ch of Object.keys(p.stocks || {})) {
+        const gained = (p.stocks[ch] || 0) - (prev[ch] || 0);
+        if (gained > 0) parts.push(`+${gained} ${ch}`);
+      }
+      if (parts.length > 0) {
+        recentStockBuys.set(i, parts.join(', '));
+        clearTimeout(stockFlashTimers.get(i));
+        stockFlashTimers.set(i, setTimeout(() => {
+          recentStockBuys.delete(i);
+          renderScoreboard();
+        }, 3000));
+      }
+    });
+  }
+  prevPlayerStocks = state.players ? state.players.map(p => ({...p.stocks})) : null;
 
   gameState = state;
   myIdx = state.myIdx;
@@ -1750,18 +1834,41 @@ function renderStockMarket() {
   }).join('');
 }
 
+/* ── Player title lookup ───────────────────────── */
+function getPlayerTitle(name, playerIdx) {
+  if (playerIdx === myIdx) return getHumanTitle(name);
+  const b = BOT_ROSTER_CLIENT.find(x => x.name === name);
+  return b ? b.title : getHumanTitle(name);
+}
+
 /* ── Scoreboard ────────────────────────────────── */
 function renderScoreboard() {
   const el = document.getElementById('scoreboard');
   el.innerHTML = gameState.players.map((p, i) => {
     const cur = i === gameState.currentPlayerIdx;
     const dc = !!p.disconnected;
-    const bot = isBot(i);
     const badges = Object.entries(p.stocks||{}).filter(([,v])=>v>0).map(([ch,v])=>`<span class="stock-badge" style="background:${chainColors[ch]}22;color:${chainColors[ch]}">${ch.slice(0,3)} ${v}</span>`).join('');
     const timer = (gameState.turnTimers[i]||0) + (cur ? Math.floor((Date.now()-gameState.turnStartTime)/1000) : 0);
-    const botBadge = bot ? '<span class="bot-badge">BOT</span>' : '';
-    const nameHtml = `${cur?'▸ ':''}${escapeHtml(p.name)}${i===myIdx?' (you)':''}${botBadge}${dc?'<span class="offline-dot" title="Disconnected"></span>':''}`;
-    return `<div class="score-player${dc?' disconnected':''}"><div class="score-player-header"><span class="score-player-name ${cur?'current':''}">${nameHtml}</span><span class="score-cash">$${p.cash.toLocaleString()}</span></div><div style="display:flex;justify-content:space-between;align-items:center"><div class="score-stocks">${badges||'<span style="color:var(--text-muted);font-size:10px">No stock</span>'}</div><span class="score-timer">${Math.floor(timer/60)}:${String(timer%60).padStart(2,'0')}</span></div></div>`;
+    const title = getPlayerTitle(p.name, i);
+    const you = i === myIdx ? ' <span style="font-size:10px;color:var(--text-muted)">(you)</span>' : '';
+    const nameHtml = `${cur?'▸ ':''}${escapeHtml(p.name)}${you}${dc?'<span class="offline-dot" title="Disconnected"></span>':''}`;
+    const stockFlash = recentStockBuys.get(i) || '';
+    return `<div class="score-player${dc?' disconnected':''}" id="score-player-${i}">
+      <div class="score-player-header">
+        <div>
+          <span class="score-player-name ${cur?'current':''}">${nameHtml}</span>
+          <div style="font-size:10px;color:var(--text-muted);font-style:italic;">${title}</div>
+        </div>
+        <div style="text-align:right">
+          <span class="score-cash">$${p.cash.toLocaleString()}</span>
+          ${stockFlash ? `<div class="stock-flash-label">${stockFlash}</div>` : ''}
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div class="score-stocks">${badges||'<span style="color:var(--text-muted);font-size:10px">No stock</span>'}</div>
+        <span class="score-timer">${Math.floor(timer/60)}:${String(timer%60).padStart(2,'0')}</span>
+      </div>
+    </div>`;
   }).join('');
 }
 
@@ -1817,10 +1924,9 @@ function initiateConcedeVote() { socket.emit('initiateConcedeVote'); }
 function submitVote(vote) { socket.emit('submitConcedeVote', { vote }); }
 function playAgain() {
   if (isSoloGame) {
-    socket.emit('soloPlayAgain');
-    document.getElementById('gameOverOverlay').style.display = 'none';
+    goSolo(); // back to solo setup to configure and start fresh
   } else {
-    socket.emit('playAgain');
+    socket.emit('playAgain'); // server sends backToLobby
   }
 }
 
