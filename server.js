@@ -122,7 +122,7 @@ function scheduleBotTurn(code) {
     if (!botPlayer) return;
 
     try {
-      decideBotAction(rooms[code].game, actingBotIdx, botPlayer.personality, botPlayer.difficulty);
+      decideBotAction(rooms[code].game, actingBotIdx, botPlayer.personality, botPlayer.difficulty, botPlayer.name);
     } catch (e) {
       console.error(`Bot error in room ${code}:`, e.message);
     }
