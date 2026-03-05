@@ -1,22 +1,168 @@
 /**
- * Acquire – Server (v3.0)
+ * Acquire – Server (v3.1 – profiles branch)
  * Express + Socket.io
- * Supports multiplayer (lobby) and solo (vs bots) modes.
+ * Supports multiplayer (lobby), solo (vs bots), and user profiles.
  */
 
-const express = require('express');
-const http = require('http');
-const path = require('path');
+require('dotenv').config();
+
+const express    = require('express');
+const http       = require('http');
+const path       = require('path');
 const { randomUUID } = require('crypto');
 const { Server } = require('socket.io');
-const engine = require('./gameEngine');
+const rateLimit  = require('express-rate-limit');
+const engine     = require('./gameEngine');
 const { decideBotAction, BOT_ROSTER } = require('./botAI');
+const db         = require('./db');
+const { signToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone } = require('./auth');
 
-const app = express();
+const app    = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: ['https://playonlineacquire.com', 'http://localhost:3000'] } });
+const io     = new Server(server, { cors: { origin: ['https://playonlineacquire.com', 'http://localhost:3000'] } });
 
+app.use(express.json());
 app.use(express.static('public'));
+
+/* ── Rate limiters ───────────────────────────────────────────── */
+const smslimit = rateLimit({
+  windowMs: 10 * 60 * 1000, max: 5,
+  message: { error: 'Too many SMS requests. Wait 10 minutes.' },
+  standardHeaders: true, legacyHeaders: false,
+});
+
+/* ── Auth / Profile routes ───────────────────────────────────── */
+
+// Check if a username is available
+app.get('/api/username-available', (req, res) => {
+  const { username } = req.query;
+  if (!username || username.length < 2 || username.length > 20) {
+    return res.json({ available: false, error: 'Username must be 2–20 characters' });
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    return res.json({ available: false, error: 'Letters, numbers, and underscores only' });
+  }
+  const existing = db.findByUsername(username);
+  res.json({ available: !existing });
+});
+
+// Send OTP — rate limited
+app.post('/api/send-otp', smslimit, async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: 'Phone number required' });
+  const e164 = normalisePhone(phone);
+  const result = await sendOtp(e164);
+  if (result.error) return res.status(500).json(result);
+  res.json({ ok: true, dev: result.dev || false });
+});
+
+// Register: verify OTP + create account → return JWT
+app.post('/api/register', async (req, res) => {
+  const { username, phone, code } = req.body;
+  if (!username || !phone || !code) return res.status(400).json({ error: 'Missing fields' });
+
+  if (username.length < 2 || username.length > 20 || !/^[a-zA-Z0-9_]+$/.test(username)) {
+    return res.status(400).json({ error: 'Invalid username' });
+  }
+
+  const e164 = normalisePhone(phone);
+  const check = await verifyOtp(e164, code);
+  if (!check.valid) return res.status(400).json({ error: check.error });
+
+  if (db.findByUsername(username)) return res.status(409).json({ error: 'Username already taken' });
+  if (db.phoneHashExists(e164))    return res.status(409).json({ error: 'An account already exists for this phone number' });
+
+  try {
+    const user  = db.createUser(username, e164, encryptPhone(e164));
+    const token = signToken(user.id);
+    res.json({ ok: true, token, user: { id: user.id, username: user.username, elo: user.elo } });
+  } catch (err) {
+    console.error('register error:', err.message);
+    res.status(500).json({ error: 'Could not create account' });
+  }
+});
+
+// Login step 1: look up username → decrypt phone → send OTP (rate limited)
+app.post('/api/login-by-username', smslimit, async (req, res) => {
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: 'Username required' });
+
+  const user = db.findByUsername(username);
+  if (!user) return res.status(404).json({ error: 'No account found with that username' });
+  if (!user.phone_encrypted) return res.status(400).json({ error: 'Account has no phone on file — contact support' });
+
+  try {
+    const e164   = decryptPhone(user.phone_encrypted);
+    const result = await sendOtp(e164);
+    if (result.error) return res.status(500).json(result);
+    res.json({ ok: true, dev: result.dev || false });
+  } catch (err) {
+    console.error('login-by-username error:', err.message);
+    res.status(500).json({ error: 'Could not send code' });
+  }
+});
+
+// Login step 2: verify OTP → return JWT
+// Accepts { username, code } (username-based login)
+app.post('/api/login', async (req, res) => {
+  const { username, code } = req.body;
+  if (!username || !code) return res.status(400).json({ error: 'Missing fields' });
+
+  const user = db.findByUsername(username);
+  if (!user) return res.status(404).json({ error: 'No account found with that username' });
+  if (!user.phone_encrypted) return res.status(400).json({ error: 'Account has no phone on file' });
+
+  try {
+    const e164  = decryptPhone(user.phone_encrypted);
+    const check = await verifyOtp(e164, code);
+    if (!check.valid) return res.status(400).json({ error: check.error });
+
+    const token = signToken(user.id);
+    res.json({ ok: true, token, user: { id: user.id, username: user.username, elo: user.elo } });
+  } catch (err) {
+    console.error('login error:', err.message);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Get current user profile (requires auth)
+// is_admin is intentionally stripped — never expose admin status to the client
+app.get('/api/me', requireAuth, (req, res) => {
+  const raw = db.findById(req.userId);
+  if (!raw) return res.status(404).json({ error: 'User not found' });
+  const { is_admin, ...user } = raw; // eslint-disable-line no-unused-vars
+  const history = db.getHistory(req.userId);
+  res.json({ user, history });
+});
+
+// Toggle profile visibility
+app.post('/api/me/visibility', requireAuth, (req, res) => {
+  const { isPublic } = req.body;
+  if (typeof isPublic !== 'boolean') return res.status(400).json({ error: 'isPublic must be a boolean' });
+  db.setPublicProfile(req.userId, isPublic);
+  res.json({ ok: true, public_profile: isPublic });
+});
+
+// Promote a user to admin — requires the ADMIN_PROMOTE_SECRET env var as a header.
+// Usage: curl -X POST /api/admin/promote -H "X-Admin-Secret: <secret>" -H "Content-Type: application/json" -d '{"username":"yourname"}'
+// Only run this once against your own account, then remove the secret from .env.
+app.post('/api/admin/promote', (req, res) => {
+  const secret = process.env.ADMIN_PROMOTE_SECRET;
+  if (!secret) return res.status(403).json({ error: 'Admin promotion is disabled' });
+  if (req.headers['x-admin-secret'] !== secret) return res.status(403).json({ error: 'Invalid secret' });
+  const { username } = req.body;
+  const user = db.findByUsername(username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  db.setAdmin(user.id, true);
+  res.json({ ok: true, message: `${username} is now an admin` });
+});
+
+// Example admin-only route — extend this pattern for future admin pages
+app.get('/api/admin/users', requireAdmin, (req, res) => {
+  // Returns basic user list — expand as needed
+  const users = db.findById && [db.findById(req.userId)]; // placeholder
+  res.json({ ok: true, note: 'Admin endpoint — add queries as needed' });
+});
 
 // Serve index.html for all known routes (client-side routing)
 const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules'];

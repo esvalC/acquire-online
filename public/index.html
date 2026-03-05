@@ -759,6 +759,93 @@
     content: '...'; animation: thinkDots 1.2s steps(3, end) infinite;
   }
   @keyframes thinkDots { 0% { content: '.'; } 33% { content: '..'; } 66% { content: '...'; } }
+
+  /* ── Hamburger button ─────────────────────────────── */
+  .menu-btn {
+    position: fixed; top: 16px; right: 16px; z-index: 200;
+    width: 40px; height: 40px; border-radius: 8px;
+    background: var(--bg-card); border: 1px solid var(--border-light);
+    cursor: pointer; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 5px;
+    transition: var(--transition);
+  }
+  .menu-btn:hover { border-color: var(--gold); }
+  .menu-btn span {
+    display: block; width: 18px; height: 2px;
+    background: var(--text-dim); border-radius: 2px; transition: var(--transition);
+  }
+  .menu-btn:hover span { background: var(--gold); }
+
+  /* ── Profile drawer ───────────────────────────────── */
+  .profile-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 300; display: none; backdrop-filter: blur(4px);
+  }
+  .profile-overlay.open { display: block; }
+  .profile-drawer {
+    position: absolute; top: 0; right: 0; bottom: 0; width: 320px;
+    background: var(--bg-card); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 24px;
+    gap: 16px; overflow-y: auto;
+    transform: translateX(100%); transition: transform 0.25s ease;
+  }
+  .profile-overlay.open .profile-drawer { transform: translateX(0); }
+  .drawer-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  .drawer-title {
+    font-family: 'Playfair Display', serif; font-size: 20px; color: var(--gold);
+  }
+  .drawer-close {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 22px; cursor: pointer; line-height: 1;
+  }
+  .drawer-close:hover { color: var(--text); }
+
+  /* ── Auth form inside drawer ──────────────────────── */
+  .auth-step { display: flex; flex-direction: column; gap: 12px; }
+  .auth-step input {
+    width: 100%; background: var(--bg-dark); border: 1px solid var(--border-light);
+    border-radius: var(--radius); color: var(--text); padding: 10px 14px;
+    font-family: 'DM Sans', sans-serif; font-size: 14px;
+  }
+  .auth-step input:focus { border-color: var(--gold); outline: none; }
+  .auth-hint { font-size: 11px; color: var(--text-muted); }
+  .auth-tabs { display: flex; gap: 4px; }
+  .auth-tab {
+    flex: 1; padding: 8px; text-align: center; font-size: 12px;
+    font-family: 'DM Sans', sans-serif; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1px; cursor: pointer;
+    border-radius: 6px; border: 1px solid var(--border-light);
+    background: var(--bg-dark); color: var(--text-muted); transition: var(--transition);
+  }
+  .auth-tab.active { background: rgba(245,158,11,0.15); border-color: var(--gold); color: var(--gold); }
+
+  /* ── Profile view ─────────────────────────────────── */
+  .profile-avatar {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold), #d97706);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 700; color: #000;
+    font-family: 'Playfair Display', serif;
+  }
+  .profile-username {
+    font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text);
+  }
+  .profile-elo {
+    font-family: 'JetBrains Mono', monospace; font-size: 24px;
+    color: var(--gold); font-weight: 500;
+  }
+  .profile-stat-row {
+    display: flex; justify-content: space-between; font-size: 13px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .profile-stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--text-muted); }
+  .stat-value { color: var(--text); font-weight: 500; }
+  .drawer-error { font-size: 12px; color: var(--red); padding: 6px 10px;
+    background: rgba(239,68,68,0.1); border-radius: 4px; border: 1px solid rgba(239,68,68,0.2); }
 </style>
 </head>
 <body>
@@ -1062,6 +1149,109 @@
     <div style="display:flex; gap:8px; justify-content:center; margin-top:20px;">
       <button class="btn" onclick="playAgain()">Play Again</button>
       <button class="btn btn-secondary btn-sm" style="width:auto" onclick="goHome()">Main Menu</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ HAMBURGER BUTTON (always visible) ═══ -->
+<button class="menu-btn" onclick="openProfileDrawer()" aria-label="Menu">
+  <span></span><span></span><span></span>
+</button>
+
+<!-- ═══ PROFILE DRAWER ═══ -->
+<div class="profile-overlay" id="profileOverlay" onclick="handleOverlayClick(event)">
+  <div class="profile-drawer" id="profileDrawer">
+    <div class="drawer-header">
+      <div class="drawer-title" id="drawerTitle">Account</div>
+      <button class="drawer-close" onclick="closeProfileDrawer()">✕</button>
+    </div>
+
+    <!-- Logged-out: tabs for Login / Register -->
+    <div id="drawerLoggedOut">
+      <div class="auth-tabs" style="margin-bottom:16px;">
+        <div class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Log In</div>
+        <div class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Register</div>
+      </div>
+
+      <!-- Login flow -->
+      <div id="loginFlow" class="auth-step">
+        <div id="loginStep1" class="auth-step">
+          <p class="auth-hint">Enter your username and we'll text a code to your registered number.</p>
+          <input type="text" id="loginUsername" placeholder="your_username" maxlength="20" autocomplete="username" />
+          <button class="btn" onclick="loginSendCode()">Send Code</button>
+        </div>
+        <div id="loginStep2" class="auth-step" style="display:none;">
+          <p class="auth-hint">Check your registered number for the 6-digit code.</p>
+          <input type="text" id="loginCode" placeholder="000000" maxlength="6" inputmode="numeric" />
+          <button class="btn" onclick="loginVerify()">Log In</button>
+          <button class="btn btn-secondary" onclick="resetLoginFlow()">← Back</button>
+        </div>
+      </div>
+
+      <!-- Register flow -->
+      <div id="registerFlow" class="auth-step" style="display:none;">
+        <div id="registerStep1" class="auth-step">
+          <p class="auth-hint">Choose a username (2–20 chars, letters/numbers/underscores).</p>
+          <input type="text" id="regUsername" placeholder="your_username" maxlength="20"
+            oninput="checkUsernameAvail()" />
+          <div id="usernameStatus" class="auth-hint"></div>
+          <input type="tel" id="regPhone" placeholder="+1 555 000 0000" />
+          <button class="btn" onclick="registerSendCode()">Send Code</button>
+        </div>
+        <div id="registerStep2" class="auth-step" style="display:none;">
+          <p class="auth-hint">Enter the 6-digit code sent to your phone.</p>
+          <input type="text" id="regCode" placeholder="000000" maxlength="6" inputmode="numeric" />
+          <button class="btn" onclick="registerVerify()">Create Profile</button>
+          <button class="btn btn-secondary" onclick="resetRegisterFlow()">← Back</button>
+        </div>
+      </div>
+
+      <div id="drawerError" class="drawer-error" style="display:none;"></div>
+    </div>
+
+    <!-- Logged-in: profile view -->
+    <div id="drawerLoggedIn" style="display:none;">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <div class="profile-avatar" id="profileAvatar">?</div>
+        <div>
+          <div class="profile-username" id="profileUsername">—</div>
+          <div style="font-size:11px;color:var(--text-muted);">Member since <span id="profileSince">—</span></div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">ELO Rating</div>
+        <div class="profile-elo" id="profileElo">1000</div>
+      </div>
+      <div id="profileStats">
+        <div class="profile-stat-row">
+          <span class="stat-label">Games Played</span>
+          <span class="stat-value" id="statPlayed">0</span>
+        </div>
+        <div class="profile-stat-row">
+          <span class="stat-label">Wins</span>
+          <span class="stat-value" id="statWins">0</span>
+        </div>
+        <div class="profile-stat-row">
+          <span class="stat-label">Win Rate</span>
+          <span class="stat-value" id="statWinRate">—</span>
+        </div>
+      </div>
+      <div style="padding-top:16px;border-top:1px solid var(--border);">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:10px;">Settings</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div>
+            <div style="font-size:13px;">Public Profile</div>
+            <div style="font-size:11px;color:var(--text-muted);">Let others see your stats</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="visibilityToggle" onchange="toggleVisibility(this.checked)" />
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+      <div style="padding-top:12px;border-top:1px solid var(--border);margin-top:auto;">
+        <button class="btn btn-secondary" style="font-size:12px;" onclick="logOut()">Log Out</button>
+      </div>
     </div>
   </div>
 </div>
@@ -2073,6 +2263,221 @@ function askRuleFromInput() {
   if (!q) return;
   askRule(q);
   input.value = '';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PROFILE / AUTH
+   ══════════════════════════════════════════════════════════════ */
+
+let authToken    = localStorage.getItem('acquire_auth_token') || null;
+let currentUser  = null; // { id, username, elo, games_played, games_won }
+let usernameCheckTimer = null;
+
+/* ── Drawer open/close ───────────────────────────────────────── */
+function openProfileDrawer() {
+  document.getElementById('profileOverlay').classList.add('open');
+  if (authToken) loadProfile();
+  else           renderDrawerLoggedOut();
+}
+function closeProfileDrawer() {
+  document.getElementById('profileOverlay').classList.remove('open');
+}
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('profileOverlay')) closeProfileDrawer();
+}
+
+/* ── Auth tab switching ──────────────────────────────────────── */
+function switchAuthTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('tabLogin').classList.toggle('active', isLogin);
+  document.getElementById('tabRegister').classList.toggle('active', !isLogin);
+  document.getElementById('loginFlow').style.display    = isLogin ? 'flex' : 'none';
+  document.getElementById('registerFlow').style.display = isLogin ? 'none' : 'flex';
+  clearDrawerError();
+}
+
+function renderDrawerLoggedOut() {
+  document.getElementById('drawerLoggedOut').style.display = 'flex';
+  document.getElementById('drawerLoggedIn').style.display  = 'none';
+  document.getElementById('drawerTitle').textContent = 'Account';
+  switchAuthTab('login');
+  resetLoginFlow();
+  resetRegisterFlow();
+}
+
+function renderDrawerLoggedIn(user) {
+  currentUser = user;
+  document.getElementById('drawerLoggedOut').style.display = 'none';
+  document.getElementById('drawerLoggedIn').style.display  = 'flex';
+  document.getElementById('drawerTitle').textContent = 'Profile';
+  document.getElementById('profileAvatar').textContent   = user.username[0].toUpperCase();
+  document.getElementById('profileUsername').textContent  = user.username;
+  document.getElementById('profileElo').textContent       = user.elo;
+  const since = user.created_at
+    ? new Date(user.created_at * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : '—';
+  document.getElementById('profileSince').textContent   = since;
+  document.getElementById('statPlayed').textContent     = user.games_played;
+  document.getElementById('statWins').textContent       = user.games_won;
+  const wr = user.games_played > 0
+    ? Math.round((user.games_won / user.games_played) * 100) + '%'
+    : '—';
+  document.getElementById('statWinRate').textContent = wr;
+  // Visibility toggle — default true if field not present
+  const toggle = document.getElementById('visibilityToggle');
+  if (toggle) toggle.checked = user.public_profile !== false && user.public_profile !== 0;
+}
+
+async function toggleVisibility(isPublic) {
+  if (!authToken) return;
+  await fetch('/api/me/visibility', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken },
+    body: JSON.stringify({ isPublic }),
+  });
+}
+
+/* ── Load profile from API ───────────────────────────────────── */
+async function loadProfile() {
+  try {
+    const res = await fetch('/api/me', {
+      headers: { Authorization: 'Bearer ' + authToken }
+    });
+    if (res.status === 401) { authToken = null; localStorage.removeItem('acquire_auth_token'); renderDrawerLoggedOut(); return; }
+    const data = await res.json();
+    renderDrawerLoggedIn(data.user);
+  } catch {
+    renderDrawerLoggedOut();
+  }
+}
+
+/* ── Login flow ──────────────────────────────────────────────── */
+function resetLoginFlow() {
+  document.getElementById('loginStep1').style.display = 'flex';
+  document.getElementById('loginStep2').style.display = 'none';
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginCode').value     = '';
+  clearDrawerError();
+}
+
+async function loginSendCode() {
+  const username = document.getElementById('loginUsername').value.trim();
+  if (!username) return showDrawerError('Enter your username');
+  clearDrawerError();
+  const btn = event.target;
+  btn.textContent = 'Sending...'; btn.disabled = true;
+  try {
+    const res  = await fetch('/api/login-by-username', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
+    const data = await res.json();
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code'; btn.disabled = false; return; }
+    if (data.dev) showDrawerError('DEV MODE: Check server console for code');
+    document.getElementById('loginStep1').style.display = 'none';
+    document.getElementById('loginStep2').style.display = 'flex';
+  } catch { showDrawerError('Network error'); }
+  btn.textContent = 'Send Code'; btn.disabled = false;
+}
+
+async function loginVerify() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const code     = document.getElementById('loginCode').value.trim();
+  if (!code) return showDrawerError('Enter the code');
+  clearDrawerError();
+  const btn = event.target;
+  btn.textContent = 'Verifying...'; btn.disabled = true;
+  try {
+    const res  = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, code }) });
+    const data = await res.json();
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Log In'; btn.disabled = false; return; }
+    authToken = data.token;
+    localStorage.setItem('acquire_auth_token', authToken);
+    renderDrawerLoggedIn(data.user);
+  } catch { showDrawerError('Network error'); }
+  btn.textContent = 'Log In'; btn.disabled = false;
+}
+
+/* ── Register flow ───────────────────────────────────────────── */
+function resetRegisterFlow() {
+  document.getElementById('registerStep1').style.display = 'flex';
+  document.getElementById('registerStep2').style.display = 'none';
+  document.getElementById('regUsername').value = '';
+  document.getElementById('regPhone').value    = '';
+  document.getElementById('regCode').value     = '';
+  document.getElementById('usernameStatus').textContent = '';
+  clearDrawerError();
+}
+
+function checkUsernameAvail() {
+  clearTimeout(usernameCheckTimer);
+  const val = document.getElementById('regUsername').value.trim();
+  const statusEl = document.getElementById('usernameStatus');
+  if (val.length < 2) { statusEl.textContent = ''; return; }
+  usernameCheckTimer = setTimeout(async () => {
+    const res  = await fetch('/api/username-available?username=' + encodeURIComponent(val));
+    const data = await res.json();
+    statusEl.style.color = data.available ? 'var(--green)' : 'var(--red)';
+    statusEl.textContent = data.error || (data.available ? '✓ Available' : '✗ Already taken');
+  }, 400);
+}
+
+async function registerSendCode() {
+  const username = document.getElementById('regUsername').value.trim();
+  const phone    = document.getElementById('regPhone').value.trim();
+  if (!username) return showDrawerError('Choose a username');
+  if (!phone)    return showDrawerError('Enter your phone number');
+  clearDrawerError();
+  const btn = event.target;
+  btn.textContent = 'Sending...'; btn.disabled = true;
+  try {
+    // Check availability one more time before sending
+    const avRes  = await fetch('/api/username-available?username=' + encodeURIComponent(username));
+    const avData = await avRes.json();
+    if (!avData.available) { showDrawerError(avData.error || 'Username already taken'); btn.textContent = 'Send Code'; btn.disabled = false; return; }
+
+    const res  = await fetch('/api/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
+    const data = await res.json();
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code'; btn.disabled = false; return; }
+    if (data.dev) showDrawerError('DEV MODE: Check server console for code');
+    document.getElementById('registerStep1').style.display = 'none';
+    document.getElementById('registerStep2').style.display = 'flex';
+  } catch { showDrawerError('Network error'); }
+  btn.textContent = 'Send Code'; btn.disabled = false;
+}
+
+async function registerVerify() {
+  const username = document.getElementById('regUsername').value.trim();
+  const phone    = document.getElementById('regPhone').value.trim();
+  const code     = document.getElementById('regCode').value.trim();
+  if (!code) return showDrawerError('Enter the code');
+  clearDrawerError();
+  const btn = event.target;
+  btn.textContent = 'Creating...'; btn.disabled = true;
+  try {
+    const res  = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, phone, code }) });
+    const data = await res.json();
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Create Profile'; btn.disabled = false; return; }
+    authToken = data.token;
+    localStorage.setItem('acquire_auth_token', authToken);
+    renderDrawerLoggedIn(data.user);
+  } catch { showDrawerError('Network error'); }
+  btn.textContent = 'Create Profile'; btn.disabled = false;
+}
+
+/* ── Log out ─────────────────────────────────────────────────── */
+function logOut() {
+  authToken = null;
+  currentUser = null;
+  localStorage.removeItem('acquire_auth_token');
+  renderDrawerLoggedOut();
+}
+
+/* ── Drawer error display ────────────────────────────────────── */
+function showDrawerError(msg) {
+  const el = document.getElementById('drawerError');
+  el.textContent = msg; el.style.display = 'block';
+}
+function clearDrawerError() {
+  const el = document.getElementById('drawerError');
+  if (el) { el.textContent = ''; el.style.display = 'none'; }
 }
 </script>
 </body>
