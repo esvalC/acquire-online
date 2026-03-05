@@ -58,16 +58,17 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
         }
         return 1.5;
       }
-      let score = 4 + myShares * 0.1;
+      // Expanding own chain is always top-2 priority — score always beats mergers
+      let score = 15 + myShares * 0.2;
       if (difficulty === 'hard') {
-        // Bonus for pushing a chain toward safe size (11+)
         const chainSize = game.chains[analysis.chain].tiles.length;
         if (chainSize >= 8 && chainSize < 11) score += 2.5;
       }
       return score;
     }
     case 'found':
-      return 3;
+      // Founding a hotel is always the top priority for all bots
+      return 20;
     case 'merge': {
       const chains = analysis.chains;
       const sorted = chains
