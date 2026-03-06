@@ -89,8 +89,8 @@
 
 <div id="authGate">
   <div style="font-family:'Playfair Display',serif;font-size:24px;color:var(--gold)">Project Dashboard</div>
-  <div style="font-size:13px;color:var(--muted)">Admin access required</div>
-  <input type="text" id="authInput" placeholder="Paste your JWT token" autocomplete="off" />
+  <div style="font-size:13px;color:var(--muted)">Log in on <a href="/beta" style="color:var(--gold)">/beta</a> first, then come back here</div>
+  <input type="text" id="authInput" placeholder="Or paste JWT token manually" autocomplete="off" />
   <button class="btn-gold" onclick="tryAuth()">Sign In</button>
   <div id="authError" style="color:var(--red);font-size:12px;display:none">Invalid or expired token</div>
 </div>
@@ -147,7 +147,8 @@
 
 <script>
 /* ── Auth ───────────────────────────────────────── */
-let token = localStorage.getItem('plan_token') || '';
+// Use the same token as the main app — no separate login needed
+let token = localStorage.getItem('acquire_auth_token') || localStorage.getItem('plan_token') || '';
 let allFeedback = [];
 let currentFilter = 'all';
 
