@@ -15,7 +15,7 @@ const rateLimit  = require('express-rate-limit');
 const engine     = require('./gameEngine');
 const { decideBotAction, BOT_ROSTER } = require('./botAI');
 const db         = require('./db');
-const { signToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone } = require('./auth');
+const { signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone } = require('./auth');
 
 const app    = express();
 const server = http.createServer(app);
@@ -242,6 +242,11 @@ function broadcastState(code) {
     io.to(s.socketId).emit('gameState', clientState);
   }
 
+  // Record game result once when it transitions to gameOver
+  if (room.game.phase === 'gameOver' && !room.gameRecorded) {
+    recordGameEnd(code);
+  }
+
   // Schedule next bot move if this is a solo room
   if (room.isSolo && room.game.phase !== 'gameOver') {
     scheduleBotTurn(code);
@@ -259,6 +264,62 @@ function broadcastLobby(code) {
     gameInProgress: !!room.game,
   };
   io.to(code).emit('lobbyUpdate', lobbyData);
+}
+
+/* ── ELO + game recording ───────────────────────────────────── */
+const ELO_K = 32;
+
+function expectedScore(myElo, oppElo) {
+  return 1 / (1 + Math.pow(10, (oppElo - myElo) / 400));
+}
+
+function recordGameEnd(code) {
+  const room = rooms[code];
+  if (!room || !room.game || room.gameRecorded) return;
+  room.gameRecorded = true;
+
+  const standings = room.game.standings; // [{ name, cash }] sorted desc
+  if (!standings || standings.length === 0) return;
+
+  const humanPlayers = room.players.filter(p => !p.isBot && p.userId);
+  if (humanPlayers.length === 0) return;
+
+  // Snapshot current ELO for all participants before any updates
+  const eloMap = {};
+  for (const p of humanPlayers) {
+    const user = db.findById(p.userId);
+    if (user) eloMap[p.userId] = user.elo;
+  }
+
+  for (const p of humanPlayers) {
+    const myRank  = standings.findIndex(s => s.name === p.name);
+    const myElo   = eloMap[p.userId] || 1000;
+    let delta = 0;
+
+    const otherHumans = humanPlayers.filter(o => o.userId !== p.userId);
+    if (otherHumans.length > 0) {
+      // Pairwise ELO vs other logged-in humans
+      for (const opp of otherHumans) {
+        const oppRank = standings.findIndex(s => s.name === opp.name);
+        const oppElo  = eloMap[opp.userId] || 1000;
+        const actual  = myRank < oppRank ? 1 : 0; // lower index = better place
+        delta += ELO_K * (actual - expectedScore(myElo, oppElo));
+      }
+      delta /= otherHumans.length; // normalize
+    } else {
+      // Solo game — compare vs fixed bot ELO 1000
+      const actual = myRank === 0 ? 1 : 0;
+      delta = ELO_K * (actual - expectedScore(myElo, 1000));
+    }
+
+    const eloChange = Math.round(delta);
+    const result    = myRank === 0 ? 'win' : 'loss';
+    const opponents = standings
+      .filter(s => s.name !== p.name)
+      .map(s => ({ name: s.name, cash: s.cash }));
+
+    db.recordGameResult(p.userId, result, eloChange, opponents);
+  }
 }
 
 /* ── Game start ─────────────────────────────────────────────── */
@@ -321,14 +382,16 @@ io.on('connection', (socket) => {
   let playerName = null;
 
   /* ── Multiplayer: create room ── */
-  socket.on('createRoom', ({ name, maxPlayers, quickstart }, cb) => {
+  socket.on('createRoom', ({ name, maxPlayers, quickstart, authToken }, cb) => {
     const code = generateCode();
     currentRoom = code;
     playerName = name;
     const token = randomUUID();
+    const payload = authToken ? verifyToken(authToken) : null;
+    const userId  = payload ? payload.sub : null;
 
     rooms[code] = {
-      players: [{ name, socketId: socket.id, ready: false, idx: 0, token }],
+      players: [{ name, socketId: socket.id, ready: false, idx: 0, token, userId }],
       spectators: [],
       game: null,
       isSolo: false,
@@ -341,16 +404,18 @@ io.on('connection', (socket) => {
   });
 
   /* ── Solo: create & start a solo game ── */
-  socket.on('createSoloGame', ({ name, botCount, quickstart, botConfigs }, cb) => {
+  socket.on('createSoloGame', ({ name, botCount, quickstart, botConfigs, authToken }, cb) => {
     const code = generateCode();
     currentRoom = code;
     playerName = name;
     const token = randomUUID();
+    const payload = authToken ? verifyToken(authToken) : null;
+    const userId  = payload ? payload.sub : null;
 
     const bots = BOT_ROSTER.slice(0, Math.min(Math.max(botCount || 1, 1), 5));
 
     const players = [
-      { name, socketId: socket.id, ready: true, idx: 0, token, isBot: false },
+      { name, socketId: socket.id, ready: true, idx: 0, token, isBot: false, userId },
       ...bots.map((b, i) => {
         const cfg = (botConfigs && botConfigs[i]) || {};
         return {
@@ -386,13 +451,15 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('joinRoom', ({ name, code, spectate }, cb) => {
+  socket.on('joinRoom', ({ name, code, spectate, authToken }, cb) => {
     const room = rooms[code];
     if (!room) return cb({ error: 'Room not found' });
 
     currentRoom = code;
     playerName = name;
     socket.join(code);
+    const payload = authToken ? verifyToken(authToken) : null;
+    const userId  = payload ? payload.sub : null;
 
     if (spectate || room.game || room.players.length >= room.config.maxPlayers) {
       room.spectators.push({ name, socketId: socket.id });
@@ -403,7 +470,7 @@ io.on('connection', (socket) => {
     }
 
     const token = randomUUID();
-    room.players.push({ name, socketId: socket.id, ready: false, idx: room.players.length, token });
+    room.players.push({ name, socketId: socket.id, ready: false, idx: room.players.length, token, userId });
     cb({ ok: true, spectator: false, token });
     broadcastLobby(code);
   });
