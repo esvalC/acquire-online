@@ -81,15 +81,17 @@ function generateOtp() {
   return String(Math.floor(100000 + crypto.randomInt(900000)));
 }
 
-/* ── Twilio Verify ───────────────────────────────────────────── */
-let twilioClient  = null;
-let verifyService = null;
-const DEV_MODE    = !process.env.TWILIO_ACCOUNT_SID;
+/* ── SMS via Twilio Messages (raw SMS, NOT Twilio Verify) ────── */
+// We generate OTPs ourselves and store them in memory.
+// Twilio only sees the phone number long enough to deliver the SMS —
+// it does not log or track verifications on its end.
+// Raw phone numbers are never written to our database (only encrypted).
+let twilioClient = null;
+const DEV_MODE   = !process.env.TWILIO_ACCOUNT_SID;
 
 if (!DEV_MODE) {
   const twilio = require('twilio');
-  twilioClient  = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
-  verifyService = process.env.TWILIO_VERIFY_SID;
+  twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
 }
 
 /**
@@ -97,19 +99,23 @@ if (!DEV_MODE) {
  * Returns { ok: true } or { error: string }.
  */
 async function sendOtp(e164) {
+  const code = generateOtp();
+  otpStore.set(e164, { code, expires: Date.now() + OTP_TTL_MS, attempts: 0 });
+
   if (DEV_MODE) {
-    const code = generateOtp();
-    otpStore.set(e164, { code, expires: Date.now() + OTP_TTL_MS, attempts: 0 });
     console.log(`\n[DEV OTP] Phone: ${e164}  Code: ${code}\n`);
     return { ok: true, dev: true };
   }
 
   try {
-    await twilioClient.verify.v2.services(verifyService).verifications.create({
-      to: e164, channel: 'sms',
+    await twilioClient.messages.create({
+      body: `Your Acquire verification code: ${code}. Valid for 10 minutes.`,
+      from: process.env.TWILIO_PHONE_NUMBER,
+      to: e164,
     });
     return { ok: true };
   } catch (err) {
+    otpStore.delete(e164); // don't leave a dangling code if send failed
     console.error('Twilio sendOtp error:', err.message);
     return { error: 'Failed to send SMS. Check the phone number and try again.' };
   }
@@ -118,29 +124,17 @@ async function sendOtp(e164) {
 /**
  * Verify an OTP for the given phone number.
  * Returns { valid: true } or { valid: false, error: string }.
+ * Verification is always handled in-memory — Twilio is not involved here.
  */
 async function verifyOtp(e164, code) {
-  if (DEV_MODE) {
-    const entry = otpStore.get(e164);
-    if (!entry)                        return { valid: false, error: 'No code sent to this number' };
-    if (Date.now() > entry.expires)  { otpStore.delete(e164); return { valid: false, error: 'Code expired' }; }
-    entry.attempts++;
-    if (entry.attempts > MAX_ATTEMPTS) { otpStore.delete(e164); return { valid: false, error: 'Too many attempts' }; }
-    if (entry.code !== String(code))   return { valid: false, error: 'Incorrect code' };
-    otpStore.delete(e164);
-    return { valid: true };
-  }
-
-  try {
-    const check = await twilioClient.verify.v2.services(verifyService).verificationChecks.create({
-      to: e164, code: String(code),
-    });
-    if (check.status === 'approved') return { valid: true };
-    return { valid: false, error: 'Incorrect code' };
-  } catch (err) {
-    console.error('Twilio verifyOtp error:', err.message);
-    return { valid: false, error: 'Verification failed. Try again.' };
-  }
+  const entry = otpStore.get(e164);
+  if (!entry)                        return { valid: false, error: 'No code sent to this number' };
+  if (Date.now() > entry.expires)  { otpStore.delete(e164); return { valid: false, error: 'Code expired' }; }
+  entry.attempts++;
+  if (entry.attempts > MAX_ATTEMPTS) { otpStore.delete(e164); return { valid: false, error: 'Too many attempts' }; }
+  if (entry.code !== String(code))   return { valid: false, error: 'Incorrect code' };
+  otpStore.delete(e164);
+  return { valid: true };
 }
 
 /* ── Phone normalisation ─────────────────────────────────────── */
@@ -152,4 +146,15 @@ function normalisePhone(raw) {
   return stripped;
 }
 
-module.exports = { signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone };
+/**
+ * Return a masked version of an E.164 number for display.
+ * e.g. +14155551234 → +1 •••-•••-1234
+ */
+function maskPhone(e164) {
+  const digits = e164.replace(/\D/g, '');
+  const last4  = digits.slice(-4);
+  const cc     = e164.startsWith('+1') ? '+1' : '+' + digits.slice(0, digits.length - 10);
+  return `${cc} •••-•••-${last4}`;
+}
+
+module.exports = { signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone };

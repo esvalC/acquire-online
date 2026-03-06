@@ -15,7 +15,7 @@ const rateLimit  = require('express-rate-limit');
 const engine     = require('./gameEngine');
 const { decideBotAction, BOT_ROSTER } = require('./botAI');
 const db         = require('./db');
-const { signToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone } = require('./auth');
+const { signToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone } = require('./auth');
 
 const app    = express();
 const server = http.createServer(app);
@@ -82,6 +82,40 @@ app.post('/api/register', async (req, res) => {
   }
 });
 
+// Account recovery: look up by phone hash → send OTP (rate limited)
+// Used when someone forgets their username.
+app.post('/api/login-by-phone', smslimit, async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: 'Phone number required' });
+
+  const e164 = normalisePhone(phone);
+  const { hashPhone } = require('./db');
+  const user = db.findByPhoneHash(hashPhone(e164));
+  if (!user) return res.status(404).json({ error: 'No account found for that phone number' });
+
+  const result = await sendOtp(e164);
+  if (result.error) return res.status(500).json(result);
+  // Return the masked username so the UI can say "Logging in as ___"
+  res.json({ ok: true, username: user.username, dev: result.dev || false });
+});
+
+// Verify OTP sent via login-by-phone → return JWT
+app.post('/api/login-by-phone/verify', async (req, res) => {
+  const { phone, code } = req.body;
+  if (!phone || !code) return res.status(400).json({ error: 'Missing fields' });
+
+  const e164  = normalisePhone(phone);
+  const check = await verifyOtp(e164, code);
+  if (!check.valid) return res.status(400).json({ error: check.error });
+
+  const { hashPhone } = require('./db');
+  const user = db.findByPhoneHash(hashPhone(e164));
+  if (!user) return res.status(404).json({ error: 'Account not found' });
+
+  const token = signToken(user.id);
+  res.json({ ok: true, token, user: { id: user.id, username: user.username, elo: user.elo } });
+});
+
 // Login step 1: look up username → decrypt phone → send OTP (rate limited)
 app.post('/api/login-by-username', smslimit, async (req, res) => {
   const { username } = req.body;
@@ -131,6 +165,11 @@ app.get('/api/me', requireAuth, (req, res) => {
   const raw = db.findById(req.userId);
   if (!raw) return res.status(404).json({ error: 'User not found' });
   const { is_admin, ...user } = raw; // eslint-disable-line no-unused-vars
+  // Add masked phone for display — never expose raw or encrypted value
+  if (user.phone_encrypted) {
+    try { user.phone_masked = maskPhone(decryptPhone(user.phone_encrypted)); }
+    catch { user.phone_masked = null; }
+  }
   const history = db.getHistory(req.userId);
   res.json({ user, history });
 });

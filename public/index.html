@@ -1180,13 +1180,23 @@
 
       <!-- Login flow -->
       <div id="loginFlow" class="auth-step">
+        <!-- Step 1a: username -->
         <div id="loginStep1" class="auth-step">
           <p class="auth-hint">Enter your username and we'll text a code to your registered number.</p>
           <input type="text" id="loginUsername" placeholder="your_username" maxlength="20" autocomplete="username" />
           <button class="btn" onclick="loginSendCode()">Send Code</button>
+          <button class="btn btn-secondary" style="margin-top:4px;font-size:11px" onclick="switchLoginMode('phone')">Forgot username? Use phone number</button>
         </div>
+        <!-- Step 1b: phone (account recovery) -->
+        <div id="loginStep1Phone" class="auth-step" style="display:none;">
+          <p class="auth-hint">Enter your registered phone number and we'll send a code.</p>
+          <input type="tel" id="loginPhone" placeholder="+1 555 000 0000" />
+          <button class="btn" onclick="loginSendCodeByPhone()">Send Code</button>
+          <button class="btn btn-secondary" style="margin-top:4px;font-size:11px" onclick="switchLoginMode('username')">← Back to username</button>
+        </div>
+        <!-- Step 2: enter code -->
         <div id="loginStep2" class="auth-step" style="display:none;">
-          <p class="auth-hint">Check your registered number for the 6-digit code.</p>
+          <p class="auth-hint" id="loginStep2Hint">Check your registered number for the 6-digit code.</p>
           <input type="text" id="loginCode" placeholder="000000" maxlength="6" inputmode="numeric" />
           <button class="btn" onclick="loginVerify()">Log In</button>
           <button class="btn btn-secondary" onclick="resetLoginFlow()">← Back</button>
@@ -1252,6 +1262,10 @@
             <input type="checkbox" id="visibilityToggle" onchange="toggleVisibility(this.checked)" />
             <span class="toggle-slider"></span>
           </label>
+        </div>
+        <div style="margin-top:10px;">
+          <div style="font-size:13px;">Registered Phone</div>
+          <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="profilePhone">—</div>
         </div>
       </div>
       <div style="padding-top:12px;border-top:1px solid var(--border);margin-top:auto;">
@@ -2338,6 +2352,9 @@ function renderDrawerLoggedIn(user) {
   // Visibility toggle — default true if field not present
   const toggle = document.getElementById('visibilityToggle');
   if (toggle) toggle.checked = user.public_profile !== false && user.public_profile !== 0;
+  // Masked phone
+  const phoneEl = document.getElementById('profilePhone');
+  if (phoneEl) phoneEl.textContent = user.phone_masked || '—';
 }
 
 async function toggleVisibility(isPublic) {
@@ -2364,10 +2381,22 @@ async function loadProfile() {
 }
 
 /* ── Login flow ──────────────────────────────────────────────── */
+let loginMode = 'username'; // 'username' | 'phone'
+
+function switchLoginMode(mode) {
+  loginMode = mode;
+  document.getElementById('loginStep1').style.display       = mode === 'username' ? 'flex' : 'none';
+  document.getElementById('loginStep1Phone').style.display  = mode === 'phone'    ? 'flex' : 'none';
+  clearDrawerError();
+}
+
 function resetLoginFlow() {
-  document.getElementById('loginStep1').style.display = 'flex';
-  document.getElementById('loginStep2').style.display = 'none';
+  loginMode = 'username';
+  document.getElementById('loginStep1').style.display       = 'flex';
+  document.getElementById('loginStep1Phone').style.display  = 'none';
+  document.getElementById('loginStep2').style.display       = 'none';
   document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPhone').value    = '';
   document.getElementById('loginCode').value     = '';
   clearDrawerError();
 }
@@ -2384,21 +2413,48 @@ async function loginSendCode() {
     if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code'; btn.disabled = false; return; }
     if (data.dev) showDrawerError('DEV MODE: Check server console for code');
     document.getElementById('loginStep1').style.display = 'none';
+    document.getElementById('loginStep2Hint').textContent = 'Check your registered number for the 6-digit code.';
+    document.getElementById('loginStep2').style.display = 'flex';
+  } catch { showDrawerError('Network error'); }
+  btn.textContent = 'Send Code'; btn.disabled = false;
+}
+
+async function loginSendCodeByPhone() {
+  const phone = document.getElementById('loginPhone').value.trim();
+  if (!phone) return showDrawerError('Enter your phone number');
+  clearDrawerError();
+  const btn = event.target;
+  btn.textContent = 'Sending...'; btn.disabled = true;
+  try {
+    const res  = await fetch('/api/login-by-phone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
+    const data = await res.json();
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code'; btn.disabled = false; return; }
+    if (data.dev) showDrawerError('DEV MODE: Check server console for code');
+    document.getElementById('loginStep1Phone').style.display = 'none';
+    document.getElementById('loginStep2Hint').textContent = data.username
+      ? `Code sent. Logging in as "${data.username}".`
+      : 'Check your phone for the 6-digit code.';
     document.getElementById('loginStep2').style.display = 'flex';
   } catch { showDrawerError('Network error'); }
   btn.textContent = 'Send Code'; btn.disabled = false;
 }
 
 async function loginVerify() {
-  const username = document.getElementById('loginUsername').value.trim();
-  const code     = document.getElementById('loginCode').value.trim();
+  const code = document.getElementById('loginCode').value.trim();
   if (!code) return showDrawerError('Enter the code');
   clearDrawerError();
   const btn = event.target;
   btn.textContent = 'Verifying...'; btn.disabled = true;
   try {
-    const res  = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, code }) });
-    const data = await res.json();
+    let res, data;
+    if (loginMode === 'phone') {
+      const phone = document.getElementById('loginPhone').value.trim();
+      res  = await fetch('/api/login-by-phone/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, code }) });
+    } else {
+      const username = document.getElementById('loginUsername').value.trim();
+      res  = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, code }) });
+    }
+    data = await res.json();
     if (data.error) { showDrawerError(data.error); btn.textContent = 'Log In'; btn.disabled = false; return; }
     authToken = data.token;
     localStorage.setItem('acquire_auth_token', authToken);
