@@ -788,10 +788,11 @@
   }
   .profile-overlay.open { display: block; }
   .profile-drawer {
-    position: absolute; top: 0; right: 0; bottom: 0; width: 320px;
+    position: absolute; top: 0; right: 0; bottom: 0;
+    width: clamp(300px, 88vw, 400px);
     background: var(--bg-card); border-left: 1px solid var(--border);
     display: flex; flex-direction: column; padding: 24px;
-    gap: 16px; overflow-y: auto;
+    gap: 16px; overflow-y: auto; overflow-x: hidden;
     transform: translateX(100%); transition: transform 0.25s ease;
   }
   .profile-overlay.open .profile-drawer { transform: translateX(0); }
@@ -816,7 +817,19 @@
     font-family: 'DM Sans', sans-serif; font-size: 14px;
   }
   .auth-step input:focus { border-color: var(--gold); outline: none; }
-  .auth-hint { font-size: 11px; color: var(--text-muted); }
+  .auth-hint { font-size: 11px; color: var(--text-muted); overflow-wrap: break-word; word-break: break-word; line-height: 1.5; }
+  .auth-label { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: -4px; }
+  .phone-input-row { display: flex; align-items: stretch; gap: 0; }
+  .phone-prefix {
+    background: var(--bg-dark); border: 1px solid var(--border-light); border-right: none;
+    border-radius: var(--radius) 0 0 var(--radius); color: var(--text-dim);
+    padding: 10px 10px; font-size: 14px; font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap; flex-shrink: 0; display: flex; align-items: center;
+  }
+  .phone-input-row input {
+    flex: 1; min-width: 0; width: auto !important;
+    border-radius: 0 var(--radius) var(--radius) 0 !important;
+  }
   .auth-tabs { display: flex; gap: 4px; }
   .auth-tab {
     flex: 1; padding: 8px; text-align: center; font-size: 12px;
@@ -1189,8 +1202,12 @@
         </div>
         <!-- Step 1b: phone (account recovery) -->
         <div id="loginStep1Phone" class="auth-step" style="display:none;">
-          <p class="auth-hint">Enter your registered phone number and we'll send a code.</p>
-          <input type="tel" id="loginPhone" placeholder="+1 555 000 0000" />
+          <p class="auth-hint">Enter your registered phone number and we'll text a code.</p>
+          <span class="auth-label">Phone Number</span>
+          <div class="phone-input-row">
+            <span class="phone-prefix">+1</span>
+            <input type="tel" id="loginPhone" placeholder="5551234567" maxlength="10" inputmode="numeric" autocomplete="tel-national" />
+          </div>
           <button class="btn" onclick="loginSendCodeByPhone()">Send Code</button>
           <button class="btn btn-secondary" style="margin-top:4px;font-size:11px" onclick="switchLoginMode('username')">← Back to username</button>
         </div>
@@ -1206,12 +1223,17 @@
       <!-- Register flow -->
       <div id="registerFlow" class="auth-step" style="display:none;">
         <div id="registerStep1" class="auth-step">
-          <p class="auth-hint">Choose a username (2–20 chars, letters/numbers/underscores).</p>
+          <span class="auth-label">Username</span>
           <input type="text" id="regUsername" placeholder="your_username" maxlength="20"
-            oninput="checkUsernameAvail()" />
+            oninput="checkUsernameAvail()" autocomplete="username" />
           <div id="usernameStatus" class="auth-hint"></div>
-          <input type="tel" id="regPhone" placeholder="+1 555 000 0000" />
-          <button class="btn" onclick="registerSendCode()">Send Code</button>
+          <span class="auth-label">Phone Number</span>
+          <div class="phone-input-row">
+            <span class="phone-prefix">+1</span>
+            <input type="tel" id="regPhone" placeholder="5551234567" maxlength="10" inputmode="numeric" autocomplete="tel-national" />
+          </div>
+          <p class="auth-hint">Used to verify your account. We never share your number.</p>
+          <button class="btn" onclick="registerSendCode()">Send Code →</button>
         </div>
         <div id="registerStep2" class="auth-step" style="display:none;">
           <p class="auth-hint">Enter the 6-digit code sent to your phone.</p>
@@ -2503,12 +2525,12 @@ async function registerSendCode() {
 
     const res  = await fetch('/api/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
     const data = await res.json();
-    if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code'; btn.disabled = false; return; }
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code →'; btn.disabled = false; return; }
     if (data.dev) showDrawerError('DEV MODE: Check server console for code');
     document.getElementById('registerStep1').style.display = 'none';
     document.getElementById('registerStep2').style.display = 'flex';
   } catch { showDrawerError('Network error'); }
-  btn.textContent = 'Send Code'; btn.disabled = false;
+  btn.textContent = 'Send Code →'; btn.disabled = false;
 }
 
 async function registerVerify() {

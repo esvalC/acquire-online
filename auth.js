@@ -81,17 +81,21 @@ function generateOtp() {
   return String(Math.floor(100000 + crypto.randomInt(900000)));
 }
 
-/* ── SMS via Twilio Messages (raw SMS, NOT Twilio Verify) ────── */
-// We generate OTPs ourselves and store them in memory.
-// Twilio only sees the phone number long enough to deliver the SMS —
-// it does not log or track verifications on its end.
-// Raw phone numbers are never written to our database (only encrypted).
-let twilioClient = null;
-const DEV_MODE   = !process.env.TWILIO_ACCOUNT_SID;
+/* ── Twilio Verify ───────────────────────────────────────────── */
+// Using Twilio Verify (managed OTP service). Twilio handles delivery
+// and tracks verification status for up to ~10 minutes, then purges.
+// Raw phone numbers are never stored in our own database (only encrypted).
+//
+// TODO: Switch to raw Twilio Messages for reduced Twilio data footprint.
+// See GitHub issue #9 for exact steps (requires buying a Twilio number).
+let twilioClient  = null;
+let verifyService = null;
+const DEV_MODE    = !process.env.TWILIO_ACCOUNT_SID;
 
 if (!DEV_MODE) {
   const twilio = require('twilio');
-  twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  twilioClient  = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  verifyService = process.env.TWILIO_VERIFY_SID;
 }
 
 /**
@@ -99,23 +103,19 @@ if (!DEV_MODE) {
  * Returns { ok: true } or { error: string }.
  */
 async function sendOtp(e164) {
-  const code = generateOtp();
-  otpStore.set(e164, { code, expires: Date.now() + OTP_TTL_MS, attempts: 0 });
-
   if (DEV_MODE) {
+    const code = generateOtp();
+    otpStore.set(e164, { code, expires: Date.now() + OTP_TTL_MS, attempts: 0 });
     console.log(`\n[DEV OTP] Phone: ${e164}  Code: ${code}\n`);
     return { ok: true, dev: true };
   }
 
   try {
-    await twilioClient.messages.create({
-      body: `Your Acquire verification code: ${code}. Valid for 10 minutes.`,
-      from: process.env.TWILIO_PHONE_NUMBER,
-      to: e164,
+    await twilioClient.verify.v2.services(verifyService).verifications.create({
+      to: e164, channel: 'sms',
     });
     return { ok: true };
   } catch (err) {
-    otpStore.delete(e164); // don't leave a dangling code if send failed
     console.error('Twilio sendOtp error:', err.message);
     return { error: 'Failed to send SMS. Check the phone number and try again.' };
   }
@@ -124,17 +124,29 @@ async function sendOtp(e164) {
 /**
  * Verify an OTP for the given phone number.
  * Returns { valid: true } or { valid: false, error: string }.
- * Verification is always handled in-memory — Twilio is not involved here.
  */
 async function verifyOtp(e164, code) {
-  const entry = otpStore.get(e164);
-  if (!entry)                        return { valid: false, error: 'No code sent to this number' };
-  if (Date.now() > entry.expires)  { otpStore.delete(e164); return { valid: false, error: 'Code expired' }; }
-  entry.attempts++;
-  if (entry.attempts > MAX_ATTEMPTS) { otpStore.delete(e164); return { valid: false, error: 'Too many attempts' }; }
-  if (entry.code !== String(code))   return { valid: false, error: 'Incorrect code' };
-  otpStore.delete(e164);
-  return { valid: true };
+  if (DEV_MODE) {
+    const entry = otpStore.get(e164);
+    if (!entry)                        return { valid: false, error: 'No code sent to this number' };
+    if (Date.now() > entry.expires)  { otpStore.delete(e164); return { valid: false, error: 'Code expired' }; }
+    entry.attempts++;
+    if (entry.attempts > MAX_ATTEMPTS) { otpStore.delete(e164); return { valid: false, error: 'Too many attempts' }; }
+    if (entry.code !== String(code))   return { valid: false, error: 'Incorrect code' };
+    otpStore.delete(e164);
+    return { valid: true };
+  }
+
+  try {
+    const check = await twilioClient.verify.v2.services(verifyService).verificationChecks.create({
+      to: e164, code: String(code),
+    });
+    if (check.status === 'approved') return { valid: true };
+    return { valid: false, error: 'Incorrect code' };
+  } catch (err) {
+    console.error('Twilio verifyOtp error:', err.message);
+    return { valid: false, error: 'Verification failed. Try again.' };
+  }
 }
 
 /* ── Phone normalisation ─────────────────────────────────────── */
@@ -142,8 +154,10 @@ async function verifyOtp(e164, code) {
 // Full validation is handled by Twilio on their end.
 function normalisePhone(raw) {
   const stripped = raw.replace(/[\s\-().]/g, '');
-  if (!stripped.startsWith('+')) return '+1' + stripped; // default to US
-  return stripped;
+  if (stripped.startsWith('+')) return stripped;
+  // Handle 11-digit US numbers with leading 1 (e.g. "18005551234" → "+18005551234")
+  if (stripped.length === 11 && stripped.startsWith('1')) return '+' + stripped;
+  return '+1' + stripped; // assume US 10-digit
 }
 
 /**
