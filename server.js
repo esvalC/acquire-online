@@ -196,15 +196,55 @@ app.post('/api/admin/promote', (req, res) => {
   res.json({ ok: true, message: `${username} is now an admin` });
 });
 
-// Example admin-only route — extend this pattern for future admin pages
-app.get('/api/admin/users', requireAdmin, (req, res) => {
-  // Returns basic user list — expand as needed
-  const users = db.findById && [db.findById(req.userId)]; // placeholder
-  res.json({ ok: true, note: 'Admin endpoint — add queries as needed' });
+// Submit user feedback (public — no auth required)
+const feedbackLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, message: { error: 'Too many submissions. Try again later.' } });
+app.post('/api/feedback', feedbackLimit, async (req, res) => {
+  const { type, message, contact, page } = req.body;
+  if (!message || message.trim().length < 5) return res.status(400).json({ error: 'Message too short' });
+  if (!['bug', 'suggestion'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
+  const result = db.addFeedback(type, message.trim().slice(0, 2000), contact?.slice(0, 100), page?.slice(0, 100));
+
+  // Auto-create GitHub issue for bugs (if GITHUB_TOKEN is set)
+  let ghIssue = null;
+  if (type === 'bug' && process.env.GITHUB_TOKEN) {
+    try {
+      const { Octokit } = await import('@octokit/rest').catch(() => null) || {};
+      if (Octokit) {
+        const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+        const issue = await octokit.issues.create({
+          owner: 'esvalC', repo: 'acquire-online',
+          title: `[User Bug] ${message.slice(0, 80)}`,
+          body: `**Type:** Bug report\n**Page:** ${page || 'unknown'}\n**Contact:** ${contact || 'none'}\n\n${message}`,
+          labels: ['bug', 'user-report'],
+        });
+        ghIssue = issue.data.number;
+        db.setFeedbackIssue(result.lastInsertRowid, ghIssue);
+      }
+    } catch (err) { console.error('GitHub issue creation failed:', err.message); }
+  }
+
+  res.json({ ok: true, id: result.lastInsertRowid, ghIssue });
+});
+
+// Plan dashboard data (admin only)
+app.get('/api/plan/data', requireAdmin, (req, res) => {
+  res.json({
+    stats:    db.getStats(),
+    feedback: db.getFeedback(500),
+  });
+});
+
+// Update feedback status (admin only)
+app.post('/api/plan/feedback/:id/status', requireAdmin, (req, res) => {
+  const { status } = req.body;
+  if (!['new', 'triaged', 'done'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+  db.setFeedbackStatus(Number(req.params.id), status);
+  res.json({ ok: true });
 });
 
 // Serve index.html for all known routes (client-side routing)
-const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules'];
+const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback'];
+app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
 for (const route of clientRoutes) {
   app.get(route, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 }

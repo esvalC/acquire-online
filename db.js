@@ -44,6 +44,17 @@ db.exec(`
     elo_change INTEGER NOT NULL DEFAULT 0,
     opponents  TEXT    NOT NULL DEFAULT '[]'
   );
+
+  CREATE TABLE IF NOT EXISTS feedback (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    type         TEXT    NOT NULL DEFAULT 'suggestion',
+    message      TEXT    NOT NULL,
+    contact      TEXT,
+    page         TEXT,
+    submitted_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    status       TEXT    NOT NULL DEFAULT 'new',
+    gh_issue     INTEGER
+  );
 `);
 
 // Migrations — add columns that may be missing in older DBs
@@ -101,4 +112,26 @@ module.exports = {
 
   setAdmin(userId, isAdmin) { stmts.setAdmin.run(isAdmin ? 1 : 0, userId); },
   setPublicProfile(userId, isPublic) { stmts.setPublicProfile.run(isPublic ? 1 : 0, userId); },
+
+  // Feedback
+  addFeedback(type, message, contact, page) {
+    return db.prepare('INSERT INTO feedback (type,message,contact,page) VALUES (?,?,?,?)').run(type, message, contact || null, page || null);
+  },
+  getFeedback(limit = 200) {
+    return db.prepare('SELECT * FROM feedback ORDER BY submitted_at DESC LIMIT ?').all(limit);
+  },
+  setFeedbackStatus(id, status) {
+    db.prepare('UPDATE feedback SET status=? WHERE id=?').run(status, id);
+  },
+  setFeedbackIssue(id, ghIssue) {
+    db.prepare('UPDATE feedback SET gh_issue=? WHERE id=?').run(ghIssue, id);
+  },
+  getStats() {
+    return {
+      users:       db.prepare('SELECT COUNT(*) as n FROM users').get().n,
+      games:       db.prepare('SELECT COUNT(*) as n FROM game_history').get().n,
+      feedback:    db.prepare('SELECT COUNT(*) as n FROM feedback').get().n,
+      newFeedback: db.prepare("SELECT COUNT(*) as n FROM feedback WHERE status='new'").get().n,
+    };
+  },
 };

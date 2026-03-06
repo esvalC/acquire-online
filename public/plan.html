@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acquire – Project Dashboard</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Sans:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+  :root {
+    --bg: #0a0f1a; --card: #111827; --border: #1e293b; --border-light: #334155;
+    --text: #e2e8f0; --dim: #94a3b8; --muted: #64748b;
+    --gold: #f59e0b; --green: #10b981; --red: #ef4444; --blue: #3b82f6;
+    --radius: 8px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Sans',sans-serif; background:var(--bg); color:var(--text); min-height:100vh; }
+
+  /* ── Layout ── */
+  .page { max-width:1100px; margin:0 auto; padding:32px 20px 80px; }
+  .page-header { display:flex; align-items:baseline; justify-content:space-between; margin-bottom:32px; flex-wrap:wrap; gap:12px; }
+  .page-title { font-family:'Playfair Display',serif; font-size:32px; color:var(--gold); }
+  .page-sub { font-size:13px; color:var(--muted); margin-top:4px; }
+  #authGate { display:none; flex-direction:column; align-items:center; justify-content:center;
+    min-height:60vh; gap:16px; }
+  #authGate input { background:var(--card); border:1px solid var(--border-light); border-radius:var(--radius);
+    color:var(--text); padding:10px 16px; font-size:14px; width:280px; }
+  #authGate input:focus { outline:none; border-color:var(--gold); }
+
+  /* ── Cards ── */
+  .section { margin-bottom:40px; }
+  .section-title { font-family:'Playfair Display',serif; font-size:18px; color:var(--gold);
+    margin-bottom:16px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+  .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(160px,1fr)); gap:12px; margin-bottom:24px; }
+  .stat-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+    padding:16px 20px; }
+  .stat-num { font-family:'JetBrains Mono',monospace; font-size:28px; font-weight:500; color:var(--gold); }
+  .stat-label { font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; margin-top:4px; }
+
+  /* ── Digest ── */
+  .digest-empty { font-size:13px; color:var(--muted); padding:12px 0; }
+  .feedback-item { background:var(--card); border:1px solid var(--border); border-radius:var(--radius);
+    padding:14px 16px; margin-bottom:8px; display:flex; gap:14px; align-items:flex-start; }
+  .feedback-item.new { border-left:3px solid var(--gold); }
+  .feedback-item.triaged { border-left:3px solid var(--blue); }
+  .feedback-item.done { border-left:3px solid var(--green); opacity:.6; }
+  .fb-type { font-size:10px; text-transform:uppercase; letter-spacing:1px; font-weight:700;
+    padding:2px 8px; border-radius:99px; white-space:nowrap; flex-shrink:0; margin-top:2px; }
+  .fb-type-bug { background:rgba(239,68,68,.15); color:var(--red); }
+  .fb-type-suggestion { background:rgba(245,158,11,.12); color:var(--gold); }
+  .fb-body { flex:1; min-width:0; }
+  .fb-msg { font-size:13px; line-height:1.5; word-break:break-word; }
+  .fb-meta { font-size:11px; color:var(--muted); margin-top:5px; display:flex; gap:12px; flex-wrap:wrap; }
+  .fb-actions { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
+  .fb-btn { font-size:11px; padding:3px 10px; border-radius:4px; border:1px solid var(--border-light);
+    background:var(--bg); color:var(--dim); cursor:pointer; font-family:'DM Sans',sans-serif; }
+  .fb-btn:hover { border-color:var(--gold); color:var(--gold); }
+  .gh-link { font-size:11px; color:var(--blue); text-decoration:none; }
+  .gh-link:hover { text-decoration:underline; }
+
+  /* ── Roadmap ── */
+  .phase { margin-bottom:24px; }
+  .phase-header { display:flex; align-items:center; gap:10px; margin-bottom:10px; cursor:pointer; }
+  .phase-name { font-size:14px; font-weight:600; color:var(--text); }
+  .phase-badge { font-size:11px; padding:2px 10px; border-radius:99px; font-weight:600; }
+  .badge-done { background:rgba(16,185,129,.15); color:var(--green); }
+  .badge-active { background:rgba(245,158,11,.15); color:var(--gold); }
+  .badge-planned { background:rgba(100,116,139,.15); color:var(--muted); }
+  .roadmap-item { display:flex; align-items:flex-start; gap:10px; padding:7px 0 7px 8px;
+    border-bottom:1px solid rgba(30,41,59,.6); font-size:13px; }
+  .roadmap-item:last-child { border-bottom:none; }
+  .roadmap-item input[type=checkbox] { margin-top:2px; accent-color:var(--gold); flex-shrink:0; cursor:pointer; }
+  .roadmap-item label { cursor:pointer; line-height:1.4; color:var(--text); }
+  .roadmap-item.done label { color:var(--muted); text-decoration:line-through; }
+  .roadmap-item .ri-note { font-size:11px; color:var(--muted); margin-top:2px; display:block; }
+  .phase-items { padding-left:4px; }
+
+  /* ── Feedback table filter ── */
+  .filter-row { display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; }
+  .filter-btn { font-size:12px; padding:5px 14px; border-radius:99px; border:1px solid var(--border-light);
+    background:var(--bg); color:var(--dim); cursor:pointer; font-family:'DM Sans',sans-serif; transition:all .15s; }
+  .filter-btn.active { background:rgba(245,158,11,.15); border-color:var(--gold); color:var(--gold); }
+
+  /* ── Login gate ── */
+  .btn-gold { background:linear-gradient(135deg,var(--gold),#d97706); color:#000; border:none;
+    border-radius:var(--radius); padding:10px 28px; font-weight:700; font-size:14px; cursor:pointer; }
+</style>
+</head>
+<body>
+
+<div id="authGate">
+  <div style="font-family:'Playfair Display',serif;font-size:24px;color:var(--gold)">Project Dashboard</div>
+  <div style="font-size:13px;color:var(--muted)">Admin access required</div>
+  <input type="text" id="authInput" placeholder="Paste your JWT token" autocomplete="off" />
+  <button class="btn-gold" onclick="tryAuth()">Sign In</button>
+  <div id="authError" style="color:var(--red);font-size:12px;display:none">Invalid or expired token</div>
+</div>
+
+<div class="page" id="dashboard" style="display:none">
+  <div class="page-header">
+    <div>
+      <div class="page-title">Acquire – Project Dashboard</div>
+      <div class="page-sub" id="lastSeen"></div>
+    </div>
+    <div style="display:flex;gap:12px;align-items:center">
+      <button class="btn-gold" style="font-size:12px;padding:8px 18px" onclick="refreshData()">↻ Refresh</button>
+      <button style="font-size:12px;padding:8px 18px;border-radius:var(--radius);border:1px solid var(--border-light);background:transparent;color:var(--dim);cursor:pointer" onclick="signOut()">Sign Out</button>
+    </div>
+  </div>
+
+  <!-- Stats -->
+  <div class="section">
+    <div class="section-title">Live Stats</div>
+    <div class="cards">
+      <div class="stat-card"><div class="stat-num" id="sUsers">—</div><div class="stat-label">Registered Users</div></div>
+      <div class="stat-card"><div class="stat-num" id="sGames">—</div><div class="stat-label">Games Played</div></div>
+      <div class="stat-card"><div class="stat-num" id="sFeedback">—</div><div class="stat-label">Total Feedback</div></div>
+      <div class="stat-card"><div class="stat-num" id="sNew" style="color:var(--gold)">—</div><div class="stat-label">New (Untriaged)</div></div>
+    </div>
+  </div>
+
+  <!-- Daily Digest -->
+  <div class="section">
+    <div class="section-title">Daily Digest — New Since Yesterday</div>
+    <div id="digestList"><div class="digest-empty">Loading…</div></div>
+  </div>
+
+  <!-- All Feedback -->
+  <div class="section">
+    <div class="section-title">All Feedback</div>
+    <div class="filter-row">
+      <button class="filter-btn active" onclick="setFilter('all',this)">All</button>
+      <button class="filter-btn" onclick="setFilter('new',this)">New</button>
+      <button class="filter-btn" onclick="setFilter('bug',this)">Bugs</button>
+      <button class="filter-btn" onclick="setFilter('suggestion',this)">Suggestions</button>
+      <button class="filter-btn" onclick="setFilter('triaged',this)">Triaged</button>
+      <button class="filter-btn" onclick="setFilter('done',this)">Done</button>
+    </div>
+    <div id="feedbackList"><div class="digest-empty">Loading…</div></div>
+  </div>
+
+  <!-- Roadmap -->
+  <div class="section">
+    <div class="section-title">Roadmap</div>
+    <div id="roadmap"></div>
+  </div>
+</div>
+
+<script>
+/* ── Auth ───────────────────────────────────────── */
+let token = localStorage.getItem('plan_token') || '';
+let allFeedback = [];
+let currentFilter = 'all';
+
+function tryAuth() {
+  token = document.getElementById('authInput').value.trim();
+  localStorage.setItem('plan_token', token);
+  loadDashboard();
+}
+
+function signOut() {
+  localStorage.removeItem('plan_token');
+  token = '';
+  document.getElementById('dashboard').style.display = 'none';
+  document.getElementById('authGate').style.display = 'flex';
+}
+
+/* ── Init ───────────────────────────────────────── */
+if (token) loadDashboard();
+else { document.getElementById('authGate').style.display = 'flex'; }
+
+async function loadDashboard() {
+  const res = await fetch('/api/plan/data', { headers: { Authorization: 'Bearer ' + token } });
+  if (res.status === 401 || res.status === 403) {
+    document.getElementById('authGate').style.display = 'flex';
+    document.getElementById('authError').style.display = 'block';
+    return;
+  }
+  const data = await res.json();
+  document.getElementById('authGate').style.display = 'none';
+  document.getElementById('dashboard').style.display = 'block';
+
+  // Stats
+  document.getElementById('sUsers').textContent    = data.stats.users;
+  document.getElementById('sGames').textContent    = data.stats.games;
+  document.getElementById('sFeedback').textContent = data.stats.feedback;
+  document.getElementById('sNew').textContent      = data.stats.newFeedback;
+
+  allFeedback = data.feedback || [];
+
+  // Daily digest — items submitted in last 24h
+  const cutoff = Math.floor(Date.now() / 1000) - 86400;
+  const digest = allFeedback.filter(f => f.submitted_at >= cutoff);
+  renderFeedbackList(digest, 'digestList', false);
+  if (digest.length === 0) document.getElementById('digestList').innerHTML = '<div class="digest-empty">No new submissions in the last 24 hours. 🎉</div>';
+
+  // All feedback
+  renderFiltered();
+
+  // Last seen
+  const lastSeen = localStorage.getItem('plan_last_seen');
+  const newCount = lastSeen ? allFeedback.filter(f => f.submitted_at * 1000 > Number(lastSeen) && f.status === 'new').length : 0;
+  document.getElementById('lastSeen').textContent = lastSeen
+    ? `Last visit: ${new Date(Number(lastSeen)).toLocaleString()} · ${newCount} new since then`
+    : 'First visit';
+  localStorage.setItem('plan_last_seen', Date.now());
+
+  // Roadmap
+  renderRoadmap();
+}
+
+function refreshData() { loadDashboard(); }
+
+/* ── Feedback rendering ─────────────────────────── */
+function setFilter(f, btn) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderFiltered();
+}
+
+function renderFiltered() {
+  let items = allFeedback;
+  if (currentFilter === 'new')        items = items.filter(f => f.status === 'new');
+  else if (currentFilter === 'bug')   items = items.filter(f => f.type === 'bug');
+  else if (currentFilter === 'suggestion') items = items.filter(f => f.type === 'suggestion');
+  else if (currentFilter === 'triaged')    items = items.filter(f => f.status === 'triaged');
+  else if (currentFilter === 'done')       items = items.filter(f => f.status === 'done');
+  renderFeedbackList(items, 'feedbackList', true);
+}
+
+function renderFeedbackList(items, containerId, showActions) {
+  const el = document.getElementById(containerId);
+  if (items.length === 0) { el.innerHTML = '<div class="digest-empty">Nothing here.</div>'; return; }
+  el.innerHTML = items.map(f => {
+    const date = new Date(f.submitted_at * 1000).toLocaleString();
+    const ghLink = f.gh_issue
+      ? `<a class="gh-link" href="https://github.com/esvalC/acquire-online/issues/${f.gh_issue}" target="_blank">#${f.gh_issue}</a>`
+      : '';
+    const actions = showActions ? `
+      <div class="fb-actions">
+        ${f.status !== 'new'      ? `<button class="fb-btn" onclick="setStatus(${f.id},'new')">Mark New</button>` : ''}
+        ${f.status !== 'triaged'  ? `<button class="fb-btn" onclick="setStatus(${f.id},'triaged')">Triage</button>` : ''}
+        ${f.status !== 'done'     ? `<button class="fb-btn" onclick="setStatus(${f.id},'done')">Done</button>` : ''}
+        <button class="fb-btn" onclick="createIssue(${f.id})">→ GitHub Issue</button>
+      </div>` : '';
+    return `
+      <div class="feedback-item ${f.status}" id="fb-${f.id}">
+        <span class="fb-type fb-type-${f.type}">${f.type}</span>
+        <div class="fb-body">
+          <div class="fb-msg">${escHtml(f.message)}</div>
+          <div class="fb-meta">
+            <span>${date}</span>
+            ${f.contact ? `<span>Contact: ${escHtml(f.contact)}</span>` : ''}
+            ${f.page    ? `<span>Page: ${escHtml(f.page)}</span>` : ''}
+            <span>Status: <strong>${f.status}</strong></span>
+            ${ghLink}
+          </div>
+          ${actions}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+async function setStatus(id, status) {
+  await fetch(`/api/plan/feedback/${id}/status`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+    body: JSON.stringify({ status }),
+  });
+  const idx = allFeedback.findIndex(f => f.id === id);
+  if (idx !== -1) allFeedback[idx].status = status;
+  renderFiltered();
+  // Update digest too
+  const cutoff = Math.floor(Date.now()/1000) - 86400;
+  const digest = allFeedback.filter(f => f.submitted_at >= cutoff);
+  renderFeedbackList(digest, 'digestList', false);
+  document.getElementById('sNew').textContent = allFeedback.filter(f => f.status === 'new').length;
+}
+
+async function createIssue(id) {
+  const fb = allFeedback.find(f => f.id === id);
+  if (!fb) return;
+  const title = encodeURIComponent(`[User ${fb.type}] ${fb.message.slice(0,80)}`);
+  const body  = encodeURIComponent(`**Type:** ${fb.type}\n**Page:** ${fb.page||'unknown'}\n**Contact:** ${fb.contact||'none'}\n\n${fb.message}`);
+  const label = fb.type === 'bug' ? 'bug' : 'enhancement';
+  window.open(`https://github.com/esvalC/acquire-online/issues/new?title=${title}&body=${body}&labels=${label}`, '_blank');
+}
+
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ── Roadmap ─────────────────────────────────────── */
+// Edit this array to update the roadmap. Checked = done.
+const ROADMAP = [
+  {
+    name: 'Phase 1 — Core Game', status: 'done',
+    items: [
+      { done: true,  text: 'Acquire game engine (tiles, chains, mergers, stock)' },
+      { done: true,  text: 'Solo mode vs AI bots with distinct personalities' },
+      { done: true,  text: 'Multiplayer lobby with 4-digit room codes' },
+      { done: true,  text: 'Real-time gameplay via Socket.IO' },
+      { done: true,  text: 'Concede vote system (majority ends game early)' },
+      { done: true,  text: 'Turn timer' },
+      { done: true,  text: 'Quickstart draw mechanic' },
+      { done: true,  text: 'In-game chat' },
+      { done: true,  text: 'Rules page' },
+    ],
+  },
+  {
+    name: 'Phase 2 — Profiles & Auth', status: 'done',
+    items: [
+      { done: true,  text: 'User registration: username + phone OTP (Twilio Verify)' },
+      { done: true,  text: 'AES-256-GCM encrypted phone storage' },
+      { done: true,  text: 'JWT sessions (30-day, localStorage)' },
+      { done: true,  text: 'Username-based login (OTP to registered phone)' },
+      { done: true,  text: 'Account recovery by phone number' },
+      { done: true,  text: 'Admin role + promotion endpoint' },
+      { done: true,  text: 'Profile drawer (ELO, stats, login state indicator)' },
+      { done: true,  text: 'Public/private profile toggle' },
+    ],
+  },
+  {
+    name: 'Phase 3 — Game Storage & ELO', status: 'done',
+    items: [
+      { done: true,  text: 'game_history table in SQLite' },
+      { done: true,  text: 'ELO rating system (pairwise K=32, solo vs bot baseline)' },
+      { done: true,  text: 'Automatic ELO update on game end' },
+      { done: true,  text: 'Recent game history in profile drawer (win/loss/elo delta)' },
+      { done: true,  text: 'Profile refreshes after game ends' },
+    ],
+  },
+  {
+    name: 'Phase 4 — Infrastructure & Ops', status: 'done',
+    items: [
+      { done: true,  text: 'EC2 t3.micro deployment at playonlineacquire.com' },
+      { done: true,  text: 'Nginx reverse proxy + SSL (Let\'s Encrypt)' },
+      { done: true,  text: '/beta route for profiles branch (port 3001)' },
+      { done: true,  text: 'PM2 process manager (auto-restart)' },
+      { done: true,  text: 'AWS SSM for management (no SSH port open)' },
+      { done: true,  text: 'S3 daily database backups with versioning' },
+      { done: true,  text: 'GitHub private repo (esvalC/acquire-online)' },
+      { done: true,  text: 'GitHub Actions OIDC CI/CD plan (issue #X)' },
+    ],
+  },
+  {
+    name: 'Phase 5 — Feedback & Dashboard', status: 'active',
+    items: [
+      { done: true,  text: 'Bugs & Suggestions tab on landing page' },
+      { done: true,  text: 'Feedback saved to DB (type, message, contact, page)' },
+      { done: true,  text: '/plan admin dashboard (this page)' },
+      { done: true,  text: 'Daily digest of new submissions' },
+      { done: false, text: 'GITHUB_TOKEN auto-creates GitHub issues from bug reports', note: 'Add GITHUB_TOKEN to .env to enable' },
+      { done: false, text: 'Email/Slack digest notification (morning summary)' },
+    ],
+  },
+  {
+    name: 'Phase 6 — Polish & Growth', status: 'planned',
+    items: [
+      { done: false, text: 'Public leaderboard page' },
+      { done: false, text: 'Game replay viewer', note: 'See issue for data format design' },
+      { done: false, text: 'Custom avatar / profile picture upload' },
+      { done: false, text: 'Friend system / challenges' },
+      { done: false, text: 'Tournament bracket mode' },
+    ],
+  },
+  {
+    name: 'Phase 7 — AI & ML', status: 'planned',
+    items: [
+      { done: false, text: 'Export game records in ML-friendly format' },
+      { done: false, text: 'Train supervised model on human game data' },
+      { done: false, text: 'Self-play reinforcement learning pipeline', note: 'See GitHub issue for architecture' },
+      { done: false, text: 'Replace rule-based bots with trained model' },
+      { done: false, text: 'Difficulty tiers backed by model strength' },
+    ],
+  },
+  {
+    name: 'Technical Debt / Open Issues', status: 'planned',
+    items: [
+      { done: false, text: 'Switch OTP from Twilio Verify → raw Twilio Messages (issue #9)' },
+      { done: false, text: 'Full CI/CD: GitHub Actions → SSM deploy on push to master' },
+      { done: false, text: 'Migrate SQLite → Turso or RDS Postgres when user base grows' },
+      { done: false, text: 'Rate limiting on all socket events (prevent abuse)' },
+      { done: false, text: 'Automated integration tests for game engine' },
+    ],
+  },
+];
+
+function renderRoadmap() {
+  const stored = JSON.parse(localStorage.getItem('roadmap_checked') || '{}');
+
+  document.getElementById('roadmap').innerHTML = ROADMAP.map((phase, pi) => {
+    const doneCount = phase.items.filter(i => i.done).length;
+    const total     = phase.items.length;
+    const statusLabel = { done:'Done', active:'In Progress', planned:'Planned' }[phase.status];
+    const items = phase.items.map((item, ii) => {
+      const key     = `${pi}-${ii}`;
+      const checked = item.done || stored[key] ? 'checked' : '';
+      const cls     = (item.done || stored[key]) ? 'done' : '';
+      return `<div class="roadmap-item ${cls}" id="ri-${key}">
+        <input type="checkbox" id="cb-${key}" ${checked} onchange="toggleItem('${key}',this.checked)" />
+        <label for="cb-${key}">
+          ${escHtml(item.text)}
+          ${item.note ? `<span class="ri-note">${escHtml(item.note)}</span>` : ''}
+        </label>
+      </div>`;
+    }).join('');
+    return `<div class="phase">
+      <div class="phase-header">
+        <div class="phase-name">${escHtml(phase.name)}</div>
+        <span class="phase-badge badge-${phase.status}">${statusLabel}</span>
+        <span style="font-size:12px;color:var(--muted);margin-left:4px">${doneCount}/${total}</span>
+      </div>
+      <div class="phase-items">${items}</div>
+    </div>`;
+  }).join('');
+}
+
+function toggleItem(key, checked) {
+  const stored = JSON.parse(localStorage.getItem('roadmap_checked') || '{}');
+  if (checked) stored[key] = true; else delete stored[key];
+  localStorage.setItem('roadmap_checked', JSON.stringify(stored));
+  const row = document.getElementById(`ri-${key}`);
+  if (row) row.className = `roadmap-item ${checked ? 'done' : ''}`;
+}
+</script>
+</body>
+</html>

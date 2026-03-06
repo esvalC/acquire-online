@@ -879,6 +879,13 @@
   .game-result-win  { color: var(--green); }
   .game-result-loss { color: var(--red); }
   .game-elo { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .fb-type-btn {
+    flex: 1; padding: 8px; font-size: 13px; font-family: 'DM Sans', sans-serif;
+    font-weight: 600; border-radius: 6px; border: 1px solid var(--border-light);
+    background: var(--bg-dark); color: var(--text-muted); cursor: pointer; transition: all .15s;
+  }
+  .fb-type-btn.active { background: rgba(245,158,11,.15); border-color: var(--gold); color: var(--gold); }
+  #feedbackOverlay.open { display: flex !important; }
 </style>
 </head>
 <body>
@@ -903,6 +910,33 @@
       <div class="mode-card-title">Rules</div>
       <div class="mode-card-desc">Complete guide to Acquire — strategy, mergers, and more</div>
     </div>
+    <div class="mode-card" onclick="openFeedbackModal()">
+      <div class="mode-card-icon">💬</div>
+      <div class="mode-card-title">Feedback</div>
+      <div class="mode-card-desc">Still in beta — report bugs or share suggestions</div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ FEEDBACK MODAL ═══ -->
+<div id="feedbackOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:400;backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:28px;width:min(480px,92vw);display:flex;flex-direction:column;gap:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-family:'Playfair Display',serif;font-size:20px;color:var(--gold)">Bugs & Suggestions</div>
+      <button onclick="closeFeedbackModal()" style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);line-height:1.5;">This project is a work in progress and your feedback is genuinely appreciated. Share a bug you found or an idea you'd like to see.</p>
+    <div style="display:flex;gap:8px;">
+      <button id="fbTypeBug" class="fb-type-btn active" onclick="setFbType('bug')">🐛 Bug</button>
+      <button id="fbTypeSuggestion" class="fb-type-btn" onclick="setFbType('suggestion')">💡 Suggestion</button>
+    </div>
+    <textarea id="fbMessage" placeholder="Describe the bug or suggestion (max 300 words)…" maxlength="2000"
+      style="background:var(--bg-dark);border:1px solid var(--border-light);border-radius:var(--radius);color:var(--text);padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;min-height:110px;"></textarea>
+    <input type="text" id="fbContact" placeholder="Email or @handle (optional — so we can follow up)" maxlength="100"
+      style="background:var(--bg-dark);border:1px solid var(--border-light);border-radius:var(--radius);color:var(--text);padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:13px;" />
+    <div id="fbError" style="display:none;font-size:12px;color:var(--red);"></div>
+    <div id="fbSuccess" style="display:none;font-size:13px;color:var(--green);padding:8px 0;">Thanks! Your feedback has been recorded. 🙌</div>
+    <button class="btn" id="fbSubmitBtn" onclick="submitFeedback()">Send Feedback</button>
   </div>
 </div>
 
@@ -1252,7 +1286,8 @@
         </div>
         <div id="registerStep2" class="auth-step" style="display:none;">
           <p class="auth-hint">Enter the 6-digit code sent to your phone.</p>
-          <input type="text" id="regCode" placeholder="000000" maxlength="6" inputmode="numeric" />
+          <div class="auth-hint" id="otpCountdown" style="color:var(--gold);font-weight:600;"></div>
+          <input type="text" id="regCode" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
           <button class="btn" onclick="registerVerify()">Create Profile</button>
           <button class="btn btn-secondary" onclick="resetRegisterFlow()">← Back</button>
         </div>
@@ -2335,6 +2370,8 @@ function askRuleFromInput() {
 
 let authToken    = localStorage.getItem('acquire_auth_token') || null;
 let currentUser  = null; // { id, username, elo, games_played, games_won }
+// Route API calls through /beta/api when running under the /beta Nginx proxy
+const API_BASE   = window.location.pathname.startsWith('/beta') ? '/beta/api' : '/api';
 let usernameCheckTimer = null;
 
 // Restore logged-in state on page load
@@ -2426,7 +2463,7 @@ function renderDrawerLoggedIn(user, history) {
 
 async function toggleVisibility(isPublic) {
   if (!authToken) return;
-  await fetch('/api/me/visibility', {
+  await fetch(`${API_BASE}/me/visibility`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken },
     body: JSON.stringify({ isPublic }),
@@ -2436,7 +2473,7 @@ async function toggleVisibility(isPublic) {
 /* ── Load profile from API ───────────────────────────────────── */
 async function loadProfile() {
   try {
-    const res = await fetch('/api/me', {
+    const res = await fetch(`${API_BASE}/me`, {
       headers: { Authorization: 'Bearer ' + authToken }
     });
     if (res.status === 401) { authToken = null; localStorage.removeItem('acquire_auth_token'); document.querySelector('.menu-btn')?.classList.remove('logged-in'); renderDrawerLoggedOut(); return; }
@@ -2475,7 +2512,7 @@ async function loginSendCode() {
   const btn = event.target;
   btn.textContent = 'Sending...'; btn.disabled = true;
   try {
-    const res  = await fetch('/api/login-by-username', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
+    const res  = await fetch(`${API_BASE}/login-by-username`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
     const data = await res.json();
     if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code'; btn.disabled = false; return; }
     if (data.dev) showDrawerError('DEV MODE: Check server console for code');
@@ -2493,7 +2530,7 @@ async function loginSendCodeByPhone() {
   const btn = event.target;
   btn.textContent = 'Sending...'; btn.disabled = true;
   try {
-    const res  = await fetch('/api/login-by-phone', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
+    const res  = await fetch(`${API_BASE}/login-by-phone`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
     const data = await res.json();
     if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code'; btn.disabled = false; return; }
     if (data.dev) showDrawerError('DEV MODE: Check server console for code');
@@ -2516,10 +2553,10 @@ async function loginVerify() {
     let res, data;
     if (loginMode === 'phone') {
       const phone = document.getElementById('loginPhone').value.trim();
-      res  = await fetch('/api/login-by-phone/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, code }) });
+      res  = await fetch(`${API_BASE}/login-by-phone/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, code }) });
     } else {
       const username = document.getElementById('loginUsername').value.trim();
-      res  = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, code }) });
+      res  = await fetch(`${API_BASE}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, code }) });
     }
     data = await res.json();
     if (data.error) { showDrawerError(data.error); btn.textContent = 'Log In'; btn.disabled = false; return; }
@@ -2532,7 +2569,31 @@ async function loginVerify() {
 }
 
 /* ── Register flow ───────────────────────────────────────────── */
+let otpCountdownTimer = null;
+
+function startOtpCountdown(seconds, onExpire) {
+  clearInterval(otpCountdownTimer);
+  let remaining = seconds;
+  const el = document.getElementById('otpCountdown');
+  const update = () => {
+    if (!el) return;
+    if (remaining <= 0) {
+      clearInterval(otpCountdownTimer);
+      if (el) el.textContent = 'Code expired — go back and resend.';
+      if (onExpire) onExpire();
+      return;
+    }
+    el.textContent = `Code expires in ${remaining}s`;
+    remaining--;
+  };
+  update();
+  otpCountdownTimer = setInterval(update, 1000);
+}
+
 function resetRegisterFlow() {
+  clearInterval(otpCountdownTimer);
+  const cd = document.getElementById('otpCountdown');
+  if (cd) cd.textContent = '';
   document.getElementById('registerStep1').style.display = 'flex';
   document.getElementById('registerStep2').style.display = 'none';
   document.getElementById('regUsername').value = '';
@@ -2548,7 +2609,7 @@ function checkUsernameAvail() {
   const statusEl = document.getElementById('usernameStatus');
   if (val.length < 2) { statusEl.textContent = ''; return; }
   usernameCheckTimer = setTimeout(async () => {
-    const res  = await fetch('/api/username-available?username=' + encodeURIComponent(val));
+    const res  = await fetch(`${API_BASE}/username-available?username=` + encodeURIComponent(val));
     const data = await res.json();
     statusEl.style.color = data.available ? 'var(--green)' : 'var(--red)';
     statusEl.textContent = data.error || (data.available ? '✓ Available' : '✗ Already taken');
@@ -2565,16 +2626,18 @@ async function registerSendCode() {
   btn.textContent = 'Sending...'; btn.disabled = true;
   try {
     // Check availability one more time before sending
-    const avRes  = await fetch('/api/username-available?username=' + encodeURIComponent(username));
+    const avRes  = await fetch(`${API_BASE}/username-available?username=` + encodeURIComponent(username));
     const avData = await avRes.json();
     if (!avData.available) { showDrawerError(avData.error || 'Username already taken'); btn.textContent = 'Send Code'; btn.disabled = false; return; }
 
-    const res  = await fetch('/api/send-otp', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
+    const res  = await fetch(`${API_BASE}/send-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
     const data = await res.json();
     if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code →'; btn.disabled = false; return; }
     if (data.dev) showDrawerError('DEV MODE: Check server console for code');
     document.getElementById('registerStep1').style.display = 'none';
     document.getElementById('registerStep2').style.display = 'flex';
+    document.getElementById('regCode').focus();
+    startOtpCountdown(120, () => { showDrawerError('Code expired — press Back and resend.'); });
   } catch { showDrawerError('Network error'); }
   btn.textContent = 'Send Code →'; btn.disabled = false;
 }
@@ -2588,11 +2651,12 @@ async function registerVerify() {
   const btn = event.target;
   btn.textContent = 'Creating...'; btn.disabled = true;
   try {
-    const res  = await fetch('/api/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, phone, code }) });
+    const res  = await fetch(`${API_BASE}/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, phone, code }) });
     const data = await res.json();
     if (data.error) { showDrawerError(data.error); btn.textContent = 'Create Profile'; btn.disabled = false; return; }
     authToken = data.token;
     localStorage.setItem('acquire_auth_token', authToken);
+    clearInterval(otpCountdownTimer);
     renderDrawerLoggedIn(data.user, []);
     loadProfile(); // load full profile with history in background
   } catch { showDrawerError('Network error'); }
@@ -2606,6 +2670,50 @@ function logOut() {
   localStorage.removeItem('acquire_auth_token');
   document.querySelector('.menu-btn')?.classList.remove('logged-in');
   renderDrawerLoggedOut();
+}
+
+/* ── Feedback modal ──────────────────────────────────────────── */
+let fbType = 'bug';
+
+function openFeedbackModal() {
+  document.getElementById('feedbackOverlay').style.display = 'flex';
+  document.getElementById('fbMessage').value  = '';
+  document.getElementById('fbContact').value  = '';
+  document.getElementById('fbError').style.display   = 'none';
+  document.getElementById('fbSuccess').style.display = 'none';
+  document.getElementById('fbSubmitBtn').style.display = 'block';
+  setFbType('bug');
+}
+function closeFeedbackModal() { document.getElementById('feedbackOverlay').style.display = 'none'; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFeedbackModal(); });
+
+function setFbType(t) {
+  fbType = t;
+  document.getElementById('fbTypeBug').classList.toggle('active', t === 'bug');
+  document.getElementById('fbTypeSuggestion').classList.toggle('active', t === 'suggestion');
+}
+
+async function submitFeedback() {
+  const message = document.getElementById('fbMessage').value.trim();
+  const contact = document.getElementById('fbContact').value.trim();
+  const errEl   = document.getElementById('fbError');
+  errEl.style.display = 'none';
+  if (message.length < 5) { errEl.textContent = 'Please write a bit more.'; errEl.style.display = 'block'; return; }
+  // Rough word count cap (~300 words ≈ 1800 chars)
+  if (message.split(/\s+/).length > 300) { errEl.textContent = 'Please keep it under 300 words.'; errEl.style.display = 'block'; return; }
+  const btn = document.getElementById('fbSubmitBtn');
+  btn.textContent = 'Sending…'; btn.disabled = true;
+  try {
+    const res  = await fetch(`${API_BASE}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: fbType, message, contact, page: document.title }),
+    });
+    const data = await res.json();
+    if (data.error) { errEl.textContent = data.error; errEl.style.display = 'block'; btn.textContent = 'Send Feedback'; btn.disabled = false; return; }
+    document.getElementById('fbSuccess').style.display = 'block';
+    btn.style.display = 'none';
+  } catch { errEl.textContent = 'Network error. Try again.'; errEl.style.display = 'block'; btn.textContent = 'Send Feedback'; btn.disabled = false; }
 }
 
 /* ── Drawer error display ────────────────────────────────────── */
