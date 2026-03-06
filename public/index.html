@@ -775,6 +775,11 @@
     background: var(--text-dim); border-radius: 2px; transition: var(--transition);
   }
   .menu-btn:hover span { background: var(--gold); }
+  .menu-btn.logged-in::after {
+    content: ''; position: absolute; top: 7px; right: 7px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green); border: 1.5px solid var(--bg-card);
+  }
 
   /* ── Profile drawer ───────────────────────────────── */
   .profile-overlay {
@@ -2273,6 +2278,12 @@ let authToken    = localStorage.getItem('acquire_auth_token') || null;
 let currentUser  = null; // { id, username, elo, games_played, games_won }
 let usernameCheckTimer = null;
 
+// Restore logged-in state on page load
+if (authToken) {
+  document.querySelector('.menu-btn')?.classList.add('logged-in');
+  loadProfile(); // runs in background; updates currentUser silently
+}
+
 /* ── Drawer open/close ───────────────────────────────────────── */
 function openProfileDrawer() {
   document.getElementById('profileOverlay').classList.add('open');
@@ -2307,6 +2318,7 @@ function renderDrawerLoggedOut() {
 
 function renderDrawerLoggedIn(user) {
   currentUser = user;
+  document.querySelector('.menu-btn')?.classList.add('logged-in');
   document.getElementById('drawerLoggedOut').style.display = 'none';
   document.getElementById('drawerLoggedIn').style.display  = 'flex';
   document.getElementById('drawerTitle').textContent = 'Profile';
@@ -2343,7 +2355,7 @@ async function loadProfile() {
     const res = await fetch('/api/me', {
       headers: { Authorization: 'Bearer ' + authToken }
     });
-    if (res.status === 401) { authToken = null; localStorage.removeItem('acquire_auth_token'); renderDrawerLoggedOut(); return; }
+    if (res.status === 401) { authToken = null; localStorage.removeItem('acquire_auth_token'); document.querySelector('.menu-btn')?.classList.remove('logged-in'); renderDrawerLoggedOut(); return; }
     const data = await res.json();
     renderDrawerLoggedIn(data.user);
   } catch {
@@ -2467,6 +2479,7 @@ function logOut() {
   authToken = null;
   currentUser = null;
   localStorage.removeItem('acquire_auth_token');
+  document.querySelector('.menu-btn')?.classList.remove('logged-in');
   renderDrawerLoggedOut();
 }
 
