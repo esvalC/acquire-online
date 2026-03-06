@@ -152,4 +152,4 @@ function normalisePhone(raw) {
   return stripped;
 }
 
-module.exports = { signToken, verifyToken, requireAuth, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone };
+module.exports = { signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone };
