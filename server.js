@@ -1,25 +1,268 @@
 /**
- * Acquire – Server (v3.0)
+ * Acquire – Server (v3.1 – profiles branch)
  * Express + Socket.io
- * Supports multiplayer (lobby) and solo (vs bots) modes.
+ * Supports multiplayer (lobby), solo (vs bots), and user profiles.
  */
 
-const express = require('express');
-const http = require('http');
-const path = require('path');
+require('dotenv').config();
+
+const express    = require('express');
+const http       = require('http');
+const path       = require('path');
 const { randomUUID } = require('crypto');
 const { Server } = require('socket.io');
-const engine = require('./gameEngine');
+const rateLimit  = require('express-rate-limit');
+const engine     = require('./gameEngine');
 const { decideBotAction, BOT_ROSTER } = require('./botAI');
+const db         = require('./db');
+const { signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone } = require('./auth');
 
-const app = express();
+const app    = express();
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: ['https://playonlineacquire.com', 'http://localhost:3000'] } });
+const io     = new Server(server, { cors: { origin: ['https://playonlineacquire.com', 'http://localhost:3000'] } });
 
+app.use(express.json());
 app.use(express.static('public'));
 
+/* ── Rate limiters ───────────────────────────────────────────── */
+const smslimit = rateLimit({
+  windowMs: 10 * 60 * 1000, max: 5,
+  message: { error: 'Too many SMS requests. Wait 10 minutes.' },
+  standardHeaders: true, legacyHeaders: false,
+});
+
+/* ── Auth / Profile routes ───────────────────────────────────── */
+
+// Check if a username is available
+app.get('/api/username-available', (req, res) => {
+  const { username } = req.query;
+  if (!username || username.length < 2 || username.length > 20) {
+    return res.json({ available: false, error: 'Username must be 2–20 characters' });
+  }
+  if (!/^[a-zA-Z0-9_]+$/.test(username)) {
+    return res.json({ available: false, error: 'Letters, numbers, and underscores only' });
+  }
+  const existing = db.findByUsername(username);
+  res.json({ available: !existing });
+});
+
+// Send OTP — rate limited
+app.post('/api/send-otp', smslimit, async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: 'Phone number required' });
+  const e164 = normalisePhone(phone);
+  const result = await sendOtp(e164);
+  if (result.error) return res.status(500).json(result);
+  res.json({ ok: true, dev: result.dev || false });
+});
+
+// Register: verify OTP + create account → return JWT
+app.post('/api/register', async (req, res) => {
+  const { username, phone, code } = req.body;
+  if (!username || !phone || !code) return res.status(400).json({ error: 'Missing fields' });
+
+  if (username.length < 2 || username.length > 20 || !/^[a-zA-Z0-9_]+$/.test(username)) {
+    return res.status(400).json({ error: 'Invalid username' });
+  }
+
+  const e164 = normalisePhone(phone);
+  const check = await verifyOtp(e164, code);
+  if (!check.valid) return res.status(400).json({ error: check.error });
+
+  if (db.findByUsername(username)) return res.status(409).json({ error: 'Username already taken' });
+  if (db.phoneHashExists(e164))    return res.status(409).json({ error: 'An account already exists for this phone number' });
+
+  try {
+    const user  = db.createUser(username, e164, encryptPhone(e164));
+    const token = signToken(user.id);
+    res.json({ ok: true, token, user: { id: user.id, username: user.username, elo: user.elo } });
+  } catch (err) {
+    console.error('register error:', err.message);
+    res.status(500).json({ error: 'Could not create account' });
+  }
+});
+
+// Account recovery: look up by phone hash → send OTP (rate limited)
+// Used when someone forgets their username.
+app.post('/api/login-by-phone', smslimit, async (req, res) => {
+  const { phone } = req.body;
+  if (!phone) return res.status(400).json({ error: 'Phone number required' });
+
+  const e164 = normalisePhone(phone);
+  const { hashPhone } = require('./db');
+  const user = db.findByPhoneHash(hashPhone(e164));
+  if (!user) return res.status(404).json({ error: 'No account found for that phone number' });
+
+  const result = await sendOtp(e164);
+  if (result.error) return res.status(500).json(result);
+  // Return the masked username so the UI can say "Logging in as ___"
+  res.json({ ok: true, username: user.username, dev: result.dev || false });
+});
+
+// Verify OTP sent via login-by-phone → return JWT
+app.post('/api/login-by-phone/verify', async (req, res) => {
+  const { phone, code } = req.body;
+  if (!phone || !code) return res.status(400).json({ error: 'Missing fields' });
+
+  const e164  = normalisePhone(phone);
+  const check = await verifyOtp(e164, code);
+  if (!check.valid) return res.status(400).json({ error: check.error });
+
+  const { hashPhone } = require('./db');
+  const user = db.findByPhoneHash(hashPhone(e164));
+  if (!user) return res.status(404).json({ error: 'Account not found' });
+
+  const token = signToken(user.id);
+  res.json({ ok: true, token, user: { id: user.id, username: user.username, elo: user.elo } });
+});
+
+// Login step 1: look up username → decrypt phone → send OTP (rate limited)
+app.post('/api/login-by-username', smslimit, async (req, res) => {
+  const { username } = req.body;
+  if (!username) return res.status(400).json({ error: 'Username required' });
+
+  const user = db.findByUsername(username);
+  if (!user) return res.status(404).json({ error: 'No account found with that username' });
+  if (!user.phone_encrypted) return res.status(400).json({ error: 'Account has no phone on file — contact support' });
+
+  try {
+    const e164   = decryptPhone(user.phone_encrypted);
+    const result = await sendOtp(e164);
+    if (result.error) return res.status(500).json(result);
+    res.json({ ok: true, dev: result.dev || false });
+  } catch (err) {
+    console.error('login-by-username error:', err.message);
+    res.status(500).json({ error: 'Could not send code' });
+  }
+});
+
+// Login step 2: verify OTP → return JWT
+// Accepts { username, code } (username-based login)
+app.post('/api/login', async (req, res) => {
+  const { username, code } = req.body;
+  if (!username || !code) return res.status(400).json({ error: 'Missing fields' });
+
+  const user = db.findByUsername(username);
+  if (!user) return res.status(404).json({ error: 'No account found with that username' });
+  if (!user.phone_encrypted) return res.status(400).json({ error: 'Account has no phone on file' });
+
+  try {
+    const e164  = decryptPhone(user.phone_encrypted);
+    const check = await verifyOtp(e164, code);
+    if (!check.valid) return res.status(400).json({ error: check.error });
+
+    const token = signToken(user.id);
+    res.json({ ok: true, token, user: { id: user.id, username: user.username, elo: user.elo } });
+  } catch (err) {
+    console.error('login error:', err.message);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+// Get current user profile (requires auth)
+// is_admin is intentionally stripped — never expose admin status to the client
+app.get('/api/me', requireAuth, (req, res) => {
+  const raw = db.findById(req.userId);
+  if (!raw) return res.status(404).json({ error: 'User not found' });
+  const { is_admin, ...user } = raw; // eslint-disable-line no-unused-vars
+  // Add masked phone for display — never expose raw or encrypted value
+  if (user.phone_encrypted) {
+    try { user.phone_masked = maskPhone(decryptPhone(user.phone_encrypted)); }
+    catch { user.phone_masked = null; }
+  }
+  const history = db.getHistory(req.userId);
+  res.json({ user, history });
+});
+
+// Toggle profile visibility
+app.post('/api/me/visibility', requireAuth, (req, res) => {
+  const { isPublic } = req.body;
+  if (typeof isPublic !== 'boolean') return res.status(400).json({ error: 'isPublic must be a boolean' });
+  db.setPublicProfile(req.userId, isPublic);
+  res.json({ ok: true, public_profile: isPublic });
+});
+
+// Promote a user to admin — requires the ADMIN_PROMOTE_SECRET env var as a header.
+// Usage: curl -X POST /api/admin/promote -H "X-Admin-Secret: <secret>" -H "Content-Type: application/json" -d '{"username":"yourname"}'
+// Only run this once against your own account, then remove the secret from .env.
+app.post('/api/admin/promote', (req, res) => {
+  const secret = process.env.ADMIN_PROMOTE_SECRET;
+  if (!secret) return res.status(403).json({ error: 'Admin promotion is disabled' });
+  if (req.headers['x-admin-secret'] !== secret) return res.status(403).json({ error: 'Invalid secret' });
+  const { username } = req.body;
+  const user = db.findByUsername(username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  db.setAdmin(user.id, true);
+  res.json({ ok: true, message: `${username} is now an admin` });
+});
+
+// Submit user feedback (public — no auth required)
+const feedbackLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, message: { error: 'Too many submissions. Try again later.' } });
+app.post('/api/feedback', feedbackLimit, async (req, res) => {
+  const { type, message, contact, page } = req.body;
+  if (!message || message.trim().length < 5) return res.status(400).json({ error: 'Message too short' });
+  if (!['bug', 'suggestion'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
+  const result = db.addFeedback(type, message.trim().slice(0, 2000), contact?.slice(0, 100), page?.slice(0, 100));
+
+  // Auto-create GitHub issue for bugs (if GITHUB_TOKEN is set)
+  let ghIssue = null;
+  if (type === 'bug' && process.env.GITHUB_TOKEN) {
+    try {
+      const { Octokit } = await import('@octokit/rest').catch(() => null) || {};
+      if (Octokit) {
+        const octokit = new Octokit({ auth: process.env.GITHUB_TOKEN });
+        const issue = await octokit.issues.create({
+          owner: 'esvalC', repo: 'acquire-online',
+          title: `[User Bug] ${message.slice(0, 80)}`,
+          body: `**Type:** Bug report\n**Page:** ${page || 'unknown'}\n**Contact:** ${contact || 'none'}\n\n${message}`,
+          labels: ['bug', 'user-report'],
+        });
+        ghIssue = issue.data.number;
+        db.setFeedbackIssue(result.lastInsertRowid, ghIssue);
+      }
+    } catch (err) { console.error('GitHub issue creation failed:', err.message); }
+  }
+
+  res.json({ ok: true, id: result.lastInsertRowid, ghIssue });
+});
+
+// Recent game sessions (public — no auth required)
+app.get('/api/recent-games', (req, res) => {
+  const sessions = db.getRecentSessions(15).map(s => ({
+    ...s,
+    standings: (() => { try { return JSON.parse(s.standings); } catch { return []; } })(),
+  }));
+  res.json({ sessions });
+});
+
+// Replay data for a specific session (public)
+app.get('/api/sessions/:id/replay', (req, res) => {
+  const row = db.getSessionReplay(Number(req.params.id));
+  if (!row) return res.status(404).json({ error: 'Session not found' });
+  let snapshots = [];
+  try { snapshots = JSON.parse(row.replay_data || '[]'); } catch {}
+  res.json({ sessionId: row.id, snapshots });
+});
+
+// Plan dashboard data (admin only)
+app.get('/api/plan/data', requireAdmin, (req, res) => {
+  res.json({
+    stats:    db.getStats(),
+    feedback: db.getFeedback(500),
+  });
+});
+
+// Update feedback status (admin only)
+app.post('/api/plan/feedback/:id/status', requireAdmin, (req, res) => {
+  const { status } = req.body;
+  if (!['new', 'triaged', 'done'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
+  db.setFeedbackStatus(Number(req.params.id), status);
+  res.json({ ok: true });
+});
+
 // Serve index.html for all known routes (client-side routing)
-const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules'];
+const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback'];
+app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
 for (const route of clientRoutes) {
   app.get(route, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 }
@@ -51,10 +294,19 @@ function broadcastState(code) {
       io.to(p.socketId).emit('gameState', clientState);
     }
   }
+
+  // Capture spectator snapshot for replay (deep-cloned so mutable game state can't overwrite it)
+  const spectatorState = engine.getClientState(room.game, -1);
+  spectatorState.playerList = playerList;
+  room.replaySnapshots = room.replaySnapshots || [];
+  room.replaySnapshots.push(JSON.parse(JSON.stringify(spectatorState)));
   for (const s of room.spectators) {
-    const clientState = engine.getClientState(room.game, -1);
-    clientState.playerList = playerList;
-    io.to(s.socketId).emit('gameState', clientState);
+    io.to(s.socketId).emit('gameState', spectatorState);
+  }
+
+  // Record game result once when it transitions to gameOver
+  if (room.game.phase === 'gameOver' && !room.gameRecorded) {
+    recordGameEnd(code);
   }
 
   // Schedule next bot move if this is a solo room
@@ -76,11 +328,85 @@ function broadcastLobby(code) {
   io.to(code).emit('lobbyUpdate', lobbyData);
 }
 
+/* ── ELO + game recording ───────────────────────────────────── */
+const ELO_K = 32;
+
+function expectedScore(myElo, oppElo) {
+  return 1 / (1 + Math.pow(10, (oppElo - myElo) / 400));
+}
+
+function recordGameEnd(code) {
+  const room = rooms[code];
+  if (!room || !room.game || room.gameRecorded) return;
+  room.gameRecorded = true;
+
+  const standings = room.game.standings; // [{ name, cash }] sorted desc
+  console.log(`[recordGameEnd] code=${code} standings=${JSON.stringify(standings)}`);
+  if (!standings || standings.length === 0) return;
+
+  // Record session for all games regardless of auth status
+  const durationSeconds = room.startedAt ? Math.round((Date.now() - room.startedAt) / 1000) : null;
+  const humanCount = room.players.filter(p => !p.isBot).length;
+  const turnCount  = room.game.turnNumber ?? null;
+  const sessionStandings = standings.map(s => {
+    const rp = room.players.find(p => p.name === s.name);
+    return { name: s.name, cash: s.cash, isBot: rp?.isBot || false, userId: rp?.userId || null };
+  });
+  try {
+    const sessionId = db.recordSession(room.isSolo, room.players.length, humanCount, durationSeconds, turnCount, sessionStandings, room.replaySnapshots || []);
+    console.log(`[session] recorded: solo=${room.isSolo} players=${room.players.length} turns=${turnCount} id=${sessionId} snapshots=${(room.replaySnapshots||[]).length}`);
+  } catch (err) {
+    console.error('[session] recordSession failed:', err.message);
+  }
+
+  const humanPlayers = room.players.filter(p => !p.isBot && p.userId);
+  if (humanPlayers.length === 0) return;
+
+  // Snapshot current ELO for all participants before any updates
+  const eloMap = {};
+  for (const p of humanPlayers) {
+    const user = db.findById(p.userId);
+    if (user) eloMap[p.userId] = user.elo;
+  }
+
+  for (const p of humanPlayers) {
+    const myRank  = standings.findIndex(s => s.name === p.name);
+    const myElo   = eloMap[p.userId] || 1000;
+    let delta = 0;
+
+    const otherHumans = humanPlayers.filter(o => o.userId !== p.userId);
+    if (otherHumans.length > 0) {
+      // Pairwise ELO vs other logged-in humans
+      for (const opp of otherHumans) {
+        const oppRank = standings.findIndex(s => s.name === opp.name);
+        const oppElo  = eloMap[opp.userId] || 1000;
+        const actual  = myRank < oppRank ? 1 : 0; // lower index = better place
+        delta += ELO_K * (actual - expectedScore(myElo, oppElo));
+      }
+      delta /= otherHumans.length; // normalize
+    } else {
+      // Solo game — compare vs fixed bot ELO 1000
+      const actual = myRank === 0 ? 1 : 0;
+      delta = ELO_K * (actual - expectedScore(myElo, 1000));
+    }
+
+    const eloChange = Math.round(delta);
+    const result    = myRank === 0 ? 'win' : 'loss';
+    const opponents = standings
+      .filter(s => s.name !== p.name)
+      .map(s => ({ name: s.name, cash: s.cash }));
+
+    db.recordGameResult(p.userId, result, eloChange, opponents);
+  }
+}
+
 /* ── Game start ─────────────────────────────────────────────── */
 function startGame(code) {
   const room = rooms[code];
   const names = room.players.map(p => p.name);
   room.game = engine.createGame(names, { quickstart: room.config.quickstart });
+  room.startedAt = Date.now();
+  room.replaySnapshots = [];
   // createGame reorders players by quickstart draw — remap indices
   for (const rp of room.players) {
     rp.idx = room.game.players.findIndex(gp => gp.name === rp.name);
@@ -136,14 +462,16 @@ io.on('connection', (socket) => {
   let playerName = null;
 
   /* ── Multiplayer: create room ── */
-  socket.on('createRoom', ({ name, maxPlayers, quickstart }, cb) => {
+  socket.on('createRoom', ({ name, maxPlayers, quickstart, authToken }, cb) => {
     const code = generateCode();
     currentRoom = code;
     playerName = name;
     const token = randomUUID();
+    const payload = authToken ? verifyToken(authToken) : null;
+    const userId  = payload ? payload.sub : null;
 
     rooms[code] = {
-      players: [{ name, socketId: socket.id, ready: false, idx: 0, token }],
+      players: [{ name, socketId: socket.id, ready: false, idx: 0, token, userId }],
       spectators: [],
       game: null,
       isSolo: false,
@@ -156,16 +484,18 @@ io.on('connection', (socket) => {
   });
 
   /* ── Solo: create & start a solo game ── */
-  socket.on('createSoloGame', ({ name, botCount, quickstart, botConfigs }, cb) => {
+  socket.on('createSoloGame', ({ name, botCount, quickstart, botConfigs, authToken }, cb) => {
     const code = generateCode();
     currentRoom = code;
     playerName = name;
     const token = randomUUID();
+    const payload = authToken ? verifyToken(authToken) : null;
+    const userId  = payload ? payload.sub : null;
 
     const bots = BOT_ROSTER.slice(0, Math.min(Math.max(botCount || 1, 1), 5));
 
     const players = [
-      { name, socketId: socket.id, ready: true, idx: 0, token, isBot: false },
+      { name, socketId: socket.id, ready: true, idx: 0, token, isBot: false, userId },
       ...bots.map((b, i) => {
         const cfg = (botConfigs && botConfigs[i]) || {};
         return {
@@ -201,13 +531,15 @@ io.on('connection', (socket) => {
     });
   });
 
-  socket.on('joinRoom', ({ name, code, spectate }, cb) => {
+  socket.on('joinRoom', ({ name, code, spectate, authToken }, cb) => {
     const room = rooms[code];
     if (!room) return cb({ error: 'Room not found' });
 
     currentRoom = code;
     playerName = name;
     socket.join(code);
+    const payload = authToken ? verifyToken(authToken) : null;
+    const userId  = payload ? payload.sub : null;
 
     if (spectate || room.game || room.players.length >= room.config.maxPlayers) {
       room.spectators.push({ name, socketId: socket.id });
@@ -218,7 +550,7 @@ io.on('connection', (socket) => {
     }
 
     const token = randomUUID();
-    room.players.push({ name, socketId: socket.id, ready: false, idx: room.players.length, token });
+    room.players.push({ name, socketId: socket.id, ready: false, idx: room.players.length, token, userId });
     cb({ ok: true, spectator: false, token });
     broadcastLobby(code);
   });

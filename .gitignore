@@ -21,3 +21,4 @@ pids/
 # Build output (if added later)
 dist/
 build/
+data/

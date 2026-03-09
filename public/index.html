@@ -759,6 +759,249 @@
     content: '...'; animation: thinkDots 1.2s steps(3, end) infinite;
   }
   @keyframes thinkDots { 0% { content: '.'; } 33% { content: '..'; } 66% { content: '...'; } }
+
+  /* ── Hamburger button ─────────────────────────────── */
+  .menu-btn {
+    position: fixed; top: 16px; right: 16px; z-index: 200;
+    width: 40px; height: 40px; border-radius: 8px;
+    background: var(--bg-card); border: 1px solid var(--border-light);
+    cursor: pointer; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 5px;
+    transition: var(--transition);
+  }
+  .menu-btn:hover { border-color: var(--gold); }
+  .menu-btn span {
+    display: block; width: 18px; height: 2px;
+    background: var(--text-dim); border-radius: 2px; transition: var(--transition);
+  }
+  .menu-btn:hover span { background: var(--gold); }
+  .menu-btn.logged-in::after {
+    content: ''; position: absolute; top: 7px; right: 7px;
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green); border: 1.5px solid var(--bg-card);
+  }
+
+  /* ── Profile drawer ───────────────────────────────── */
+  .profile-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+    z-index: 300; display: none; backdrop-filter: blur(4px);
+  }
+  .profile-overlay.open { display: block; }
+  .profile-drawer {
+    position: absolute; top: 0; right: 0; bottom: 0;
+    width: clamp(300px, 88vw, 400px);
+    background: var(--bg-card); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; padding: 24px;
+    gap: 16px; overflow-y: auto; overflow-x: hidden;
+    transform: translateX(100%); transition: transform 0.25s ease;
+  }
+  .profile-overlay.open .profile-drawer { transform: translateX(0); }
+  .drawer-header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 16px; border-bottom: 1px solid var(--border);
+  }
+  .drawer-title {
+    font-family: 'Playfair Display', serif; font-size: 20px; color: var(--gold);
+  }
+  .drawer-close {
+    background: none; border: none; color: var(--text-muted);
+    font-size: 22px; cursor: pointer; line-height: 1;
+  }
+  .drawer-close:hover { color: var(--text); }
+
+  /* ── Auth form inside drawer ──────────────────────── */
+  #drawerLoggedOut { flex-direction: column; gap: 16px; }
+  #drawerLoggedIn  { flex-direction: column; gap: 0; }
+  .auth-step { display: flex; flex-direction: column; gap: 10px; }
+  .auth-step .btn { padding: 9px 16px; font-size: 13px; }
+  .auth-step input {
+    width: 100%; background: var(--bg-dark); border: 1px solid var(--border-light);
+    border-radius: var(--radius); color: var(--text); padding: 10px 14px;
+    font-family: 'DM Sans', sans-serif; font-size: 14px;
+  }
+  .auth-step input:focus { border-color: var(--gold); outline: none; }
+  .auth-hint { font-size: 11px; color: var(--text-muted); overflow-wrap: break-word; word-break: break-word; line-height: 1.5; }
+  .auth-label { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: -4px; }
+  .phone-input-row { display: flex; align-items: stretch; gap: 0; }
+  .phone-prefix {
+    background: var(--bg-dark); border: 1px solid var(--border-light); border-right: none;
+    border-radius: var(--radius) 0 0 var(--radius); color: var(--text-dim);
+    padding: 10px 10px; font-size: 14px; font-family: 'JetBrains Mono', monospace;
+    white-space: nowrap; flex-shrink: 0; display: flex; align-items: center;
+  }
+  .phone-input-row input {
+    flex: 1; min-width: 0; width: auto !important;
+    border-radius: 0 var(--radius) var(--radius) 0 !important;
+  }
+  .auth-tabs { display: flex; gap: 4px; }
+  .auth-tab {
+    flex: 1; padding: 8px; text-align: center; font-size: 12px;
+    font-family: 'DM Sans', sans-serif; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 1px; cursor: pointer;
+    border-radius: 6px; border: 1px solid var(--border-light);
+    background: var(--bg-dark); color: var(--text-muted); transition: var(--transition);
+  }
+  .auth-tab.active { background: rgba(245,158,11,0.15); border-color: var(--gold); color: var(--gold); }
+
+  /* ── Profile view ─────────────────────────────────── */
+  .profile-avatar {
+    width: 64px; height: 64px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--gold), #d97706);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 28px; font-weight: 700; color: #000;
+    font-family: 'Playfair Display', serif;
+  }
+  .profile-username {
+    font-family: 'Playfair Display', serif; font-size: 20px; color: var(--text);
+  }
+  .profile-elo {
+    font-family: 'JetBrains Mono', monospace; font-size: 24px;
+    color: var(--gold); font-weight: 500;
+  }
+  .profile-stat-row {
+    display: flex; justify-content: space-between; font-size: 13px;
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+  }
+  .profile-stat-row:last-child { border-bottom: none; }
+  .stat-label { color: var(--text-muted); }
+  .stat-value { color: var(--text); font-weight: 500; }
+  .drawer-error { font-size: 12px; color: var(--red); padding: 6px 10px;
+    background: rgba(239,68,68,0.1); border-radius: 4px; border: 1px solid rgba(239,68,68,0.2); }
+  .game-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 10px; border-radius: 6px;
+    background: var(--bg-dark); border: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .game-row-win  { border-left: 3px solid var(--green); }
+  .game-row-loss { border-left: 3px solid var(--red); }
+  .game-result { font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .game-result-win  { color: var(--green); }
+  .game-result-loss { color: var(--red); }
+  .game-elo { font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+  .fb-type-btn {
+    flex: 1; padding: 8px; font-size: 13px; font-family: 'DM Sans', sans-serif;
+    font-weight: 600; border-radius: 6px; border: 1px solid var(--border-light);
+    background: var(--bg-dark); color: var(--text-muted); cursor: pointer; transition: all .15s;
+  }
+  .fb-type-btn.active { background: rgba(245,158,11,.15); border-color: var(--gold); color: var(--gold); }
+  #feedbackOverlay.open { display: flex !important; }
+
+  /* ── Recent Games (home page) ───────────────────── */
+  .recent-games-section {
+    width: 100%; max-width: 640px; margin-top: 24px;
+  }
+  .recent-games-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-muted); margin-bottom: 10px;
+  }
+  .session-row {
+    display: flex; align-items: center; gap: 12px;
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 6px;
+    font-size: 12px; flex-wrap: wrap;
+  }
+  .session-mode {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--text-muted); flex-shrink: 0; width: 36px;
+  }
+  .session-players-inline { flex: 1; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .session-player-chip {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 12px; white-space: nowrap;
+  }
+  .session-player-chip + .session-player-chip::before {
+    content: '›'; color: var(--text-muted); font-size: 11px; margin-right: 2px;
+  }
+  .chip-rank { font-size: 10px; color: var(--text-muted); }
+  .chip-rank-1 { color: var(--gold); font-weight: 700; }
+  .chip-name-member { cursor: pointer; color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
+  .chip-cash { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+  .session-date { font-size: 11px; color: var(--text-muted); flex-shrink: 0; margin-left: auto; }
+  .player-badge {
+    font-size: 9px; padding: 1px 5px; border-radius: 99px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0;
+  }
+  .player-badge-bot    { background: rgba(100,116,139,.2); color: var(--text-muted); }
+  .player-badge-guest  { background: rgba(59,130,246,.15); color: var(--blue); }
+  .player-badge-member { background: rgba(16,185,129,.15); color: var(--green); }
+
+  /* ── Replay button on session rows ─────────────── */
+  .session-row { cursor: pointer; }
+  .session-row:hover { border-color: var(--gold); background: rgba(245,158,11,.04); }
+  .session-replay-btn {
+    font-size: 10px; color: var(--text-muted); flex-shrink: 0;
+    padding: 2px 7px; border: 1px solid var(--border); border-radius: 99px;
+    background: transparent; cursor: pointer; white-space: nowrap;
+    transition: all .15s;
+  }
+  .session-replay-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* ── Replay overlay ─────────────────────────────── */
+  #replayOverlay {
+    display: none; position: fixed; inset: 0; z-index: 500;
+    background: var(--bg-dark); flex-direction: column; overflow: hidden;
+  }
+  .replay-topbar {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    background: var(--bg-card); border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .replay-topbar-title { font-weight: 700; font-size: 13px; color: var(--gold); flex: 1; }
+  .replay-nav { display: flex; align-items: center; gap: 8px; }
+  .btn-replay {
+    padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg-sidebar); color: var(--text); font-size: 12px;
+    cursor: pointer; transition: all .15s; font-family: 'DM Sans', sans-serif;
+  }
+  .btn-replay:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+  .btn-replay:disabled { opacity: 0.35; cursor: default; }
+  #replayStepLabel { font-size: 12px; color: var(--text-muted); min-width: 120px; text-align: center; }
+  .btn-replay-exit {
+    padding: 5px 14px; border-radius: 6px; border: 1px solid var(--red);
+    background: transparent; color: var(--red); font-size: 12px;
+    cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all .15s;
+  }
+  .btn-replay-exit:hover { background: rgba(239,68,68,.1); }
+  .replay-body {
+    display: flex; flex: 1; gap: 0; min-height: 0; overflow: hidden;
+  }
+  .replay-board-col {
+    flex: 1; overflow: auto; padding: 12px;
+    display: flex; flex-direction: column; align-items: flex-start;
+  }
+  .replay-sidebar {
+    width: 280px; overflow-y: auto; padding: 12px;
+    background: var(--bg-sidebar); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 0; flex-shrink: 0;
+  }
+  .replay-panel-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px;
+  }
+  #replayBoard { grid-template-columns: 18px repeat(12, 1fr); }
+  #replayLog {
+    font-size: 11px; color: var(--text-dim); display: flex; flex-direction: column; gap: 3px;
+  }
+  #replayLog .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+  .replay-phase-label {
+    font-size: 11px; color: var(--text-muted); margin-bottom: 10px;
+    padding: 6px 10px; background: rgba(255,255,255,.04); border-radius: 6px;
+  }
+
+  /* ── Profile drawer tabs ────────────────────────── */
+  .drawer-tabs {
+    display: flex; gap: 0; margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .drawer-tab {
+    flex: 1; padding: 8px 0; font-size: 12px; font-weight: 600;
+    text-align: center; cursor: pointer; color: var(--text-muted);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    background: none; border-top: none; border-left: none; border-right: none;
+    font-family: 'DM Sans', sans-serif; transition: all .15s;
+  }
+  .drawer-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
 </style>
 </head>
 <body>
@@ -783,6 +1026,67 @@
       <div class="mode-card-title">Rules</div>
       <div class="mode-card-desc">Complete guide to Acquire — strategy, mergers, and more</div>
     </div>
+    <div class="mode-card" onclick="openFeedbackModal()">
+      <div class="mode-card-icon">💬</div>
+      <div class="mode-card-title">Feedback</div>
+      <div class="mode-card-desc">Still in beta — report bugs or share suggestions</div>
+    </div>
+  </div>
+
+  <div class="recent-games-section">
+    <div class="recent-games-title">Recent Games</div>
+    <div id="recentGamesList"><div style="font-size:12px;color:var(--text-muted);padding:8px 0;">Loading…</div></div>
+  </div>
+</div>
+
+<!-- ═══ REPLAY OVERLAY ═══ -->
+<div id="replayOverlay">
+  <div class="replay-topbar">
+    <div class="replay-topbar-title">▶ Game Replay</div>
+    <div class="replay-nav">
+      <button class="btn-replay" id="replayPrevBtn" onclick="replayPrev()">← Prev</button>
+      <span id="replayStepLabel">Loading…</span>
+      <button class="btn-replay" id="replayNextBtn" onclick="replayNext()">Next →</button>
+    </div>
+    <button class="btn-replay-exit" onclick="closeReplay()">✕ Exit Replay</button>
+  </div>
+  <div class="replay-body">
+    <div class="replay-board-col">
+      <div class="replay-phase-label" id="replayPhaseLabel"></div>
+      <div class="board-container" style="flex:none;width:100%">
+        <div class="board" id="replayBoard"></div>
+      </div>
+    </div>
+    <div class="replay-sidebar">
+      <div class="replay-panel-label">Players</div>
+      <div id="replayScoreboard"></div>
+      <div class="replay-panel-label" style="margin-top:14px">Hotel Chains</div>
+      <div id="replayStockMarket"></div>
+      <div class="replay-panel-label" style="margin-top:14px">Recent Log</div>
+      <div id="replayLog"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ FEEDBACK MODAL ═══ -->
+<div id="feedbackOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:400;backdrop-filter:blur(4px);align-items:center;justify-content:center;">
+  <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:28px;width:min(480px,92vw);display:flex;flex-direction:column;gap:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div style="font-family:'Playfair Display',serif;font-size:20px;color:var(--gold)">Bugs & Suggestions</div>
+      <button onclick="closeFeedbackModal()" style="background:none;border:none;color:var(--text-muted);font-size:22px;cursor:pointer;line-height:1">✕</button>
+    </div>
+    <p style="font-size:13px;color:var(--text-muted);line-height:1.5;">This project is a work in progress and your feedback is genuinely appreciated. Share a bug you found or an idea you'd like to see.</p>
+    <div style="display:flex;gap:8px;">
+      <button id="fbTypeBug" class="fb-type-btn active" onclick="setFbType('bug')">🐛 Bug</button>
+      <button id="fbTypeSuggestion" class="fb-type-btn" onclick="setFbType('suggestion')">💡 Suggestion</button>
+    </div>
+    <textarea id="fbMessage" placeholder="Describe the bug or suggestion (max 300 words)…" maxlength="2000"
+      style="background:var(--bg-dark);border:1px solid var(--border-light);border-radius:var(--radius);color:var(--text);padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;min-height:110px;"></textarea>
+    <input type="text" id="fbContact" placeholder="Email or @handle (optional — so we can follow up)" maxlength="100"
+      style="background:var(--bg-dark);border:1px solid var(--border-light);border-radius:var(--radius);color:var(--text);padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:13px;" />
+    <div id="fbError" style="display:none;font-size:12px;color:var(--red);"></div>
+    <div id="fbSuccess" style="display:none;font-size:13px;color:var(--green);padding:8px 0;">Thanks! Your feedback has been recorded. 🙌</div>
+    <button class="btn" id="fbSubmitBtn" onclick="submitFeedback()">Send Feedback</button>
   </div>
 </div>
 
@@ -794,6 +1098,7 @@
       <h3 style="font-family:'Playfair Display',serif;font-size:18px;color:var(--gold)">Solo Game</h3>
       <button class="btn btn-sm btn-secondary" onclick="goHome()">← Back</button>
     </div>
+    <div class="playing-as-banner" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:12px;"></div>
     <div class="input-group">
       <label>Your Name</label>
       <input type="text" id="soloName" placeholder="Enter your name" maxlength="20" />
@@ -886,6 +1191,7 @@
     <div style="display:flex; flex-direction:column; gap:20px;">
       <div class="landing-card">
         <h3>Create a Table</h3>
+        <div class="playing-as-banner" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:8px;"></div>
         <div class="input-group">
           <label>Your Name</label>
           <input type="text" id="createName" placeholder="Enter your name" maxlength="20" />
@@ -913,6 +1219,7 @@
           <label>Room Code</label>
           <input type="text" id="joinCode" placeholder="4-digit code" maxlength="4" />
         </div>
+        <div class="playing-as-banner" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:8px;margin-top:4px;"></div>
         <div class="input-group">
           <label>Your Name</label>
           <input type="text" id="joinName" placeholder="Enter your name" maxlength="20" />
@@ -1066,6 +1373,150 @@
   </div>
 </div>
 
+<!-- ═══ HAMBURGER BUTTON (always visible) ═══ -->
+<button class="menu-btn" onclick="openProfileDrawer()" aria-label="Menu">
+  <span></span><span></span><span></span>
+</button>
+
+<!-- ═══ PROFILE DRAWER ═══ -->
+<div class="profile-overlay" id="profileOverlay" onclick="handleOverlayClick(event)">
+  <div class="profile-drawer" id="profileDrawer">
+    <div class="drawer-header">
+      <div class="drawer-title" id="drawerTitle">Account</div>
+      <button class="drawer-close" onclick="closeProfileDrawer()">✕</button>
+    </div>
+
+    <!-- Logged-out: tabs for Login / Register -->
+    <div id="drawerLoggedOut">
+      <div class="auth-tabs" style="margin-bottom:16px;">
+        <div class="auth-tab active" id="tabLogin" onclick="switchAuthTab('login')">Log In</div>
+        <div class="auth-tab" id="tabRegister" onclick="switchAuthTab('register')">Register</div>
+      </div>
+
+      <!-- Login flow -->
+      <div id="loginFlow" class="auth-step">
+        <!-- Step 1a: username -->
+        <div id="loginStep1" class="auth-step">
+          <p class="auth-hint">Enter your username and we'll text a code to your registered number.</p>
+          <input type="text" id="loginUsername" placeholder="your_username" maxlength="20" autocomplete="username" />
+          <button class="btn" onclick="loginSendCode()">Send Code</button>
+          <button class="btn btn-secondary" style="margin-top:4px;font-size:11px" onclick="switchLoginMode('phone')">Forgot username? Use phone number</button>
+        </div>
+        <!-- Step 1b: phone (account recovery) -->
+        <div id="loginStep1Phone" class="auth-step" style="display:none;">
+          <p class="auth-hint">Enter your registered phone number and we'll text a code.</p>
+          <span class="auth-label">Phone Number</span>
+          <div class="phone-input-row">
+            <span class="phone-prefix">+1</span>
+            <input type="tel" id="loginPhone" placeholder="5551234567" maxlength="10" inputmode="numeric" autocomplete="tel-national" />
+          </div>
+          <button class="btn" onclick="loginSendCodeByPhone()">Send Code</button>
+          <button class="btn btn-secondary" style="margin-top:4px;font-size:11px" onclick="switchLoginMode('username')">← Back to username</button>
+        </div>
+        <!-- Step 2: enter code -->
+        <div id="loginStep2" class="auth-step" style="display:none;">
+          <p class="auth-hint" id="loginStep2Hint">Check your registered number for the 6-digit code.</p>
+          <input type="text" id="loginCode" placeholder="000000" maxlength="6" inputmode="numeric" />
+          <button class="btn" onclick="loginVerify()">Log In</button>
+          <button class="btn btn-secondary" onclick="resetLoginFlow()">← Back</button>
+        </div>
+      </div>
+
+      <!-- Register flow -->
+      <div id="registerFlow" class="auth-step" style="display:none;">
+        <div id="registerStep1" class="auth-step">
+          <span class="auth-label">Username</span>
+          <input type="text" id="regUsername" placeholder="your_username" maxlength="20"
+            oninput="checkUsernameAvail()" autocomplete="username" />
+          <div id="usernameStatus" class="auth-hint"></div>
+          <span class="auth-label">Phone Number</span>
+          <div class="phone-input-row">
+            <span class="phone-prefix">+1</span>
+            <input type="tel" id="regPhone" placeholder="5551234567" maxlength="10" inputmode="numeric" autocomplete="tel-national" />
+          </div>
+          <p class="auth-hint">Used to verify your account. We never share your number.</p>
+          <button class="btn" onclick="registerSendCode()">Send Code →</button>
+        </div>
+        <div id="registerStep2" class="auth-step" style="display:none;">
+          <p class="auth-hint">Enter the 6-digit code sent to your phone.</p>
+          <div class="auth-hint" id="otpCountdown" style="color:var(--gold);font-weight:600;"></div>
+          <input type="text" id="regCode" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+          <button class="btn" onclick="registerVerify()">Create Profile</button>
+          <button class="btn btn-secondary" onclick="resetRegisterFlow()">← Back</button>
+        </div>
+      </div>
+
+      <div id="drawerError" class="drawer-error" style="display:none;"></div>
+    </div>
+
+    <!-- Logged-in: profile view -->
+    <div id="drawerLoggedIn" style="display:none;">
+      <div style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <div class="profile-avatar" id="profileAvatar">?</div>
+        <div>
+          <div class="profile-username" id="profileUsername">—</div>
+          <div style="font-size:11px;color:var(--text-muted);">Member since <span id="profileSince">—</span></div>
+        </div>
+      </div>
+      <div style="text-align:center;margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">ELO Rating</div>
+        <div class="profile-elo" id="profileElo">1000</div>
+      </div>
+      <!-- Tab bar -->
+      <div class="drawer-tabs">
+        <button class="drawer-tab active" id="drawerTabStats" onclick="switchDrawerTab('stats')">Stats</button>
+        <button class="drawer-tab" id="drawerTabGames" onclick="switchDrawerTab('games')">Game History</button>
+      </div>
+
+      <!-- Stats tab -->
+      <div id="drawerPanelStats">
+        <div id="profileStats">
+          <div class="profile-stat-row">
+            <span class="stat-label">Games Played</span>
+            <span class="stat-value" id="statPlayed">0</span>
+          </div>
+          <div class="profile-stat-row">
+            <span class="stat-label">Wins</span>
+            <span class="stat-value" id="statWins">0</span>
+          </div>
+          <div class="profile-stat-row">
+            <span class="stat-label">Win Rate</span>
+            <span class="stat-value" id="statWinRate">—</span>
+          </div>
+        </div>
+        <div style="padding-top:16px;border-top:1px solid var(--border);margin-top:8px;">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:10px;">Settings</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div>
+              <div style="font-size:13px;">Public Profile</div>
+              <div style="font-size:11px;color:var(--text-muted);">Let others see your stats</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="visibilityToggle" onchange="toggleVisibility(this.checked)" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div style="margin-top:10px;">
+            <div style="font-size:13px;">Registered Phone</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="profilePhone">—</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Games tab -->
+      <div id="drawerPanelGames" style="display:none;">
+        <div id="profileHistory" style="display:flex;flex-direction:column;gap:6px;">
+          <div style="font-size:12px;color:var(--text-muted);">No ranked games recorded yet.</div>
+        </div>
+      </div>
+
+      <div style="padding-top:12px;border-top:1px solid var(--border);margin-top:auto;">
+        <button class="btn btn-secondary" style="font-size:12px;" onclick="logOut()">Log Out</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="error-toast" id="errorToast"></div>
 <div id="yourTurnBanner">✦ YOUR TURN</div>
 <div id="tilePreview"><div class="tp-action" id="tpAction"></div><div class="tp-detail" id="tpDetail"></div></div>
@@ -1130,8 +1581,9 @@ function goHome() {
   recentTiles = new Set();
   if (isSoloGame) socket.emit('leaveRoom');
   isSoloGame = false;
-  history.pushState({}, '', '/');
+  history.pushState({}, '', window.location.pathname.startsWith('/beta') ? '/beta' : '/');
   showScreen('newLanding');
+  loadRecentGames();
 }
 function goSolo() {
   document.getElementById('gameOverOverlay').style.display = 'none';
@@ -1170,13 +1622,13 @@ function clearLogPulse() {
 
 /* ── Landing Actions ───────────────────────────── */
 function createRoom() {
-  const name = document.getElementById('createName').value.trim();
+  const name = (currentUser ? currentUser.username : document.getElementById('createName').value.trim());
   if (!name) return showError('Enter your name');
   myName = name;
   isSoloGame = false;
   const maxPlayers = parseInt(document.getElementById('maxPlayers').value);
   const quickstart = document.getElementById('quickstartToggle').checked;
-  socket.emit('createRoom', { name, maxPlayers, quickstart }, (res) => {
+  socket.emit('createRoom', { name, maxPlayers, quickstart, authToken }, (res) => {
     if (res.error) return showError(res.error);
     saveSession(res.code, name, res.token);
     history.pushState({}, '', '/multiplayer/' + res.code);
@@ -1186,13 +1638,13 @@ function createRoom() {
 }
 
 function joinRoom(spectate = false) {
-  const name = document.getElementById('joinName').value.trim();
+  const name = (currentUser ? currentUser.username : document.getElementById('joinName').value.trim());
   const code = document.getElementById('joinCode').value.trim();
   if (!name) return showError('Enter your name');
   if (!code || code.length !== 4) return showError('Enter a 4-digit room code');
   myName = name;
   isSoloGame = false;
-  socket.emit('joinRoom', { name, code, spectate }, (res) => {
+  socket.emit('joinRoom', { name, code, spectate, authToken }, (res) => {
     if (res.error) return showError(res.error);
     if (res.token) saveSession(code, name, res.token);
     history.pushState({}, '', '/multiplayer/' + code);
@@ -1278,7 +1730,7 @@ function renderBotRoster() {
 }
 
 function startSoloGame() {
-  const name = document.getElementById('soloName').value.trim();
+  const name = (currentUser ? currentUser.username : document.getElementById('soloName').value.trim());
   if (!name) return showError('Enter your name');
   myName = name;
   isSoloGame = true;
@@ -1291,7 +1743,7 @@ function startSoloGame() {
       difficulty: s.difficulty,
     };
   });
-  socket.emit('createSoloGame', { name, botCount: selectedBotCount, quickstart, botConfigs }, (res) => {
+  socket.emit('createSoloGame', { name, botCount: selectedBotCount, quickstart, botConfigs, authToken }, (res) => {
     if (res.error) return showError(res.error);
     saveSession(res.code, name, res.token);
     showScreen('game');
@@ -1382,6 +1834,7 @@ function attemptReconnect(code, name, token) {
     return;
   }
   // Default: / → newLanding (already active by default)
+  loadRecentGames();
 })();
 
 function toggleReady() { socket.emit('toggleReady'); }
@@ -1422,8 +1875,9 @@ socket.on('soloRestart', () => {
 });
 
 socket.on('disconnect', () => {
-  if (window.location.pathname !== '/') {
-    history.replaceState({}, '', '/');
+  const home = window.location.pathname.startsWith('/beta') ? '/beta' : '/';
+  if (window.location.pathname !== home) {
+    history.replaceState({}, '', home);
   }
 });
 
@@ -1957,6 +2411,8 @@ function renderGameOver() {
   document.getElementById('standingsDisplay').innerHTML = (gameState.standings||[]).map((s,i)=>
     `<div class="standing-row"><span class="place">${places[i]||''}</span><span class="sname">${escapeHtml(s.name)}</span><span class="scash">$${s.cash.toLocaleString()}</span></div>`
   ).join('');
+  // Reload profile in background so ELO + history update
+  if (authToken) setTimeout(() => loadProfile(), 1500);
 }
 
 /* ── Socket actions ────────────────────────────── */
@@ -2073,6 +2529,603 @@ function askRuleFromInput() {
   if (!q) return;
   askRule(q);
   input.value = '';
+}
+
+/* ══════════════════════════════════════════════════════════════
+   PROFILE / AUTH
+   ══════════════════════════════════════════════════════════════ */
+
+let authToken    = localStorage.getItem('acquire_auth_token') || null;
+let currentUser  = null; // { id, username, elo, games_played, games_won }
+// Route API calls through /beta/api when running under the /beta Nginx proxy
+const API_BASE   = window.location.pathname.startsWith('/beta') ? '/beta/api' : '/api';
+let usernameCheckTimer = null;
+
+// Restore logged-in state on page load
+if (authToken) {
+  document.querySelector('.menu-btn')?.classList.add('logged-in');
+  loadProfile(); // runs in background; updates currentUser silently
+}
+
+/* ── Drawer open/close ───────────────────────────────────────── */
+function openProfileDrawer() {
+  document.getElementById('profileOverlay').classList.add('open');
+  if (authToken) loadProfile();
+  else           renderDrawerLoggedOut();
+}
+function closeProfileDrawer() {
+  document.getElementById('profileOverlay').classList.remove('open');
+}
+function handleOverlayClick(e) {
+  if (e.target === document.getElementById('profileOverlay')) closeProfileDrawer();
+}
+
+/* ── Auto-fill name inputs when logged in ────────────────────── */
+function updateNameInputs(username) {
+  const ids = ['soloName', 'createName', 'joinName'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const wrap = el.closest('.input-group');
+    if (username) {
+      el.value = username;
+      if (wrap) wrap.style.display = 'none';
+    } else {
+      el.value = '';
+      if (wrap) wrap.style.display = '';
+    }
+  });
+  // Show/hide "Playing as" banners
+  document.querySelectorAll('.playing-as-banner').forEach(b => {
+    b.textContent = username ? `Playing as ${username}` : '';
+    b.style.display = username ? 'block' : 'none';
+  });
+}
+
+/* ── Profile drawer tab switching ───────────────────────────── */
+function switchDrawerTab(tab) {
+  const isStats = tab === 'stats';
+  document.getElementById('drawerTabStats').classList.toggle('active', isStats);
+  document.getElementById('drawerTabGames').classList.toggle('active', !isStats);
+  document.getElementById('drawerPanelStats').style.display = isStats ? 'block' : 'none';
+  document.getElementById('drawerPanelGames').style.display = isStats ? 'none'  : 'block';
+}
+
+/* ── Auth tab switching ──────────────────────────────────────── */
+function switchAuthTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('tabLogin').classList.toggle('active', isLogin);
+  document.getElementById('tabRegister').classList.toggle('active', !isLogin);
+  document.getElementById('loginFlow').style.display    = isLogin ? 'flex' : 'none';
+  document.getElementById('registerFlow').style.display = isLogin ? 'none' : 'flex';
+  clearDrawerError();
+}
+
+function renderDrawerLoggedOut() {
+  document.getElementById('drawerLoggedOut').style.display = 'flex';
+  document.getElementById('drawerLoggedIn').style.display  = 'none';
+  document.getElementById('drawerTitle').textContent = 'Account';
+  switchAuthTab('login');
+  resetLoginFlow();
+  resetRegisterFlow();
+}
+
+function renderDrawerLoggedIn(user, history) {
+  currentUser = user;
+  document.querySelector('.menu-btn')?.classList.add('logged-in');
+  document.getElementById('drawerLoggedOut').style.display = 'none';
+  document.getElementById('drawerLoggedIn').style.display  = 'flex';
+  document.getElementById('drawerTitle').textContent = 'Profile';
+  document.getElementById('profileAvatar').textContent   = user.username[0].toUpperCase();
+  document.getElementById('profileUsername').textContent  = user.username;
+  document.getElementById('profileElo').textContent       = user.elo;
+  const since = user.created_at
+    ? new Date(user.created_at * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    : '—';
+  document.getElementById('profileSince').textContent   = since;
+  document.getElementById('statPlayed').textContent     = user.games_played;
+  document.getElementById('statWins').textContent       = user.games_won;
+  const wr = user.games_played > 0
+    ? Math.round((user.games_won / user.games_played) * 100) + '%'
+    : '—';
+  document.getElementById('statWinRate').textContent = wr;
+  // Visibility toggle — default true if field not present
+  const toggle = document.getElementById('visibilityToggle');
+  if (toggle) toggle.checked = user.public_profile !== false && user.public_profile !== 0;
+  // Masked phone
+  const phoneEl = document.getElementById('profilePhone');
+  if (phoneEl) phoneEl.textContent = user.phone_masked || '—';
+  // Pre-fill & hide name inputs on game screens — use username automatically
+  updateNameInputs(user.username);
+  // Game history
+  const histEl = document.getElementById('profileHistory');
+  if (histEl && history && history.length > 0) {
+    histEl.innerHTML = history.slice(0, 10).map(g => {
+      const date = new Date(g.played_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      const sign = g.elo_change > 0 ? '+' : '';
+      const eloColor = g.elo_change > 0 ? 'var(--green)' : g.elo_change < 0 ? 'var(--red)' : 'var(--text-muted)';
+      const opps = (() => { try { return JSON.parse(g.opponents).map(o => o.name).join(', ') || '—'; } catch { return '—'; } })();
+      return `<div class="game-row game-row-${g.result}">
+        <div>
+          <span class="game-result game-result-${g.result}">${g.result}</span>
+          <span style="color:var(--text-muted);margin-left:6px;font-size:11px;">vs ${opps}</span>
+        </div>
+        <div style="text-align:right">
+          <span class="game-elo" style="color:${eloColor}">${sign}${g.elo_change}</span>
+          <div style="font-size:10px;color:var(--text-muted)">${date}</div>
+        </div>
+      </div>`;
+    }).join('');
+  } else if (histEl) {
+    histEl.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No games recorded yet.</div>';
+  }
+}
+
+async function toggleVisibility(isPublic) {
+  if (!authToken) return;
+  await fetch(`${API_BASE}/me/visibility`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + authToken },
+    body: JSON.stringify({ isPublic }),
+  });
+}
+
+/* ── Load profile from API ───────────────────────────────────── */
+async function loadProfile() {
+  try {
+    const res = await fetch(`${API_BASE}/me`, {
+      headers: { Authorization: 'Bearer ' + authToken }
+    });
+    if (res.status === 401) { authToken = null; localStorage.removeItem('acquire_auth_token'); document.querySelector('.menu-btn')?.classList.remove('logged-in'); renderDrawerLoggedOut(); return; }
+    const data = await res.json();
+    renderDrawerLoggedIn(data.user, data.history || []);
+  } catch {
+    renderDrawerLoggedOut();
+  }
+}
+
+/* ── Login flow ──────────────────────────────────────────────── */
+let loginMode = 'username'; // 'username' | 'phone'
+
+function switchLoginMode(mode) {
+  loginMode = mode;
+  document.getElementById('loginStep1').style.display       = mode === 'username' ? 'flex' : 'none';
+  document.getElementById('loginStep1Phone').style.display  = mode === 'phone'    ? 'flex' : 'none';
+  clearDrawerError();
+}
+
+function resetLoginFlow() {
+  loginMode = 'username';
+  document.getElementById('loginStep1').style.display       = 'flex';
+  document.getElementById('loginStep1Phone').style.display  = 'none';
+  document.getElementById('loginStep2').style.display       = 'none';
+  document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPhone').value    = '';
+  document.getElementById('loginCode').value     = '';
+  clearDrawerError();
+}
+
+async function loginSendCode() {
+  const username = document.getElementById('loginUsername').value.trim();
+  if (!username) return showDrawerError('Enter your username');
+  clearDrawerError();
+  const btn = event.target;
+  btn.textContent = 'Sending...'; btn.disabled = true;
+  try {
+    const res  = await fetch(`${API_BASE}/login-by-username`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username }) });
+    const data = await res.json();
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code'; btn.disabled = false; return; }
+    if (data.dev) showDrawerError('DEV MODE: Check server console for code');
+    document.getElementById('loginStep1').style.display = 'none';
+    document.getElementById('loginStep2Hint').textContent = 'Check your registered number for the 6-digit code.';
+    document.getElementById('loginStep2').style.display = 'flex';
+  } catch { showDrawerError('Network error'); }
+  btn.textContent = 'Send Code'; btn.disabled = false;
+}
+
+async function loginSendCodeByPhone() {
+  const phone = document.getElementById('loginPhone').value.trim();
+  if (!phone) return showDrawerError('Enter your phone number');
+  clearDrawerError();
+  const btn = event.target;
+  btn.textContent = 'Sending...'; btn.disabled = true;
+  try {
+    const res  = await fetch(`${API_BASE}/login-by-phone`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
+    const data = await res.json();
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code'; btn.disabled = false; return; }
+    if (data.dev) showDrawerError('DEV MODE: Check server console for code');
+    document.getElementById('loginStep1Phone').style.display = 'none';
+    document.getElementById('loginStep2Hint').textContent = data.username
+      ? `Code sent. Logging in as "${data.username}".`
+      : 'Check your phone for the 6-digit code.';
+    document.getElementById('loginStep2').style.display = 'flex';
+  } catch { showDrawerError('Network error'); }
+  btn.textContent = 'Send Code'; btn.disabled = false;
+}
+
+async function loginVerify() {
+  const code = document.getElementById('loginCode').value.trim();
+  if (!code) return showDrawerError('Enter the code');
+  clearDrawerError();
+  const btn = event.target;
+  btn.textContent = 'Verifying...'; btn.disabled = true;
+  try {
+    let res, data;
+    if (loginMode === 'phone') {
+      const phone = document.getElementById('loginPhone').value.trim();
+      res  = await fetch(`${API_BASE}/login-by-phone/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, code }) });
+    } else {
+      const username = document.getElementById('loginUsername').value.trim();
+      res  = await fetch(`${API_BASE}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, code }) });
+    }
+    data = await res.json();
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Log In'; btn.disabled = false; return; }
+    authToken = data.token;
+    localStorage.setItem('acquire_auth_token', authToken);
+    renderDrawerLoggedIn(data.user, []);
+    loadProfile(); // load full profile with history in background
+  } catch { showDrawerError('Network error'); }
+  btn.textContent = 'Log In'; btn.disabled = false;
+}
+
+/* ── Register flow ───────────────────────────────────────────── */
+let otpCountdownTimer = null;
+
+function startOtpCountdown(seconds, onExpire) {
+  clearInterval(otpCountdownTimer);
+  let remaining = seconds;
+  const el = document.getElementById('otpCountdown');
+  const update = () => {
+    if (!el) return;
+    if (remaining <= 0) {
+      clearInterval(otpCountdownTimer);
+      if (el) el.textContent = 'Code expired — go back and resend.';
+      if (onExpire) onExpire();
+      return;
+    }
+    el.textContent = `Code expires in ${remaining}s`;
+    remaining--;
+  };
+  update();
+  otpCountdownTimer = setInterval(update, 1000);
+}
+
+function resetRegisterFlow() {
+  clearInterval(otpCountdownTimer);
+  const cd = document.getElementById('otpCountdown');
+  if (cd) cd.textContent = '';
+  document.getElementById('registerStep1').style.display = 'flex';
+  document.getElementById('registerStep2').style.display = 'none';
+  document.getElementById('regUsername').value = '';
+  document.getElementById('regPhone').value    = '';
+  document.getElementById('regCode').value     = '';
+  document.getElementById('usernameStatus').textContent = '';
+  clearDrawerError();
+}
+
+function checkUsernameAvail() {
+  clearTimeout(usernameCheckTimer);
+  const val = document.getElementById('regUsername').value.trim();
+  const statusEl = document.getElementById('usernameStatus');
+  if (val.length < 2) { statusEl.textContent = ''; return; }
+  usernameCheckTimer = setTimeout(async () => {
+    const res  = await fetch(`${API_BASE}/username-available?username=` + encodeURIComponent(val));
+    const data = await res.json();
+    statusEl.style.color = data.available ? 'var(--green)' : 'var(--red)';
+    statusEl.textContent = data.error || (data.available ? '✓ Available' : '✗ Already taken');
+  }, 400);
+}
+
+async function registerSendCode() {
+  const username = document.getElementById('regUsername').value.trim();
+  const phone    = document.getElementById('regPhone').value.trim();
+  if (!username) return showDrawerError('Choose a username');
+  if (!phone)    return showDrawerError('Enter your phone number');
+  clearDrawerError();
+  const btn = event.target;
+  btn.textContent = 'Sending...'; btn.disabled = true;
+  try {
+    // Check availability one more time before sending
+    const avRes  = await fetch(`${API_BASE}/username-available?username=` + encodeURIComponent(username));
+    const avData = await avRes.json();
+    if (!avData.available) { showDrawerError(avData.error || 'Username already taken'); btn.textContent = 'Send Code'; btn.disabled = false; return; }
+
+    const res  = await fetch(`${API_BASE}/send-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
+    const data = await res.json();
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code →'; btn.disabled = false; return; }
+    if (data.dev) showDrawerError('DEV MODE: Check server console for code');
+    document.getElementById('registerStep1').style.display = 'none';
+    document.getElementById('registerStep2').style.display = 'flex';
+    document.getElementById('regCode').focus();
+    startOtpCountdown(120, () => { showDrawerError('Code expired — press Back and resend.'); });
+  } catch { showDrawerError('Network error'); }
+  btn.textContent = 'Send Code →'; btn.disabled = false;
+}
+
+async function registerVerify() {
+  const username = document.getElementById('regUsername').value.trim();
+  const phone    = document.getElementById('regPhone').value.trim();
+  const code     = document.getElementById('regCode').value.trim();
+  if (!code) return showDrawerError('Enter the code');
+  clearDrawerError();
+  const btn = event.target;
+  btn.textContent = 'Creating...'; btn.disabled = true;
+  try {
+    const res  = await fetch(`${API_BASE}/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, phone, code }) });
+    const data = await res.json();
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Create Profile'; btn.disabled = false; return; }
+    authToken = data.token;
+    localStorage.setItem('acquire_auth_token', authToken);
+    clearInterval(otpCountdownTimer);
+    renderDrawerLoggedIn(data.user, []);
+    loadProfile(); // load full profile with history in background
+  } catch { showDrawerError('Network error'); }
+  btn.textContent = 'Create Profile'; btn.disabled = false;
+}
+
+/* ── Log out ─────────────────────────────────────────────────── */
+function logOut() {
+  authToken = null;
+  currentUser = null;
+  localStorage.removeItem('acquire_auth_token');
+  document.querySelector('.menu-btn')?.classList.remove('logged-in');
+  updateNameInputs(null);
+  renderDrawerLoggedOut();
+}
+
+/* ── Recent Games (home page) ────────────────────────────────── */
+async function loadRecentGames() {
+  try {
+    const base = window.location.pathname.startsWith('/beta') ? '/beta/api' : '/api';
+    const res  = await fetch(`${base}/recent-games`);
+    const data = await res.json();
+    renderRecentGames(data.sessions || []);
+  } catch {
+    document.getElementById('recentGamesList').innerHTML =
+      '<div style="font-size:12px;color:var(--text-muted);">Could not load recent games.</div>';
+  }
+}
+
+function renderRecentGames(sessions) {
+  const el = document.getElementById('recentGamesList');
+  if (!sessions.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No games yet — be the first to play!</div>';
+    return;
+  }
+  el.innerHTML = sessions.map(s => {
+    const date      = new Date(s.played_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const modeLabel = s.is_solo ? 'Solo' : 'Multi';
+    const standings = s.standings || [];
+    const chips = standings.map((p, i) => {
+      const rankCls = i === 0 ? 'chip-rank-1' : 'chip-rank';
+      let namePart, badge;
+      if (p.isBot) {
+        namePart = `<span style="color:var(--text-muted)">${escH(p.name)}</span>`;
+        badge    = `<span class="player-badge player-badge-bot">Bot</span>`;
+      } else if (p.userId) {
+        namePart = `<span class="chip-name-member" onclick="openProfileModal(${p.userId},'${escH(p.name)}')">${escH(p.name)}</span>`;
+        badge    = `<span class="player-badge player-badge-member">Member</span>`;
+      } else {
+        namePart = `<span>${escH(p.name)}</span>`;
+        badge    = `<span class="player-badge player-badge-guest">Guest</span>`;
+      }
+      return `<span class="session-player-chip">
+        <span class="${rankCls}">${i+1}.</span>
+        ${namePart}${badge}
+        <span class="chip-cash">$${p.cash.toLocaleString()}</span>
+      </span>`;
+    }).join('');
+    return `<div class="session-row" onclick="openReplay(${s.id}, event)">
+      <span class="session-mode">${modeLabel}</span>
+      <div class="session-players-inline">${chips}</div>
+      <span class="session-date">${date}</span>
+      <button class="session-replay-btn" onclick="openReplay(${s.id}, event)">▶ Replay</button>
+    </div>`;
+  }).join('');
+}
+
+function fmtDuration(secs) {
+  if (secs < 60) return `${secs}s`;
+  const m = Math.floor(secs / 60), s2 = secs % 60;
+  if (m < 60) return `${m}m ${s2}s`;
+  return `${Math.floor(m/60)}h ${m%60}m`;
+}
+
+function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ── Profile mini-modal (click member name in Recent Games) ──── */
+function openProfileModal(userId, username) {
+  // For now, just open the profile drawer if it's the logged-in user,
+  // otherwise show a simple alert. Full public profile page is a future feature.
+  if (currentUser && currentUser.id === userId) {
+    openProfileDrawer();
+  } else {
+    alert(`Public profiles coming soon!\n\n${username}'s profile is not yet viewable.`);
+  }
+}
+
+/* ── Game Replay ─────────────────────────────────────────────── */
+let replaySnapshots = [];
+let replayIdx = 0;
+
+const REPLAY_CHAIN_COLORS = {
+  Tower: '#e11d48', Luxor: '#f97316', American: '#3b82f6',
+  Worldwide: '#8b5cf6', Festival: '#06b6d4', Imperial: '#10b981', Continental: '#eab308',
+};
+
+async function openReplay(sessionId, event) {
+  if (event) event.stopPropagation();
+  const overlay = document.getElementById('replayOverlay');
+  overlay.style.display = 'flex';
+  document.getElementById('replayStepLabel').textContent = 'Loading…';
+  document.getElementById('replayPrevBtn').disabled = true;
+  document.getElementById('replayNextBtn').disabled = true;
+  document.getElementById('replayBoard').innerHTML = '';
+  document.getElementById('replayScoreboard').innerHTML = '';
+  document.getElementById('replayStockMarket').innerHTML = '';
+  document.getElementById('replayLog').innerHTML = '';
+  document.getElementById('replayPhaseLabel').textContent = '';
+
+  try {
+    const base = window.location.pathname.startsWith('/beta') ? '/beta/api' : '/api';
+    const res = await fetch(`${base}/sessions/${sessionId}/replay`);
+    const data = await res.json();
+    replaySnapshots = data.snapshots || [];
+    replayIdx = 0;
+    if (!replaySnapshots.length) {
+      document.getElementById('replayStepLabel').textContent = 'No replay data for this game.';
+      return;
+    }
+    renderReplayFrame();
+  } catch (err) {
+    document.getElementById('replayStepLabel').textContent = 'Failed to load replay.';
+  }
+}
+
+function closeReplay() {
+  document.getElementById('replayOverlay').style.display = 'none';
+  replaySnapshots = [];
+  replayIdx = 0;
+}
+
+function replayPrev() {
+  if (replayIdx > 0) { replayIdx--; renderReplayFrame(); }
+}
+function replayNext() {
+  if (replayIdx < replaySnapshots.length - 1) { replayIdx++; renderReplayFrame(); }
+}
+
+function renderReplayFrame() {
+  const snap = replaySnapshots[replayIdx];
+  if (!snap) return;
+
+  const total = replaySnapshots.length;
+  document.getElementById('replayStepLabel').textContent = `Step ${replayIdx + 1} / ${total}  ·  Turn ${snap.turnNumber}`;
+  document.getElementById('replayPrevBtn').disabled = replayIdx === 0;
+  document.getElementById('replayNextBtn').disabled = replayIdx === total - 1;
+
+  const phaseNames = { placeTile: 'Place Tile', chooseChain: 'Found Chain', buyStock: 'Buy Stock', mergerDecision: 'Merger', gameOver: 'Game Over' };
+  const curName = snap.players[snap.currentPlayerIdx]?.name || '';
+  document.getElementById('replayPhaseLabel').textContent =
+    snap.phase === 'gameOver' ? 'Game Over' : `${curName} — ${phaseNames[snap.phase] || snap.phase}`;
+
+  renderReplayBoard(snap);
+  renderReplayScore(snap);
+  renderReplayStock(snap);
+  renderReplayLog(snap);
+}
+
+function renderReplayBoard(snap) {
+  const el = document.getElementById('replayBoard');
+  let html = '<div class="board-cell header-cell"></div>';
+  for (let c = 0; c < 12; c++) html += `<div class="board-cell header-cell">${String.fromCharCode(65+c)}</div>`;
+  for (let r = 0; r < 9; r++) {
+    html += `<div class="board-cell header-cell">${r+1}</div>`;
+    for (let c = 0; c < 12; c++) {
+      const tile = `${r+1}${String.fromCharCode(65+c)}`;
+      const cell = snap.board[r][c];
+      let cls = 'board-cell';
+      if (cell === 'lone') cls += ' lone';
+      else if (cell) cls += ` chain-${cell}`;
+      html += `<div class="${cls}">${tile}</div>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+function renderReplayScore(snap) {
+  const el = document.getElementById('replayScoreboard');
+  el.innerHTML = snap.players.map((p, i) => {
+    const cur = i === snap.currentPlayerIdx;
+    const badges = Object.entries(p.stocks || {}).filter(([,v]) => v > 0)
+      .map(([ch, v]) => `<span class="stock-badge" style="background:${REPLAY_CHAIN_COLORS[ch]}22;color:${REPLAY_CHAIN_COLORS[ch]}">${ch.slice(0,3)} ${v}</span>`).join('');
+    return `<div class="score-player" style="margin-bottom:6px">
+      <div class="score-player-header">
+        <span class="score-player-name${cur ? ' current' : ''}">${cur ? '▸ ' : ''}${escapeHtml(p.name)}</span>
+        <span class="score-cash">$${p.cash.toLocaleString()}</span>
+      </div>
+      <div class="score-stocks">${badges || '<span style="color:var(--text-muted);font-size:10px">No stock</span>'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderReplayStock(snap) {
+  const el = document.getElementById('replayStockMarket');
+  el.innerHTML = Object.entries(snap.chains).map(([name, info]) => {
+    if (!info.active) return `<div class="chain-row chain-inactive"><div class="chain-dot" style="background:${REPLAY_CHAIN_COLORS[name]};opacity:0.3"></div><div class="chain-name">${name}</div><div class="chain-size">—</div><div class="chain-price">—</div></div>`;
+    const issued = snap.players.reduce((s, p) => s + (p.stocks[name] || 0), 0);
+    const remaining = 25 - issued;
+    return `<div class="chain-row"><div class="chain-dot" style="background:${REPLAY_CHAIN_COLORS[name]}"></div><div class="chain-name">${name}</div><div class="chain-size">${info.size}</div><div class="chain-price">$${info.price}</div><div class="buy-shares-left">${remaining}</div>${info.safe ? '<span class="chain-safe">SAFE</span>' : ''}</div>`;
+  }).join('');
+}
+
+function renderReplayLog(snap) {
+  const el = document.getElementById('replayLog');
+  const log = snap.log || [];
+  el.innerHTML = [...log].reverse().map(l => `<div class="log-entry">${escapeHtml(l)}</div>`).join('');
+}
+
+/* ── Feedback modal ──────────────────────────────────────────── */
+let fbType = 'bug';
+
+function openFeedbackModal() {
+  document.getElementById('feedbackOverlay').style.display = 'flex';
+  document.getElementById('fbMessage').value  = '';
+  document.getElementById('fbContact').value  = '';
+  document.getElementById('fbError').style.display   = 'none';
+  document.getElementById('fbSuccess').style.display = 'none';
+  document.getElementById('fbSubmitBtn').style.display = 'block';
+  setFbType('bug');
+}
+function closeFeedbackModal() { document.getElementById('feedbackOverlay').style.display = 'none'; }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('replayOverlay').style.display !== 'none') { closeReplay(); return; }
+    closeFeedbackModal();
+  }
+  if (document.getElementById('replayOverlay').style.display !== 'none') {
+    if (e.key === 'ArrowLeft')  replayPrev();
+    if (e.key === 'ArrowRight') replayNext();
+  }
+});
+
+function setFbType(t) {
+  fbType = t;
+  document.getElementById('fbTypeBug').classList.toggle('active', t === 'bug');
+  document.getElementById('fbTypeSuggestion').classList.toggle('active', t === 'suggestion');
+}
+
+async function submitFeedback() {
+  const message = document.getElementById('fbMessage').value.trim();
+  const contact = document.getElementById('fbContact').value.trim();
+  const errEl   = document.getElementById('fbError');
+  errEl.style.display = 'none';
+  if (message.length < 5) { errEl.textContent = 'Please write a bit more.'; errEl.style.display = 'block'; return; }
+  // Rough word count cap (~300 words ≈ 1800 chars)
+  if (message.split(/\s+/).length > 300) { errEl.textContent = 'Please keep it under 300 words.'; errEl.style.display = 'block'; return; }
+  const btn = document.getElementById('fbSubmitBtn');
+  btn.textContent = 'Sending…'; btn.disabled = true;
+  try {
+    const res  = await fetch(`${API_BASE}/feedback`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: fbType, message, contact, page: document.title }),
+    });
+    const data = await res.json();
+    if (data.error) { errEl.textContent = data.error; errEl.style.display = 'block'; btn.textContent = 'Send Feedback'; btn.disabled = false; return; }
+    document.getElementById('fbSuccess').style.display = 'block';
+    btn.style.display = 'none';
+  } catch { errEl.textContent = 'Network error. Try again.'; errEl.style.display = 'block'; btn.textContent = 'Send Feedback'; btn.disabled = false; }
+}
+
+/* ── Drawer error display ────────────────────────────────────── */
+function showDrawerError(msg) {
+  const el = document.getElementById('drawerError');
+  el.textContent = msg; el.style.display = 'block';
+}
+function clearDrawerError() {
+  const el = document.getElementById('drawerError');
+  if (el) { el.textContent = ''; el.style.display = 'none'; }
 }
 </script>
 </body>
