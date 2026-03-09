@@ -55,6 +55,17 @@ db.exec(`
     status       TEXT    NOT NULL DEFAULT 'new',
     gh_issue     INTEGER
   );
+
+  CREATE TABLE IF NOT EXISTS game_sessions (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    played_at        INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    is_solo          INTEGER NOT NULL DEFAULT 0,
+    player_count     INTEGER NOT NULL DEFAULT 2,
+    human_count      INTEGER NOT NULL DEFAULT 1,
+    duration_seconds INTEGER,
+    turn_count       INTEGER,
+    standings        TEXT    NOT NULL DEFAULT '[]'
+  );
 `);
 
 // Migrations — add columns that may be missing in older DBs
@@ -62,6 +73,9 @@ const cols = db.prepare(`PRAGMA table_info(users)`).all().map(r => r.name);
 if (!cols.includes('is_admin'))        db.exec(`ALTER TABLE users ADD COLUMN is_admin        INTEGER NOT NULL DEFAULT 0`);
 if (!cols.includes('public_profile'))  db.exec(`ALTER TABLE users ADD COLUMN public_profile  INTEGER NOT NULL DEFAULT 1`);
 if (!cols.includes('phone_encrypted')) db.exec(`ALTER TABLE users ADD COLUMN phone_encrypted TEXT`);
+
+const sessionCols = db.prepare(`PRAGMA table_info(game_sessions)`).all().map(r => r.name);
+if (!sessionCols.includes('standings')) db.exec(`ALTER TABLE game_sessions ADD COLUMN standings TEXT NOT NULL DEFAULT '[]'`);
 
 /* ── Phone hashing ───────────────────────────────────────────── */
 // Salt prevents rainbow-table attacks on the hash.
@@ -126,12 +140,27 @@ module.exports = {
   setFeedbackIssue(id, ghIssue) {
     db.prepare('UPDATE feedback SET gh_issue=? WHERE id=?').run(ghIssue, id);
   },
+  recordSession(isSolo, playerCount, humanCount, durationSeconds, turnCount, standings) {
+    db.prepare('INSERT INTO game_sessions (is_solo, player_count, human_count, duration_seconds, turn_count, standings) VALUES (?,?,?,?,?,?)')
+      .run(isSolo ? 1 : 0, playerCount, humanCount, durationSeconds ?? null, turnCount ?? null, JSON.stringify(standings || []));
+  },
+
+  getRecentSessions(limit = 15) {
+    return db.prepare('SELECT * FROM game_sessions ORDER BY played_at DESC LIMIT ?').all(limit);
+  },
+
   getStats() {
+    const dayAgo  = Math.floor(Date.now() / 1000) - 86400;
+    const weekAgo = Math.floor(Date.now() / 1000) - 86400 * 7;
     return {
-      users:       db.prepare('SELECT COUNT(*) as n FROM users').get().n,
-      games:       db.prepare('SELECT COUNT(*) as n FROM game_history').get().n,
-      feedback:    db.prepare('SELECT COUNT(*) as n FROM feedback').get().n,
-      newFeedback: db.prepare("SELECT COUNT(*) as n FROM feedback WHERE status='new'").get().n,
+      users:          db.prepare('SELECT COUNT(*) as n FROM users').get().n,
+      games:          db.prepare('SELECT COUNT(*) as n FROM game_history').get().n,
+      sessions:       db.prepare('SELECT COUNT(*) as n FROM game_sessions').get().n,
+      sessionsToday:  db.prepare('SELECT COUNT(*) as n FROM game_sessions WHERE played_at >= ?').get(dayAgo).n,
+      sessionsWeek:   db.prepare('SELECT COUNT(*) as n FROM game_sessions WHERE played_at >= ?').get(weekAgo).n,
+      soloSessions:   db.prepare("SELECT COUNT(*) as n FROM game_sessions WHERE is_solo=1").get().n,
+      feedback:       db.prepare('SELECT COUNT(*) as n FROM feedback').get().n,
+      newFeedback:    db.prepare("SELECT COUNT(*) as n FROM feedback WHERE status='new'").get().n,
     };
   },
 };

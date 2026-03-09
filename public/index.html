@@ -886,6 +886,55 @@
   }
   .fb-type-btn.active { background: rgba(245,158,11,.15); border-color: var(--gold); color: var(--gold); }
   #feedbackOverlay.open { display: flex !important; }
+
+  /* ── Recent Games (home page) ───────────────────── */
+  .recent-games-section {
+    width: 100%; max-width: 520px; margin-top: 24px;
+  }
+  .recent-games-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
+    color: var(--text-muted); margin-bottom: 10px;
+  }
+  .session-card {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+  }
+  .session-meta {
+    font-size: 10px; color: var(--text-muted); margin-bottom: 8px;
+    display: flex; gap: 10px; flex-wrap: wrap;
+  }
+  .session-player {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 4px 0; font-size: 12px;
+    border-bottom: 1px solid rgba(30,41,59,.5);
+  }
+  .session-player:last-child { border-bottom: none; }
+  .session-player-left { display: flex; align-items: center; gap: 8px; }
+  .session-rank { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); width: 18px; }
+  .session-rank-1 { color: var(--gold); font-weight: 700; }
+  .player-badge {
+    font-size: 9px; padding: 1px 6px; border-radius: 99px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .player-badge-bot    { background: rgba(100,116,139,.2); color: var(--text-muted); }
+  .player-badge-guest  { background: rgba(59,130,246,.15); color: var(--blue); }
+  .player-badge-member { background: rgba(16,185,129,.15); color: var(--green); }
+  .player-name-link { cursor: pointer; color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
+  .session-cash { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+
+  /* ── Profile drawer tabs ────────────────────────── */
+  .drawer-tabs {
+    display: flex; gap: 0; margin-bottom: 14px;
+    border-bottom: 1px solid var(--border);
+  }
+  .drawer-tab {
+    flex: 1; padding: 8px 0; font-size: 12px; font-weight: 600;
+    text-align: center; cursor: pointer; color: var(--text-muted);
+    border-bottom: 2px solid transparent; margin-bottom: -1px;
+    background: none; border-top: none; border-left: none; border-right: none;
+    font-family: 'DM Sans', sans-serif; transition: all .15s;
+  }
+  .drawer-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
 </style>
 </head>
 <body>
@@ -915,6 +964,11 @@
       <div class="mode-card-title">Feedback</div>
       <div class="mode-card-desc">Still in beta — report bugs or share suggestions</div>
     </div>
+  </div>
+
+  <div class="recent-games-section">
+    <div class="recent-games-title">Recent Games</div>
+    <div id="recentGamesList"><div style="font-size:12px;color:var(--text-muted);padding:8px 0;">Loading…</div></div>
   </div>
 </div>
 
@@ -1309,43 +1363,54 @@
         <div style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:1px;">ELO Rating</div>
         <div class="profile-elo" id="profileElo">1000</div>
       </div>
-      <div id="profileStats">
-        <div class="profile-stat-row">
-          <span class="stat-label">Games Played</span>
-          <span class="stat-value" id="statPlayed">0</span>
-        </div>
-        <div class="profile-stat-row">
-          <span class="stat-label">Wins</span>
-          <span class="stat-value" id="statWins">0</span>
-        </div>
-        <div class="profile-stat-row">
-          <span class="stat-label">Win Rate</span>
-          <span class="stat-value" id="statWinRate">—</span>
-        </div>
+      <!-- Tab bar -->
+      <div class="drawer-tabs">
+        <button class="drawer-tab active" id="drawerTabStats" onclick="switchDrawerTab('stats')">Stats</button>
+        <button class="drawer-tab" id="drawerTabGames" onclick="switchDrawerTab('games')">Game History</button>
       </div>
-      <div style="padding-top:16px;border-top:1px solid var(--border);">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:10px;">Settings</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-          <div>
-            <div style="font-size:13px;">Public Profile</div>
-            <div style="font-size:11px;color:var(--text-muted);">Let others see your stats</div>
+
+      <!-- Stats tab -->
+      <div id="drawerPanelStats">
+        <div id="profileStats">
+          <div class="profile-stat-row">
+            <span class="stat-label">Games Played</span>
+            <span class="stat-value" id="statPlayed">0</span>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" id="visibilityToggle" onchange="toggleVisibility(this.checked)" />
-            <span class="toggle-slider"></span>
-          </label>
+          <div class="profile-stat-row">
+            <span class="stat-label">Wins</span>
+            <span class="stat-value" id="statWins">0</span>
+          </div>
+          <div class="profile-stat-row">
+            <span class="stat-label">Win Rate</span>
+            <span class="stat-value" id="statWinRate">—</span>
+          </div>
         </div>
-        <div style="margin-top:10px;">
-          <div style="font-size:13px;">Registered Phone</div>
-          <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="profilePhone">—</div>
+        <div style="padding-top:16px;border-top:1px solid var(--border);margin-top:8px;">
+          <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:10px;">Settings</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+            <div>
+              <div style="font-size:13px;">Public Profile</div>
+              <div style="font-size:11px;color:var(--text-muted);">Let others see your stats</div>
+            </div>
+            <label class="toggle-switch">
+              <input type="checkbox" id="visibilityToggle" onchange="toggleVisibility(this.checked)" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div style="margin-top:10px;">
+            <div style="font-size:13px;">Registered Phone</div>
+            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="profilePhone">—</div>
+          </div>
         </div>
       </div>
-      <div style="padding-top:16px;border-top:1px solid var(--border);">
-        <div style="font-size:11px;text-transform:uppercase;letter-spacing:1px;color:var(--text-muted);margin-bottom:10px;">Recent Games</div>
+
+      <!-- Games tab -->
+      <div id="drawerPanelGames" style="display:none;">
         <div id="profileHistory" style="display:flex;flex-direction:column;gap:6px;">
-          <div style="font-size:12px;color:var(--text-muted);">No games recorded yet.</div>
+          <div style="font-size:12px;color:var(--text-muted);">No ranked games recorded yet.</div>
         </div>
       </div>
+
       <div style="padding-top:12px;border-top:1px solid var(--border);margin-top:auto;">
         <button class="btn btn-secondary" style="font-size:12px;" onclick="logOut()">Log Out</button>
       </div>
@@ -1419,6 +1484,7 @@ function goHome() {
   isSoloGame = false;
   history.pushState({}, '', '/');
   showScreen('newLanding');
+  loadRecentGames();
 }
 function goSolo() {
   document.getElementById('gameOverOverlay').style.display = 'none';
@@ -1669,6 +1735,7 @@ function attemptReconnect(code, name, token) {
     return;
   }
   // Default: / → newLanding (already active by default)
+  loadRecentGames();
 })();
 
 function toggleReady() { socket.emit('toggleReady'); }
@@ -2393,6 +2460,15 @@ function handleOverlayClick(e) {
   if (e.target === document.getElementById('profileOverlay')) closeProfileDrawer();
 }
 
+/* ── Profile drawer tab switching ───────────────────────────── */
+function switchDrawerTab(tab) {
+  const isStats = tab === 'stats';
+  document.getElementById('drawerTabStats').classList.toggle('active', isStats);
+  document.getElementById('drawerTabGames').classList.toggle('active', !isStats);
+  document.getElementById('drawerPanelStats').style.display = isStats ? 'block' : 'none';
+  document.getElementById('drawerPanelGames').style.display = isStats ? 'none'  : 'block';
+}
+
 /* ── Auth tab switching ──────────────────────────────────────── */
 function switchAuthTab(tab) {
   const isLogin = tab === 'login';
@@ -2670,6 +2746,84 @@ function logOut() {
   localStorage.removeItem('acquire_auth_token');
   document.querySelector('.menu-btn')?.classList.remove('logged-in');
   renderDrawerLoggedOut();
+}
+
+/* ── Recent Games (home page) ────────────────────────────────── */
+async function loadRecentGames() {
+  try {
+    const res  = await fetch(`${API_BASE}/recent-games`);
+    const data = await res.json();
+    renderRecentGames(data.sessions || []);
+  } catch {
+    document.getElementById('recentGamesList').innerHTML =
+      '<div style="font-size:12px;color:var(--text-muted);">Could not load recent games.</div>';
+  }
+}
+
+function renderRecentGames(sessions) {
+  const el = document.getElementById('recentGamesList');
+  if (!sessions.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No games yet — be the first to play!</div>';
+    return;
+  }
+  el.innerHTML = sessions.map(s => {
+    const date = new Date(s.played_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const modeLabel = s.is_solo ? 'Solo' : `${s.player_count}-player`;
+    const durLabel  = s.duration_seconds ? fmtDuration(s.duration_seconds) : '';
+    const standings = s.standings || [];
+    const players = standings.map((p, i) => {
+      const rank    = i + 1;
+      const rankCls = rank === 1 ? 'session-rank-1' : '';
+      let   badge, namePart;
+      if (p.isBot) {
+        badge    = `<span class="player-badge player-badge-bot">Bot</span>`;
+        namePart = `<span style="color:var(--text-muted)">${escH(p.name)}</span>`;
+      } else if (p.userId) {
+        badge    = `<span class="player-badge player-badge-member">Member</span>`;
+        namePart = `<span class="player-name-link" onclick="openProfileModal(${p.userId}, '${escH(p.name)}')">${escH(p.name)}</span>`;
+      } else {
+        badge    = `<span class="player-badge player-badge-guest">Guest</span>`;
+        namePart = `<span style="color:var(--text)">${escH(p.name)}</span>`;
+      }
+      return `<div class="session-player">
+        <div class="session-player-left">
+          <span class="session-rank ${rankCls}">${rank}.</span>
+          ${namePart}
+          ${badge}
+        </div>
+        <span class="session-cash">$${p.cash.toLocaleString()}</span>
+      </div>`;
+    }).join('');
+    return `<div class="session-card">
+      <div class="session-meta">
+        <span>${modeLabel}</span>
+        ${durLabel ? `<span>${durLabel}</span>` : ''}
+        ${s.turn_count ? `<span>${s.turn_count} turns</span>` : ''}
+        <span style="margin-left:auto">${date}</span>
+      </div>
+      ${players}
+    </div>`;
+  }).join('');
+}
+
+function fmtDuration(secs) {
+  if (secs < 60) return `${secs}s`;
+  const m = Math.floor(secs / 60), s2 = secs % 60;
+  if (m < 60) return `${m}m ${s2}s`;
+  return `${Math.floor(m/60)}h ${m%60}m`;
+}
+
+function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+/* ── Profile mini-modal (click member name in Recent Games) ──── */
+function openProfileModal(userId, username) {
+  // For now, just open the profile drawer if it's the logged-in user,
+  // otherwise show a simple alert. Full public profile page is a future feature.
+  if (currentUser && currentUser.id === userId) {
+    openProfileDrawer();
+  } else {
+    alert(`Public profiles coming soon!\n\n${username}'s profile is not yet viewable.`);
+  }
 }
 
 /* ── Feedback modal ──────────────────────────────────────────── */

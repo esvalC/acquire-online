@@ -226,6 +226,15 @@ app.post('/api/feedback', feedbackLimit, async (req, res) => {
   res.json({ ok: true, id: result.lastInsertRowid, ghIssue });
 });
 
+// Recent game sessions (public — no auth required)
+app.get('/api/recent-games', (req, res) => {
+  const sessions = db.getRecentSessions(15).map(s => ({
+    ...s,
+    standings: (() => { try { return JSON.parse(s.standings); } catch { return []; } })(),
+  }));
+  res.json({ sessions });
+});
+
 // Plan dashboard data (admin only)
 app.get('/api/plan/data', requireAdmin, (req, res) => {
   res.json({
@@ -321,6 +330,16 @@ function recordGameEnd(code) {
   const standings = room.game.standings; // [{ name, cash }] sorted desc
   if (!standings || standings.length === 0) return;
 
+  // Record session for all games regardless of auth status
+  const durationSeconds = room.startedAt ? Math.round((Date.now() - room.startedAt) / 1000) : null;
+  const humanCount = room.players.filter(p => !p.isBot).length;
+  const turnCount  = room.game.turnNumber ?? null;
+  const sessionStandings = standings.map(s => {
+    const rp = room.players.find(p => p.name === s.name);
+    return { name: s.name, cash: s.cash, isBot: rp?.isBot || false, userId: rp?.userId || null };
+  });
+  db.recordSession(room.isSolo, room.players.length, humanCount, durationSeconds, turnCount, sessionStandings);
+
   const humanPlayers = room.players.filter(p => !p.isBot && p.userId);
   if (humanPlayers.length === 0) return;
 
@@ -367,6 +386,7 @@ function startGame(code) {
   const room = rooms[code];
   const names = room.players.map(p => p.name);
   room.game = engine.createGame(names, { quickstart: room.config.quickstart });
+  room.startedAt = Date.now();
   // createGame reorders players by quickstart draw — remap indices
   for (const rp of room.players) {
     rp.idx = room.game.players.findIndex(gp => gp.name === rp.name);

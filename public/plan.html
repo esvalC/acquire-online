@@ -112,7 +112,11 @@
     <div class="section-title">Live Stats</div>
     <div class="cards">
       <div class="stat-card"><div class="stat-num" id="sUsers">—</div><div class="stat-label">Registered Users</div></div>
-      <div class="stat-card"><div class="stat-num" id="sGames">—</div><div class="stat-label">Games Played</div></div>
+      <div class="stat-card"><div class="stat-num" id="sSessions">—</div><div class="stat-label">Total Game Sessions</div></div>
+      <div class="stat-card"><div class="stat-num" id="sSessionsToday" style="color:var(--green)">—</div><div class="stat-label">Sessions Today</div></div>
+      <div class="stat-card"><div class="stat-num" id="sSessionsWeek">—</div><div class="stat-label">Sessions This Week</div></div>
+      <div class="stat-card"><div class="stat-num" id="sSolo">—</div><div class="stat-label">Solo Sessions</div></div>
+      <div class="stat-card"><div class="stat-num" id="sGames">—</div><div class="stat-label">Ranked Games (Logged In)</div></div>
       <div class="stat-card"><div class="stat-num" id="sFeedback">—</div><div class="stat-label">Total Feedback</div></div>
       <div class="stat-card"><div class="stat-num" id="sNew" style="color:var(--gold)">—</div><div class="stat-label">New (Untriaged)</div></div>
     </div>
@@ -146,6 +150,9 @@
 </div>
 
 <script>
+/* ── API base (handles /beta prefix when running on beta server) ── */
+const API_BASE = window.location.pathname.startsWith('/beta') ? '/beta' : '';
+
 /* ── Auth ───────────────────────────────────────── */
 // Use the same token as the main app — no separate login needed
 let token = localStorage.getItem('acquire_auth_token') || localStorage.getItem('plan_token') || '';
@@ -170,7 +177,7 @@ if (token) loadDashboard();
 else { document.getElementById('authGate').style.display = 'flex'; }
 
 async function loadDashboard() {
-  const res = await fetch('/api/plan/data', { headers: { Authorization: 'Bearer ' + token } });
+  const res = await fetch(API_BASE + '/api/plan/data', { headers: { Authorization: 'Bearer ' + token } });
   if (res.status === 401 || res.status === 403) {
     document.getElementById('authGate').style.display = 'flex';
     document.getElementById('authError').style.display = 'block';
@@ -181,10 +188,14 @@ async function loadDashboard() {
   document.getElementById('dashboard').style.display = 'block';
 
   // Stats
-  document.getElementById('sUsers').textContent    = data.stats.users;
-  document.getElementById('sGames').textContent    = data.stats.games;
-  document.getElementById('sFeedback').textContent = data.stats.feedback;
-  document.getElementById('sNew').textContent      = data.stats.newFeedback;
+  document.getElementById('sUsers').textContent         = data.stats.users;
+  document.getElementById('sSessions').textContent      = data.stats.sessions;
+  document.getElementById('sSessionsToday').textContent = data.stats.sessionsToday;
+  document.getElementById('sSessionsWeek').textContent  = data.stats.sessionsWeek;
+  document.getElementById('sSolo').textContent          = data.stats.soloSessions;
+  document.getElementById('sGames').textContent         = data.stats.games;
+  document.getElementById('sFeedback').textContent      = data.stats.feedback;
+  document.getElementById('sNew').textContent           = data.stats.newFeedback;
 
   allFeedback = data.feedback || [];
 
@@ -263,7 +274,7 @@ function renderFeedbackList(items, containerId, showActions) {
 }
 
 async function setStatus(id, status) {
-  await fetch(`/api/plan/feedback/${id}/status`, {
+  await fetch(API_BASE + `/api/plan/feedback/${id}/status`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: JSON.stringify({ status }),
