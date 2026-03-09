@@ -295,11 +295,11 @@ function broadcastState(code) {
     }
   }
 
-  // Capture spectator snapshot for replay
+  // Capture spectator snapshot for replay (deep-cloned so mutable game state can't overwrite it)
   const spectatorState = engine.getClientState(room.game, -1);
   spectatorState.playerList = playerList;
   room.replaySnapshots = room.replaySnapshots || [];
-  room.replaySnapshots.push(spectatorState);
+  room.replaySnapshots.push(JSON.parse(JSON.stringify(spectatorState)));
   for (const s of room.spectators) {
     io.to(s.socketId).emit('gameState', spectatorState);
   }
