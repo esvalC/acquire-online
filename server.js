@@ -328,6 +328,7 @@ function recordGameEnd(code) {
   room.gameRecorded = true;
 
   const standings = room.game.standings; // [{ name, cash }] sorted desc
+  console.log(`[recordGameEnd] code=${code} standings=${JSON.stringify(standings)}`);
   if (!standings || standings.length === 0) return;
 
   // Record session for all games regardless of auth status
@@ -338,7 +339,12 @@ function recordGameEnd(code) {
     const rp = room.players.find(p => p.name === s.name);
     return { name: s.name, cash: s.cash, isBot: rp?.isBot || false, userId: rp?.userId || null };
   });
-  db.recordSession(room.isSolo, room.players.length, humanCount, durationSeconds, turnCount, sessionStandings);
+  try {
+    db.recordSession(room.isSolo, room.players.length, humanCount, durationSeconds, turnCount, sessionStandings);
+    console.log(`[session] recorded: solo=${room.isSolo} players=${room.players.length} turns=${turnCount}`);
+  } catch (err) {
+    console.error('[session] recordSession failed:', err.message);
+  }
 
   const humanPlayers = room.players.filter(p => !p.isBot && p.userId);
   if (humanPlayers.length === 0) return;
