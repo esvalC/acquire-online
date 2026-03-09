@@ -2751,7 +2751,8 @@ function logOut() {
 /* ── Recent Games (home page) ────────────────────────────────── */
 async function loadRecentGames() {
   try {
-    const res  = await fetch(`${API_BASE}/recent-games`);
+    const base = window.location.pathname.startsWith('/beta') ? '/beta/api' : '/api';
+    const res  = await fetch(`${base}/recent-games`);
     const data = await res.json();
     renderRecentGames(data.sessions || []);
   } catch {
