@@ -1581,7 +1581,7 @@ function goHome() {
   recentTiles = new Set();
   if (isSoloGame) socket.emit('leaveRoom');
   isSoloGame = false;
-  history.pushState({}, '', '/');
+  history.pushState({}, '', window.location.pathname.startsWith('/beta') ? '/beta' : '/');
   showScreen('newLanding');
   loadRecentGames();
 }
@@ -1875,8 +1875,9 @@ socket.on('soloRestart', () => {
 });
 
 socket.on('disconnect', () => {
-  if (window.location.pathname !== '/') {
-    history.replaceState({}, '', '/');
+  const home = window.location.pathname.startsWith('/beta') ? '/beta' : '/';
+  if (window.location.pathname !== home) {
+    history.replaceState({}, '', home);
   }
 });
 
