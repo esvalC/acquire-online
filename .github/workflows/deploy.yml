@@ -28,10 +28,12 @@ jobs:
             --document-name "AWS-RunShellScript" \
             --comment "Deploy from GitHub Actions - ${{ github.sha }}" \
             --parameters 'commands=[
-              "cd /home/ubuntu/acquire-online",
-              "sudo -u ubuntu GIT_SSH_COMMAND=\"ssh -i /home/ubuntu/.ssh/deploy_key\" git pull origin main",
-              "sudo -u ubuntu npm install --omit=dev",
+              "sudo -u ubuntu GIT_SSH_COMMAND=\"ssh -i /home/ubuntu/.ssh/deploy_key\" git -C /home/ubuntu/acquire-online pull origin main",
+              "sudo -u ubuntu npm --prefix /home/ubuntu/acquire-online install --omit=dev",
               "sudo -u ubuntu pm2 restart acquire-online",
+              "git -C /home/ubuntu/acquire-main -c safe.directory=/home/ubuntu/acquire-main pull origin main",
+              "npm --prefix /home/ubuntu/acquire-main install --omit=dev",
+              "pm2 restart acquire-main",
               "echo DEPLOY_DONE"
             ]' \
             --query "Command.CommandId" \
