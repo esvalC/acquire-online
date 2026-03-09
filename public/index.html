@@ -889,38 +889,42 @@
 
   /* ── Recent Games (home page) ───────────────────── */
   .recent-games-section {
-    width: 100%; max-width: 520px; margin-top: 24px;
+    width: 100%; max-width: 640px; margin-top: 24px;
   }
   .recent-games-title {
     font-size: 11px; text-transform: uppercase; letter-spacing: 1px;
     color: var(--text-muted); margin-bottom: 10px;
   }
-  .session-card {
+  .session-row {
+    display: flex; align-items: center; gap: 12px;
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 8px; padding: 12px 14px; margin-bottom: 8px;
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 6px;
+    font-size: 12px; flex-wrap: wrap;
   }
-  .session-meta {
-    font-size: 10px; color: var(--text-muted); margin-bottom: 8px;
-    display: flex; gap: 10px; flex-wrap: wrap;
+  .session-mode {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.5px; color: var(--text-muted); flex-shrink: 0; width: 36px;
   }
-  .session-player {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 4px 0; font-size: 12px;
-    border-bottom: 1px solid rgba(30,41,59,.5);
+  .session-players-inline { flex: 1; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .session-player-chip {
+    display: flex; align-items: center; gap: 4px;
+    font-size: 12px; white-space: nowrap;
   }
-  .session-player:last-child { border-bottom: none; }
-  .session-player-left { display: flex; align-items: center; gap: 8px; }
-  .session-rank { font-family: 'JetBrains Mono', monospace; font-size: 10px; color: var(--text-muted); width: 18px; }
-  .session-rank-1 { color: var(--gold); font-weight: 700; }
+  .session-player-chip + .session-player-chip::before {
+    content: '›'; color: var(--text-muted); font-size: 11px; margin-right: 2px;
+  }
+  .chip-rank { font-size: 10px; color: var(--text-muted); }
+  .chip-rank-1 { color: var(--gold); font-weight: 700; }
+  .chip-name-member { cursor: pointer; color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
+  .chip-cash { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
+  .session-date { font-size: 11px; color: var(--text-muted); flex-shrink: 0; margin-left: auto; }
   .player-badge {
-    font-size: 9px; padding: 1px 6px; border-radius: 99px; font-weight: 600;
-    text-transform: uppercase; letter-spacing: 0.5px;
+    font-size: 9px; padding: 1px 5px; border-radius: 99px; font-weight: 600;
+    text-transform: uppercase; letter-spacing: 0.5px; flex-shrink: 0;
   }
   .player-badge-bot    { background: rgba(100,116,139,.2); color: var(--text-muted); }
   .player-badge-guest  { background: rgba(59,130,246,.15); color: var(--blue); }
   .player-badge-member { background: rgba(16,185,129,.15); color: var(--green); }
-  .player-name-link { cursor: pointer; color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
-  .session-cash { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
 
   /* ── Profile drawer tabs ────────────────────────── */
   .drawer-tabs {
@@ -1002,6 +1006,7 @@
       <h3 style="font-family:'Playfair Display',serif;font-size:18px;color:var(--gold)">Solo Game</h3>
       <button class="btn btn-sm btn-secondary" onclick="goHome()">← Back</button>
     </div>
+    <div class="playing-as-banner" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:12px;"></div>
     <div class="input-group">
       <label>Your Name</label>
       <input type="text" id="soloName" placeholder="Enter your name" maxlength="20" />
@@ -1094,6 +1099,7 @@
     <div style="display:flex; flex-direction:column; gap:20px;">
       <div class="landing-card">
         <h3>Create a Table</h3>
+        <div class="playing-as-banner" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:8px;"></div>
         <div class="input-group">
           <label>Your Name</label>
           <input type="text" id="createName" placeholder="Enter your name" maxlength="20" />
@@ -1121,6 +1127,7 @@
           <label>Room Code</label>
           <input type="text" id="joinCode" placeholder="4-digit code" maxlength="4" />
         </div>
+        <div class="playing-as-banner" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:8px;margin-top:4px;"></div>
         <div class="input-group">
           <label>Your Name</label>
           <input type="text" id="joinName" placeholder="Enter your name" maxlength="20" />
@@ -1523,7 +1530,7 @@ function clearLogPulse() {
 
 /* ── Landing Actions ───────────────────────────── */
 function createRoom() {
-  const name = document.getElementById('createName').value.trim();
+  const name = (currentUser ? currentUser.username : document.getElementById('createName').value.trim());
   if (!name) return showError('Enter your name');
   myName = name;
   isSoloGame = false;
@@ -1539,7 +1546,7 @@ function createRoom() {
 }
 
 function joinRoom(spectate = false) {
-  const name = document.getElementById('joinName').value.trim();
+  const name = (currentUser ? currentUser.username : document.getElementById('joinName').value.trim());
   const code = document.getElementById('joinCode').value.trim();
   if (!name) return showError('Enter your name');
   if (!code || code.length !== 4) return showError('Enter a 4-digit room code');
@@ -1631,7 +1638,7 @@ function renderBotRoster() {
 }
 
 function startSoloGame() {
-  const name = document.getElementById('soloName').value.trim();
+  const name = (currentUser ? currentUser.username : document.getElementById('soloName').value.trim());
   if (!name) return showError('Enter your name');
   myName = name;
   isSoloGame = true;
@@ -2460,6 +2467,28 @@ function handleOverlayClick(e) {
   if (e.target === document.getElementById('profileOverlay')) closeProfileDrawer();
 }
 
+/* ── Auto-fill name inputs when logged in ────────────────────── */
+function updateNameInputs(username) {
+  const ids = ['soloName', 'createName', 'joinName'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const wrap = el.closest('.input-group');
+    if (username) {
+      el.value = username;
+      if (wrap) wrap.style.display = 'none';
+    } else {
+      el.value = '';
+      if (wrap) wrap.style.display = '';
+    }
+  });
+  // Show/hide "Playing as" banners
+  document.querySelectorAll('.playing-as-banner').forEach(b => {
+    b.textContent = username ? `Playing as ${username}` : '';
+    b.style.display = username ? 'block' : 'none';
+  });
+}
+
 /* ── Profile drawer tab switching ───────────────────────────── */
 function switchDrawerTab(tab) {
   const isStats = tab === 'stats';
@@ -2513,6 +2542,8 @@ function renderDrawerLoggedIn(user, history) {
   // Masked phone
   const phoneEl = document.getElementById('profilePhone');
   if (phoneEl) phoneEl.textContent = user.phone_masked || '—';
+  // Pre-fill & hide name inputs on game screens — use username automatically
+  updateNameInputs(user.username);
   // Game history
   const histEl = document.getElementById('profileHistory');
   if (histEl && history && history.length > 0) {
@@ -2745,6 +2776,7 @@ function logOut() {
   currentUser = null;
   localStorage.removeItem('acquire_auth_token');
   document.querySelector('.menu-btn')?.classList.remove('logged-in');
+  updateNameInputs(null);
   renderDrawerLoggedOut();
 }
 
@@ -2768,41 +2800,32 @@ function renderRecentGames(sessions) {
     return;
   }
   el.innerHTML = sessions.map(s => {
-    const date = new Date(s.played_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-    const modeLabel = s.is_solo ? 'Solo' : `${s.player_count}-player`;
-    const durLabel  = s.duration_seconds ? fmtDuration(s.duration_seconds) : '';
+    const date      = new Date(s.played_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const modeLabel = s.is_solo ? 'Solo' : 'Multi';
     const standings = s.standings || [];
-    const players = standings.map((p, i) => {
-      const rank    = i + 1;
-      const rankCls = rank === 1 ? 'session-rank-1' : '';
-      let   badge, namePart;
+    const chips = standings.map((p, i) => {
+      const rankCls = i === 0 ? 'chip-rank-1' : 'chip-rank';
+      let namePart, badge;
       if (p.isBot) {
-        badge    = `<span class="player-badge player-badge-bot">Bot</span>`;
         namePart = `<span style="color:var(--text-muted)">${escH(p.name)}</span>`;
+        badge    = `<span class="player-badge player-badge-bot">Bot</span>`;
       } else if (p.userId) {
+        namePart = `<span class="chip-name-member" onclick="openProfileModal(${p.userId},'${escH(p.name)}')">${escH(p.name)}</span>`;
         badge    = `<span class="player-badge player-badge-member">Member</span>`;
-        namePart = `<span class="player-name-link" onclick="openProfileModal(${p.userId}, '${escH(p.name)}')">${escH(p.name)}</span>`;
       } else {
+        namePart = `<span>${escH(p.name)}</span>`;
         badge    = `<span class="player-badge player-badge-guest">Guest</span>`;
-        namePart = `<span style="color:var(--text)">${escH(p.name)}</span>`;
       }
-      return `<div class="session-player">
-        <div class="session-player-left">
-          <span class="session-rank ${rankCls}">${rank}.</span>
-          ${namePart}
-          ${badge}
-        </div>
-        <span class="session-cash">$${p.cash.toLocaleString()}</span>
-      </div>`;
+      return `<span class="session-player-chip">
+        <span class="${rankCls}">${i+1}.</span>
+        ${namePart}${badge}
+        <span class="chip-cash">$${p.cash.toLocaleString()}</span>
+      </span>`;
     }).join('');
-    return `<div class="session-card">
-      <div class="session-meta">
-        <span>${modeLabel}</span>
-        ${durLabel ? `<span>${durLabel}</span>` : ''}
-        ${s.turn_count ? `<span>${s.turn_count} turns</span>` : ''}
-        <span style="margin-left:auto">${date}</span>
-      </div>
-      ${players}
+    return `<div class="session-row">
+      <span class="session-mode">${modeLabel}</span>
+      <div class="session-players-inline">${chips}</div>
+      <span class="session-date">${date}</span>
     </div>`;
   }).join('');
 }
