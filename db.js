@@ -64,7 +64,8 @@ db.exec(`
     human_count      INTEGER NOT NULL DEFAULT 1,
     duration_seconds INTEGER,
     turn_count       INTEGER,
-    standings        TEXT    NOT NULL DEFAULT '[]'
+    standings        TEXT    NOT NULL DEFAULT '[]',
+    replay_data      TEXT
   );
 `);
 
@@ -75,7 +76,8 @@ if (!cols.includes('public_profile'))  db.exec(`ALTER TABLE users ADD COLUMN pub
 if (!cols.includes('phone_encrypted')) db.exec(`ALTER TABLE users ADD COLUMN phone_encrypted TEXT`);
 
 const sessionCols = db.prepare(`PRAGMA table_info(game_sessions)`).all().map(r => r.name);
-if (!sessionCols.includes('standings')) db.exec(`ALTER TABLE game_sessions ADD COLUMN standings TEXT NOT NULL DEFAULT '[]'`);
+if (!sessionCols.includes('standings'))    db.exec(`ALTER TABLE game_sessions ADD COLUMN standings TEXT NOT NULL DEFAULT '[]'`);
+if (!sessionCols.includes('replay_data')) db.exec(`ALTER TABLE game_sessions ADD COLUMN replay_data TEXT`);
 
 /* ── Phone hashing ───────────────────────────────────────────── */
 // Salt prevents rainbow-table attacks on the hash.
@@ -140,13 +142,20 @@ module.exports = {
   setFeedbackIssue(id, ghIssue) {
     db.prepare('UPDATE feedback SET gh_issue=? WHERE id=?').run(ghIssue, id);
   },
-  recordSession(isSolo, playerCount, humanCount, durationSeconds, turnCount, standings) {
-    db.prepare('INSERT INTO game_sessions (is_solo, player_count, human_count, duration_seconds, turn_count, standings) VALUES (?,?,?,?,?,?)')
-      .run(isSolo ? 1 : 0, playerCount, humanCount, durationSeconds ?? null, turnCount ?? null, JSON.stringify(standings || []));
+  recordSession(isSolo, playerCount, humanCount, durationSeconds, turnCount, standings, replaySnapshots) {
+    const result = db.prepare('INSERT INTO game_sessions (is_solo, player_count, human_count, duration_seconds, turn_count, standings, replay_data) VALUES (?,?,?,?,?,?,?)')
+      .run(isSolo ? 1 : 0, playerCount, humanCount, durationSeconds ?? null, turnCount ?? null,
+          JSON.stringify(standings || []),
+          replaySnapshots && replaySnapshots.length ? JSON.stringify(replaySnapshots) : null);
+    return result.lastInsertRowid;
   },
 
   getRecentSessions(limit = 15) {
-    return db.prepare('SELECT * FROM game_sessions ORDER BY played_at DESC LIMIT ?').all(limit);
+    return db.prepare('SELECT id, played_at, is_solo, player_count, human_count, duration_seconds, turn_count, standings FROM game_sessions ORDER BY played_at DESC LIMIT ?').all(limit);
+  },
+
+  getSessionReplay(id) {
+    return db.prepare('SELECT id, replay_data FROM game_sessions WHERE id = ?').get(id);
   },
 
   getStats() {

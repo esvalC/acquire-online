@@ -926,6 +926,69 @@
   .player-badge-guest  { background: rgba(59,130,246,.15); color: var(--blue); }
   .player-badge-member { background: rgba(16,185,129,.15); color: var(--green); }
 
+  /* ── Replay button on session rows ─────────────── */
+  .session-row { cursor: pointer; }
+  .session-row:hover { border-color: var(--gold); background: rgba(245,158,11,.04); }
+  .session-replay-btn {
+    font-size: 10px; color: var(--text-muted); flex-shrink: 0;
+    padding: 2px 7px; border: 1px solid var(--border); border-radius: 99px;
+    background: transparent; cursor: pointer; white-space: nowrap;
+    transition: all .15s;
+  }
+  .session-replay-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* ── Replay overlay ─────────────────────────────── */
+  #replayOverlay {
+    display: none; position: fixed; inset: 0; z-index: 500;
+    background: var(--bg-dark); flex-direction: column; overflow: hidden;
+  }
+  .replay-topbar {
+    display: flex; align-items: center; gap: 12px; padding: 10px 16px;
+    background: var(--bg-card); border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .replay-topbar-title { font-weight: 700; font-size: 13px; color: var(--gold); flex: 1; }
+  .replay-nav { display: flex; align-items: center; gap: 8px; }
+  .btn-replay {
+    padding: 5px 12px; border-radius: 6px; border: 1px solid var(--border);
+    background: var(--bg-sidebar); color: var(--text); font-size: 12px;
+    cursor: pointer; transition: all .15s; font-family: 'DM Sans', sans-serif;
+  }
+  .btn-replay:hover:not(:disabled) { border-color: var(--gold); color: var(--gold); }
+  .btn-replay:disabled { opacity: 0.35; cursor: default; }
+  #replayStepLabel { font-size: 12px; color: var(--text-muted); min-width: 120px; text-align: center; }
+  .btn-replay-exit {
+    padding: 5px 14px; border-radius: 6px; border: 1px solid var(--red);
+    background: transparent; color: var(--red); font-size: 12px;
+    cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all .15s;
+  }
+  .btn-replay-exit:hover { background: rgba(239,68,68,.1); }
+  .replay-body {
+    display: flex; flex: 1; gap: 0; min-height: 0; overflow: hidden;
+  }
+  .replay-board-col {
+    flex: 1; overflow: auto; padding: 12px;
+    display: flex; flex-direction: column; align-items: flex-start;
+  }
+  .replay-sidebar {
+    width: 280px; overflow-y: auto; padding: 12px;
+    background: var(--bg-sidebar); border-left: 1px solid var(--border);
+    display: flex; flex-direction: column; gap: 0; flex-shrink: 0;
+  }
+  .replay-panel-label {
+    font-size: 10px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px;
+  }
+  #replayBoard { grid-template-columns: 18px repeat(12, 1fr); }
+  #replayLog {
+    font-size: 11px; color: var(--text-dim); display: flex; flex-direction: column; gap: 3px;
+  }
+  #replayLog .log-entry { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,.04); }
+  .replay-phase-label {
+    font-size: 11px; color: var(--text-muted); margin-bottom: 10px;
+    padding: 6px 10px; background: rgba(255,255,255,.04); border-radius: 6px;
+  }
+
   /* ── Profile drawer tabs ────────────────────────── */
   .drawer-tabs {
     display: flex; gap: 0; margin-bottom: 14px;
@@ -973,6 +1036,35 @@
   <div class="recent-games-section">
     <div class="recent-games-title">Recent Games</div>
     <div id="recentGamesList"><div style="font-size:12px;color:var(--text-muted);padding:8px 0;">Loading…</div></div>
+  </div>
+</div>
+
+<!-- ═══ REPLAY OVERLAY ═══ -->
+<div id="replayOverlay">
+  <div class="replay-topbar">
+    <div class="replay-topbar-title">▶ Game Replay</div>
+    <div class="replay-nav">
+      <button class="btn-replay" id="replayPrevBtn" onclick="replayPrev()">← Prev</button>
+      <span id="replayStepLabel">Loading…</span>
+      <button class="btn-replay" id="replayNextBtn" onclick="replayNext()">Next →</button>
+    </div>
+    <button class="btn-replay-exit" onclick="closeReplay()">✕ Exit Replay</button>
+  </div>
+  <div class="replay-body">
+    <div class="replay-board-col">
+      <div class="replay-phase-label" id="replayPhaseLabel"></div>
+      <div class="board-container" style="flex:none;width:100%">
+        <div class="board" id="replayBoard"></div>
+      </div>
+    </div>
+    <div class="replay-sidebar">
+      <div class="replay-panel-label">Players</div>
+      <div id="replayScoreboard"></div>
+      <div class="replay-panel-label" style="margin-top:14px">Hotel Chains</div>
+      <div id="replayStockMarket"></div>
+      <div class="replay-panel-label" style="margin-top:14px">Recent Log</div>
+      <div id="replayLog"></div>
+    </div>
   </div>
 </div>
 
@@ -2822,10 +2914,11 @@ function renderRecentGames(sessions) {
         <span class="chip-cash">$${p.cash.toLocaleString()}</span>
       </span>`;
     }).join('');
-    return `<div class="session-row">
+    return `<div class="session-row" onclick="openReplay(${s.id}, event)">
       <span class="session-mode">${modeLabel}</span>
       <div class="session-players-inline">${chips}</div>
       <span class="session-date">${date}</span>
+      <button class="session-replay-btn" onclick="openReplay(${s.id}, event)">▶ Replay</button>
     </div>`;
   }).join('');
 }
@@ -2850,6 +2943,127 @@ function openProfileModal(userId, username) {
   }
 }
 
+/* ── Game Replay ─────────────────────────────────────────────── */
+let replaySnapshots = [];
+let replayIdx = 0;
+
+const REPLAY_CHAIN_COLORS = {
+  Tower: '#e11d48', Luxor: '#f97316', American: '#3b82f6',
+  Worldwide: '#8b5cf6', Festival: '#06b6d4', Imperial: '#10b981', Continental: '#eab308',
+};
+
+async function openReplay(sessionId, event) {
+  if (event) event.stopPropagation();
+  const overlay = document.getElementById('replayOverlay');
+  overlay.style.display = 'flex';
+  document.getElementById('replayStepLabel').textContent = 'Loading…';
+  document.getElementById('replayPrevBtn').disabled = true;
+  document.getElementById('replayNextBtn').disabled = true;
+  document.getElementById('replayBoard').innerHTML = '';
+  document.getElementById('replayScoreboard').innerHTML = '';
+  document.getElementById('replayStockMarket').innerHTML = '';
+  document.getElementById('replayLog').innerHTML = '';
+  document.getElementById('replayPhaseLabel').textContent = '';
+
+  try {
+    const base = window.location.pathname.startsWith('/beta') ? '/beta/api' : '/api';
+    const res = await fetch(`${base}/sessions/${sessionId}/replay`);
+    const data = await res.json();
+    replaySnapshots = data.snapshots || [];
+    replayIdx = 0;
+    if (!replaySnapshots.length) {
+      document.getElementById('replayStepLabel').textContent = 'No replay data for this game.';
+      return;
+    }
+    renderReplayFrame();
+  } catch (err) {
+    document.getElementById('replayStepLabel').textContent = 'Failed to load replay.';
+  }
+}
+
+function closeReplay() {
+  document.getElementById('replayOverlay').style.display = 'none';
+  replaySnapshots = [];
+  replayIdx = 0;
+}
+
+function replayPrev() {
+  if (replayIdx > 0) { replayIdx--; renderReplayFrame(); }
+}
+function replayNext() {
+  if (replayIdx < replaySnapshots.length - 1) { replayIdx++; renderReplayFrame(); }
+}
+
+function renderReplayFrame() {
+  const snap = replaySnapshots[replayIdx];
+  if (!snap) return;
+
+  const total = replaySnapshots.length;
+  document.getElementById('replayStepLabel').textContent = `Step ${replayIdx + 1} / ${total}  ·  Turn ${snap.turnNumber}`;
+  document.getElementById('replayPrevBtn').disabled = replayIdx === 0;
+  document.getElementById('replayNextBtn').disabled = replayIdx === total - 1;
+
+  const phaseNames = { placeTile: 'Place Tile', chooseChain: 'Found Chain', buyStock: 'Buy Stock', mergerDecision: 'Merger', gameOver: 'Game Over' };
+  const curName = snap.players[snap.currentPlayerIdx]?.name || '';
+  document.getElementById('replayPhaseLabel').textContent =
+    snap.phase === 'gameOver' ? 'Game Over' : `${curName} — ${phaseNames[snap.phase] || snap.phase}`;
+
+  renderReplayBoard(snap);
+  renderReplayScore(snap);
+  renderReplayStock(snap);
+  renderReplayLog(snap);
+}
+
+function renderReplayBoard(snap) {
+  const el = document.getElementById('replayBoard');
+  let html = '<div class="board-cell header-cell"></div>';
+  for (let c = 0; c < 12; c++) html += `<div class="board-cell header-cell">${String.fromCharCode(65+c)}</div>`;
+  for (let r = 0; r < 9; r++) {
+    html += `<div class="board-cell header-cell">${r+1}</div>`;
+    for (let c = 0; c < 12; c++) {
+      const tile = `${r+1}${String.fromCharCode(65+c)}`;
+      const cell = snap.board[r][c];
+      let cls = 'board-cell';
+      if (cell === 'lone') cls += ' lone';
+      else if (cell) cls += ` chain-${cell}`;
+      html += `<div class="${cls}">${tile}</div>`;
+    }
+  }
+  el.innerHTML = html;
+}
+
+function renderReplayScore(snap) {
+  const el = document.getElementById('replayScoreboard');
+  el.innerHTML = snap.players.map((p, i) => {
+    const cur = i === snap.currentPlayerIdx;
+    const badges = Object.entries(p.stocks || {}).filter(([,v]) => v > 0)
+      .map(([ch, v]) => `<span class="stock-badge" style="background:${REPLAY_CHAIN_COLORS[ch]}22;color:${REPLAY_CHAIN_COLORS[ch]}">${ch.slice(0,3)} ${v}</span>`).join('');
+    return `<div class="score-player" style="margin-bottom:6px">
+      <div class="score-player-header">
+        <span class="score-player-name${cur ? ' current' : ''}">${cur ? '▸ ' : ''}${escapeHtml(p.name)}</span>
+        <span class="score-cash">$${p.cash.toLocaleString()}</span>
+      </div>
+      <div class="score-stocks">${badges || '<span style="color:var(--text-muted);font-size:10px">No stock</span>'}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderReplayStock(snap) {
+  const el = document.getElementById('replayStockMarket');
+  el.innerHTML = Object.entries(snap.chains).map(([name, info]) => {
+    if (!info.active) return `<div class="chain-row chain-inactive"><div class="chain-dot" style="background:${REPLAY_CHAIN_COLORS[name]};opacity:0.3"></div><div class="chain-name">${name}</div><div class="chain-size">—</div><div class="chain-price">—</div></div>`;
+    const issued = snap.players.reduce((s, p) => s + (p.stocks[name] || 0), 0);
+    const remaining = 25 - issued;
+    return `<div class="chain-row"><div class="chain-dot" style="background:${REPLAY_CHAIN_COLORS[name]}"></div><div class="chain-name">${name}</div><div class="chain-size">${info.size}</div><div class="chain-price">$${info.price}</div><div class="buy-shares-left">${remaining}</div>${info.safe ? '<span class="chain-safe">SAFE</span>' : ''}</div>`;
+  }).join('');
+}
+
+function renderReplayLog(snap) {
+  const el = document.getElementById('replayLog');
+  const log = snap.log || [];
+  el.innerHTML = [...log].reverse().map(l => `<div class="log-entry">${escapeHtml(l)}</div>`).join('');
+}
+
 /* ── Feedback modal ──────────────────────────────────────────── */
 let fbType = 'bug';
 
@@ -2863,7 +3077,16 @@ function openFeedbackModal() {
   setFbType('bug');
 }
 function closeFeedbackModal() { document.getElementById('feedbackOverlay').style.display = 'none'; }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFeedbackModal(); });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    if (document.getElementById('replayOverlay').style.display !== 'none') { closeReplay(); return; }
+    closeFeedbackModal();
+  }
+  if (document.getElementById('replayOverlay').style.display !== 'none') {
+    if (e.key === 'ArrowLeft')  replayPrev();
+    if (e.key === 'ArrowRight') replayNext();
+  }
+});
 
 function setFbType(t) {
   fbType = t;

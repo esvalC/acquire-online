@@ -235,6 +235,15 @@ app.get('/api/recent-games', (req, res) => {
   res.json({ sessions });
 });
 
+// Replay data for a specific session (public)
+app.get('/api/sessions/:id/replay', (req, res) => {
+  const row = db.getSessionReplay(Number(req.params.id));
+  if (!row) return res.status(404).json({ error: 'Session not found' });
+  let snapshots = [];
+  try { snapshots = JSON.parse(row.replay_data || '[]'); } catch {}
+  res.json({ sessionId: row.id, snapshots });
+});
+
 // Plan dashboard data (admin only)
 app.get('/api/plan/data', requireAdmin, (req, res) => {
   res.json({
@@ -285,10 +294,14 @@ function broadcastState(code) {
       io.to(p.socketId).emit('gameState', clientState);
     }
   }
+
+  // Capture spectator snapshot for replay
+  const spectatorState = engine.getClientState(room.game, -1);
+  spectatorState.playerList = playerList;
+  room.replaySnapshots = room.replaySnapshots || [];
+  room.replaySnapshots.push(spectatorState);
   for (const s of room.spectators) {
-    const clientState = engine.getClientState(room.game, -1);
-    clientState.playerList = playerList;
-    io.to(s.socketId).emit('gameState', clientState);
+    io.to(s.socketId).emit('gameState', spectatorState);
   }
 
   // Record game result once when it transitions to gameOver
@@ -340,8 +353,8 @@ function recordGameEnd(code) {
     return { name: s.name, cash: s.cash, isBot: rp?.isBot || false, userId: rp?.userId || null };
   });
   try {
-    db.recordSession(room.isSolo, room.players.length, humanCount, durationSeconds, turnCount, sessionStandings);
-    console.log(`[session] recorded: solo=${room.isSolo} players=${room.players.length} turns=${turnCount}`);
+    const sessionId = db.recordSession(room.isSolo, room.players.length, humanCount, durationSeconds, turnCount, sessionStandings, room.replaySnapshots || []);
+    console.log(`[session] recorded: solo=${room.isSolo} players=${room.players.length} turns=${turnCount} id=${sessionId} snapshots=${(room.replaySnapshots||[]).length}`);
   } catch (err) {
     console.error('[session] recordSession failed:', err.message);
   }
@@ -393,6 +406,7 @@ function startGame(code) {
   const names = room.players.map(p => p.name);
   room.game = engine.createGame(names, { quickstart: room.config.quickstart });
   room.startedAt = Date.now();
+  room.replaySnapshots = [];
   // createGame reorders players by quickstart draw — remap indices
   for (const rp of room.players) {
     rp.idx = room.game.players.findIndex(gp => gp.name === rp.name);
