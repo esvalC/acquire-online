@@ -2,7 +2,7 @@ name: Deploy to AWS
 
 on:
   push:
-    branches: [master]
+    branches: [main]
 
 # Required for OIDC token request
 permissions:
@@ -29,8 +29,8 @@ jobs:
             --comment "Deploy from GitHub Actions - ${{ github.sha }}" \
             --parameters 'commands=[
               "cd /home/ubuntu/acquire-online",
-              "sudo -u ubuntu GIT_SSH_COMMAND=\"ssh -i /home/ubuntu/.ssh/deploy_key\" git pull origin master",
-              "npm ci --production",
+              "sudo -u ubuntu GIT_SSH_COMMAND=\"ssh -i /home/ubuntu/.ssh/deploy_key\" git pull origin main",
+              "sudo -u ubuntu npm install --omit=dev",
               "sudo -u ubuntu pm2 restart acquire-online",
               "echo DEPLOY_DONE"
             ]' \
