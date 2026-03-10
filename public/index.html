@@ -1883,6 +1883,9 @@ socket.on('disconnect', () => {
 
 /* ── Game State ────────────────────────────────── */
 socket.on('gameState', (state) => {
+  // Don't update live game state while replay overlay is open — prevents "(you)" bleed-through
+  if (document.getElementById('replayOverlay').style.display !== 'none') return;
+
   const prevIdx = prevCurrentPlayerIdx;
 
   // Detect newly placed tiles by diffing boards
