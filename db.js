@@ -67,6 +67,15 @@ db.exec(`
     standings        TEXT    NOT NULL DEFAULT '[]',
     replay_data      TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS game_participants (
+    session_id INTEGER NOT NULL REFERENCES game_sessions(id),
+    user_id    INTEGER NOT NULL REFERENCES users(id),
+    rank       INTEGER NOT NULL,
+    cash       INTEGER NOT NULL,
+    PRIMARY KEY (session_id, user_id)
+  );
+  CREATE INDEX IF NOT EXISTS idx_gp_user ON game_participants(user_id);
 `);
 
 // Migrations — add columns that may be missing in older DBs
@@ -143,15 +152,41 @@ module.exports = {
     db.prepare('UPDATE feedback SET gh_issue=? WHERE id=?').run(ghIssue, id);
   },
   recordSession(isSolo, playerCount, humanCount, durationSeconds, turnCount, standings, replaySnapshots) {
-    const result = db.prepare('INSERT INTO game_sessions (is_solo, player_count, human_count, duration_seconds, turn_count, standings, replay_data) VALUES (?,?,?,?,?,?,?)')
-      .run(isSolo ? 1 : 0, playerCount, humanCount, durationSeconds ?? null, turnCount ?? null,
-          JSON.stringify(standings || []),
-          replaySnapshots && replaySnapshots.length ? JSON.stringify(replaySnapshots) : null);
-    return result.lastInsertRowid;
+    const insertSession = db.prepare(
+      'INSERT INTO game_sessions (is_solo, player_count, human_count, duration_seconds, turn_count, standings, replay_data) VALUES (?,?,?,?,?,?,?)'
+    );
+    const insertParticipant = db.prepare(
+      'INSERT OR IGNORE INTO game_participants (session_id, user_id, rank, cash) VALUES (?,?,?,?)'
+    );
+    const run = db.transaction(() => {
+      const r = insertSession.run(
+        isSolo ? 1 : 0, playerCount, humanCount, durationSeconds ?? null, turnCount ?? null,
+        JSON.stringify(standings || []),
+        replaySnapshots && replaySnapshots.length ? JSON.stringify(replaySnapshots) : null
+      );
+      const sessionId = r.lastInsertRowid;
+      (standings || []).forEach((p, rank) => {
+        if (p.userId) insertParticipant.run(sessionId, p.userId, rank, p.cash);
+      });
+      return sessionId;
+    });
+    return run();
   },
 
   getRecentSessions(limit = 15) {
     return db.prepare('SELECT id, played_at, is_solo, player_count, human_count, duration_seconds, turn_count, standings FROM game_sessions ORDER BY played_at DESC LIMIT ?').all(limit);
+  },
+
+  getUserSessions(userId, limit = 20) {
+    return db.prepare(`
+      SELECT gs.id, gs.played_at, gs.is_solo, gs.player_count, gs.human_count,
+             gs.duration_seconds, gs.turn_count, gs.standings, gp.rank, gp.cash AS my_cash
+      FROM game_participants gp
+      JOIN game_sessions gs ON gs.id = gp.session_id
+      WHERE gp.user_id = ?
+      ORDER BY gs.played_at DESC
+      LIMIT ?
+    `).all(userId, limit);
   },
 
   getSessionReplay(id) {

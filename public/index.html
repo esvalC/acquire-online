@@ -1476,7 +1476,7 @@
             <span class="stat-value" id="statPlayed">0</span>
           </div>
           <div class="profile-stat-row">
-            <span class="stat-label">Wins</span>
+            <span class="stat-label">Ranked Wins</span>
             <span class="stat-value" id="statWins">0</span>
           </div>
           <div class="profile-stat-row">
@@ -2613,7 +2613,7 @@ function renderDrawerLoggedOut() {
   resetRegisterFlow();
 }
 
-function renderDrawerLoggedIn(user, history) {
+function renderDrawerLoggedIn(user, history, sessions = []) {
   currentUser = user;
   document.querySelector('.menu-btn')?.classList.add('logged-in');
   document.getElementById('drawerLoggedOut').style.display = 'none';
@@ -2626,12 +2626,12 @@ function renderDrawerLoggedIn(user, history) {
     ? new Date(user.created_at * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
     : '—';
   document.getElementById('profileSince').textContent   = since;
-  document.getElementById('statPlayed').textContent     = user.games_played;
-  document.getElementById('statWins').textContent       = user.games_won;
-  const wr = user.games_played > 0
-    ? Math.round((user.games_won / user.games_played) * 100) + '%'
-    : '—';
-  document.getElementById('statWinRate').textContent = wr;
+  // Sessions have rank directly from game_participants join
+  const played = sessions.length || user.games_played;
+  const wins   = sessions.length ? sessions.filter(s => s.rank === 0).length : user.games_won;
+  document.getElementById('statPlayed').textContent  = played;
+  document.getElementById('statWins').textContent    = wins;
+  document.getElementById('statWinRate').textContent = played > 0 ? Math.round((wins / played) * 100) + '%' : '—';
   // Visibility toggle — default true if field not present
   const toggle = document.getElementById('visibilityToggle');
   if (toggle) toggle.checked = user.public_profile !== false && user.public_profile !== 0;
@@ -2640,28 +2640,52 @@ function renderDrawerLoggedIn(user, history) {
   if (phoneEl) phoneEl.textContent = user.phone_masked || '—';
   // Pre-fill & hide name inputs on game screens — use username automatically
   updateNameInputs(user.username);
-  // Game history
+  // Game history — sessions (with replay) + ELO entries
   const histEl = document.getElementById('profileHistory');
-  if (histEl && history && history.length > 0) {
-    histEl.innerHTML = history.slice(0, 10).map(g => {
-      const date = new Date(g.played_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      const sign = g.elo_change > 0 ? '+' : '';
-      const eloColor = g.elo_change > 0 ? 'var(--green)' : g.elo_change < 0 ? 'var(--red)' : 'var(--text-muted)';
-      const opps = (() => { try { return JSON.parse(g.opponents).map(o => o.name).join(', ') || '—'; } catch { return '—'; } })();
-      return `<div class="game-row game-row-${g.result}">
+  if (!histEl) return;
+
+  const eloById = {};
+  (history || []).forEach(g => { eloById[g.played_at] = g; });
+
+  let html = '';
+
+  if (sessions && sessions.length > 0) {
+    html += sessions.map(s => {
+      const date  = new Date(s.played_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+      const myRank = s.rank; // direct from game_participants join
+      const result = myRank === 0 ? 'win' : 'loss';
+      const rowCls = `game-row-${result}`;
+      const rankLabel = myRank === 0 ? '1st' : myRank === 1 ? '2nd' : myRank === 2 ? '3rd' : `${myRank + 1}th`;
+      // Other players from standings JSON (no need to find self — rank already known)
+      const allStandings = (() => { try { return JSON.parse(s.standings || '[]'); } catch { return []; } })();
+      const others = allStandings.filter(p => p.userId !== user.id).map(p => escapeHtml(p.name)).join(', ') || '—';
+      // Match ELO entry by proximity (sessions and game_history record within same second)
+      const eloEntry = (history || []).find(g => Math.abs(g.played_at - s.played_at) < 10);
+      const eloHtml  = eloEntry
+        ? (() => {
+            const sign = eloEntry.elo_change > 0 ? '+' : '';
+            const c = eloEntry.elo_change > 0 ? 'var(--green)' : eloEntry.elo_change < 0 ? 'var(--red)' : 'var(--text-muted)';
+            return `<span class="game-elo" style="color:${c}">${sign}${eloEntry.elo_change}</span>`;
+          })()
+        : '';
+      return `<div class="game-row ${rowCls}" style="cursor:pointer" onclick="openReplay(${s.id}, event)">
         <div>
-          <span class="game-result game-result-${g.result}">${g.result}</span>
-          <span style="color:var(--text-muted);margin-left:6px;font-size:11px;">vs ${opps}</span>
+          <span style="font-size:12px;font-weight:600;color:${result === 'win' ? 'var(--green)' : 'var(--red)'}">${rankLabel}</span>
+          <span style="color:var(--text-muted);margin-left:6px;font-size:11px;">vs ${others}</span>
+          <span style="font-size:10px;color:var(--text-muted);margin-left:4px;">${s.is_solo ? '(solo)' : '(multi)'}</span>
         </div>
         <div style="text-align:right">
-          <span class="game-elo" style="color:${eloColor}">${sign}${g.elo_change}</span>
+          ${eloHtml}
           <div style="font-size:10px;color:var(--text-muted)">${date}</div>
+          <div style="font-size:9px;color:var(--gold);margin-top:1px;">▶ Replay</div>
         </div>
       </div>`;
     }).join('');
-  } else if (histEl) {
-    histEl.innerHTML = '<div style="font-size:12px;color:var(--text-muted);">No games recorded yet.</div>';
+  } else {
+    html = '<div style="font-size:12px;color:var(--text-muted);">No games recorded yet.<br><span style="font-size:11px;">Play a game while logged in to track your history.</span></div>';
   }
+
+  histEl.innerHTML = html;
 }
 
 async function toggleVisibility(isPublic) {
@@ -2676,12 +2700,14 @@ async function toggleVisibility(isPublic) {
 /* ── Load profile from API ───────────────────────────────────── */
 async function loadProfile() {
   try {
-    const res = await fetch(`${API_BASE}/me`, {
-      headers: { Authorization: 'Bearer ' + authToken }
-    });
-    if (res.status === 401) { authToken = null; localStorage.removeItem('acquire_auth_token'); document.querySelector('.menu-btn')?.classList.remove('logged-in'); renderDrawerLoggedOut(); return; }
-    const data = await res.json();
-    renderDrawerLoggedIn(data.user, data.history || []);
+    const [meRes, sessRes] = await Promise.all([
+      fetch(`${API_BASE}/me`, { headers: { Authorization: 'Bearer ' + authToken } }),
+      fetch(`${API_BASE}/me/sessions`, { headers: { Authorization: 'Bearer ' + authToken } }),
+    ]);
+    if (meRes.status === 401) { authToken = null; localStorage.removeItem('acquire_auth_token'); document.querySelector('.menu-btn')?.classList.remove('logged-in'); renderDrawerLoggedOut(); return; }
+    const data = await meRes.json();
+    const sessData = sessRes.ok ? await sessRes.json() : {};
+    renderDrawerLoggedIn(data.user, data.history || [], sessData.sessions || []);
   } catch {
     renderDrawerLoggedOut();
   }

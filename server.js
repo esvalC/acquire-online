@@ -174,6 +174,12 @@ app.get('/api/me', requireAuth, (req, res) => {
   res.json({ user, history });
 });
 
+// Get game sessions the user participated in
+app.get('/api/me/sessions', requireAuth, (req, res) => {
+  const sessions = db.getUserSessions(req.userId, 20);
+  res.json({ sessions });
+});
+
 // Toggle profile visibility
 app.post('/api/me/visibility', requireAuth, (req, res) => {
   const { isPublic } = req.body;
