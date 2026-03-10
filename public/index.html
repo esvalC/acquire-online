@@ -1606,6 +1606,18 @@ function goRules() {
   showScreen('rulesPage');
 }
 
+/* ── Browser back/forward button support ──────── */
+window.addEventListener('popstate', () => {
+  const path = window.location.pathname;
+  if (path === '/rules')       { showScreen('rulesPage'); return; }
+  if (path === '/solo')        { showScreen('soloSetup'); return; }
+  if (path === '/multiplayer') { showScreen('landing');   return; }
+  // Default: home — don't call goHome() since URL is already correct
+  document.getElementById('gameOverOverlay').style.display = 'none';
+  showScreen('newLanding');
+  loadRecentGames();
+});
+
 function switchTab(tab, btn) {
   document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
