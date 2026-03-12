@@ -50,6 +50,8 @@ REPO_URL="${REPO_URL:-https://github.com/esvalC/acquire-online.git}"
 REPO_BRANCH="${REPO_BRANCH:-main}"
 WORKDIR="${WORKDIR:-/tmp/acquire-training}"
 OUTFILE="$WORKDIR/games_$(date +%Y%m%d_%H%M%S).jsonl"
+STATSFILE="$WORKDIR/stats.json"
+DASHBOARD_PORT="${DASHBOARD_PORT:-8080}"
 
 echo "=============================================="
 echo "  Acquire Self-Play Training"
@@ -85,12 +87,22 @@ npm install --omit=dev
 
 mkdir -p ai/data
 
+# ── Start live dashboard on port 8080 ─────────────────────────
+echo "[dashboard] Starting live dashboard on :$DASHBOARD_PORT ..."
+node ai/dashboard.js --stats "$STATSFILE" &
+DASHBOARD_PID=$!
+
 # ── Run self-play ──────────────────────────────────────────────
 echo "[train] Starting self-play for ${TIME_LIMIT_HOURS}h..."
+PUBLIC_IP=$(curl -sf --max-time 3 http://169.254.169.254/latest/meta-data/public-ipv4 || echo "localhost")
+echo "  Dashboard: http://$PUBLIC_IP:$DASHBOARD_PORT"
 node ai/selfplay.js \
   --time-limit "$TIME_LIMIT_SECS" \
   --export "$OUTFILE" \
+  --stats "$STATSFILE" \
   2>&1 | tee "$WORKDIR/train.log"
+
+kill $DASHBOARD_PID 2>/dev/null || true
 
 echo "[train] Done. Records saved to $OUTFILE"
 wc -l "$OUTFILE"

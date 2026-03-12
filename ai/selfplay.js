@@ -160,14 +160,36 @@ function runGame(bots, opts = {}) {
 
 /* ── Aggregate results ───────────────────────────────────────── */
 
+/* ── ELO tracking (chess-comparable, K=32) ───────────────────── */
+// Each bot starts at 1500 (chess standard). After each game we do pairwise
+// updates for every pair of players based on their finish order.
+const K = 32;
+function expectedScore(ra, rb) { return 1 / (1 + Math.pow(10, (rb - ra) / 400)); }
+function updateElo(ratings, standings) {
+  // standings is ordered best→worst: index 0 = 1st place
+  for (let i = 0; i < standings.length; i++) {
+    for (let j = i + 1; j < standings.length; j++) {
+      const winner = standings[i].name;
+      const loser  = standings[j].name;
+      if (!ratings[winner] || !ratings[loser]) continue;
+      const rw = ratings[winner], rl = ratings[loser];
+      const exp = expectedScore(rw, rl);
+      ratings[winner] = Math.round(rw + K * (1 - exp));
+      ratings[loser]  = Math.round(rl + K * (0 - (1 - exp)));
+    }
+  }
+}
+
 /**
  * Run games until `totalGames` is reached OR `timeLimitSecs` expires,
  * and print win-rate statistics. Exports training data if exportFile is set.
+ * If opts.statsFile is set, writes live JSON stats every 10 games for the dashboard.
  */
 function runBenchmark(totalGames, opts = {}) {
   const wins    = {};
   const podiums = {};
   const cashes  = {};
+  const elo     = {};
   let   errors  = 0;
   let   totalTurns = 0;
   let   exportStream = null;
@@ -177,6 +199,7 @@ function runBenchmark(totalGames, opts = {}) {
     wins[b.name]    = 0;
     podiums[b.name] = 0;
     cashes[b.name]  = [];
+    elo[b.name]     = 1500; // chess starting ELO
   }
 
   if (opts.exportFile) {
@@ -186,9 +209,42 @@ function runBenchmark(totalGames, opts = {}) {
     if (!opts.quiet) console.log(`  Exporting training data → ${opts.exportFile}`);
   }
 
-  const t0        = Date.now();
+  const t0          = Date.now();
   const timeLimitMs = (opts.timeLimitSecs || Infinity) * 1000;
   let   g = 0;
+
+  // Write live stats JSON for the dashboard
+  function writeStats() {
+    if (!opts.statsFile) return;
+    const elapsedMs  = Date.now() - t0;
+    const played     = g - errors;
+    const remainMs   = timeLimitMs === Infinity ? null : Math.max(0, timeLimitMs - elapsedMs);
+    const stats = {
+      gamesPlayed:     played,
+      gamesTotal:      g,
+      errors,
+      exportedRecords,
+      elapsedSecs:     Math.floor(elapsedMs / 1000),
+      remainingSecs:   remainMs === null ? null : Math.floor(remainMs / 1000),
+      timeLimitSecs:   opts.timeLimitSecs || null,
+      avgTurns:        played > 0 ? +(totalTurns / played).toFixed(1) : 0,
+      updatedAt:       new Date().toISOString(),
+      bots: BOTS.map(b => {
+        const w   = wins[b.name];
+        const arr = cashes[b.name];
+        return {
+          name:       b.name,
+          difficulty: b.difficulty,
+          wins:       w,
+          winPct:     played > 0 ? +((w / played) * 100).toFixed(1) : 0,
+          top3Pct:    played > 0 ? +((podiums[b.name] / played) * 100).toFixed(1) : 0,
+          avgCash:    arr.length ? Math.round(arr.reduce((s,v)=>s+v,0)/arr.length) : 0,
+          elo:        elo[b.name],
+        };
+      }).sort((a,b) => b.elo - a.elo),
+    };
+    try { fs.writeFileSync(opts.statsFile, JSON.stringify(stats, null, 2)); } catch {}
+  }
 
   while (g < totalGames) {
     // Check time limit
@@ -209,6 +265,7 @@ function runBenchmark(totalGames, opts = {}) {
 
     totalTurns += result.turns;
     wins[result.winner]++;
+    updateElo(elo, result.standings);
 
     for (let i = 0; i < result.standings.length; i++) {
       const { name, cash } = result.standings[i];
@@ -224,11 +281,15 @@ function runBenchmark(totalGames, opts = {}) {
       }
     }
 
+    if (g % 10 === 0) writeStats();
+
     if (!opts.quiet && g % 100 === 0) {
       const elapsed = ((Date.now() - t0) / 1000).toFixed(0);
       process.stdout.write(`\r  ${g} games | ${elapsed}s elapsed${exportStream ? ` | ${exportedRecords} records` : ''}…`);
     }
   }
+
+  writeStats(); // final write
 
   if (!opts.quiet) process.stdout.write('\n');
   if (exportStream) { exportStream.end(); }
@@ -271,10 +332,11 @@ function getArg(flag, defaultVal) {
   return args[idx + 1];
 }
 
-const nGames       = parseInt(getArg('--games', '999999999'), 10); // huge default = run forever until time limit
+const nGames        = parseInt(getArg('--games', '999999999'), 10);
 const timeLimitSecs = getArg('--time-limit') ? parseInt(getArg('--time-limit'), 10) : null;
-const exportFile   = getArg('--export') || null;
-const quiet        = args.includes('--quiet');
+const exportFile    = getArg('--export') || null;
+const statsFile     = getArg('--stats') || null;
+const quiet         = args.includes('--quiet');
 
 // If neither --games nor --time-limit specified, default to 1000 games
 const effectiveGames = args.includes('--games') ? nGames : (timeLimitSecs ? 999999999 : 1000);
@@ -286,4 +348,4 @@ if (!quiet) {
   console.log(`Bots: ${BOTS.map(b => `${b.name}(${b.difficulty})`).join(', ')}\n`);
 }
 
-runBenchmark(effectiveGames, { quiet, timeLimitSecs, exportFile });
+runBenchmark(effectiveGames, { quiet, timeLimitSecs, exportFile, statsFile });
