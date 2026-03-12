@@ -174,10 +174,54 @@ Both servers share a single SQLite database at `/home/ubuntu/acquire-data/acquir
 | Resource | Name / ID | Purpose |
 |---|---|---|
 | EC2 Instance | `i-0bbc6c13fd3dfe6ab` | Runs both Node.js servers |
-| Security Group | `acquire-online-sg` | Ports 80 + 443 only. No SSH. |
-| IAM Role (EC2) | `acquire-online-ec2-role` | Allows EC2 to use AWS Systems Manager |
+| Security Group | `acquire-online-sg` | Ports 80, 443, 8080. No SSH. |
+| S3 Bucket | `acquire-training-data` | Stores AI training data from spot runs |
+| IAM Role (EC2) | `acquire-online-ec2-role` | SSM access + S3 write for training runs |
 | IAM Role (CI/CD) | `acquire-online-github-actions-role` | What GitHub Actions assumes to deploy |
 | OIDC Provider | `token.actions.githubusercontent.com` | Trust bridge between GitHub and AWS |
+
+---
+
+## AI Training
+
+The bot AI can be improved by running self-play games on a cheap EC2 spot instance.
+
+### Launch a training run
+
+```bash
+aws ec2 run-instances \
+  --image-id ami-0c421724a94bba6d6 \
+  --instance-type c5n.xlarge \
+  --instance-market-options '{"MarketType":"spot"}' \
+  --iam-instance-profile Name=acquire-online-ec2-role \
+  --security-group-ids sg-0689315c5c119b6ff \
+  --user-data "$(base64 -i ai/ec2_train.sh)" \
+  --instance-initiated-shutdown-behavior terminate \
+  --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=acquire-training}]' \
+  --query 'Instances[0].[InstanceId,PublicIpAddress]' \
+  --output text
+```
+
+- **Cost:** ~$0.10/hr × 5 hours = **~$0.50 per run**
+- **Auto-terminates** after 5 hours — no cleanup needed
+- Wait ~5 minutes for the instance to boot, then open **`http://<IP>:8080`** to watch the live dashboard
+
+The dashboard shows games played, ELO ratings per bot, training records exported, and time remaining.
+
+### Find a running instance's IP
+
+```bash
+aws ec2 describe-instances \
+  --filters 'Name=tag:Name,Values=acquire-training' 'Name=instance-state-name,Values=running' \
+  --query 'Reservations[0].Instances[0].PublicIpAddress' \
+  --output text
+```
+
+### Download results
+
+```bash
+aws s3 cp s3://acquire-training-data/latest.jsonl ai/data/games.jsonl
+```
 
 ### Why No SSH?
 
