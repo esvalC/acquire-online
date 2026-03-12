@@ -83,22 +83,49 @@
   /* ── Login gate ── */
   .btn-gold { background:linear-gradient(135deg,var(--gold),#d97706); color:#000; border:none;
     border-radius:var(--radius); padding:10px 28px; font-weight:700; font-size:14px; cursor:pointer; }
+
+  /* ── Personas ── */
+  .persona-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(280px,1fr)); gap:12px; }
+  .persona-card { background:var(--card); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; }
+  .persona-card.done { border-left:3px solid var(--green); }
+  .persona-card.in-progress { border-left:3px solid var(--gold); }
+  .persona-card.planned { border-left:3px solid var(--muted); opacity:.75; }
+  .persona-role { font-size:10px; text-transform:uppercase; letter-spacing:1px; color:var(--muted); margin-bottom:4px; }
+  .persona-story { font-size:13px; line-height:1.45; color:var(--text); }
+  .persona-note { font-size:11px; color:var(--muted); margin-top:5px; font-style:italic; }
+  .persona-status { font-size:10px; font-weight:700; padding:2px 8px; border-radius:99px; display:inline-block; margin-top:6px; }
+  .persona-status.done { background:rgba(16,185,129,.15); color:var(--green); }
+  .persona-status.in-progress { background:rgba(245,158,11,.12); color:var(--gold); }
+  .persona-status.planned { background:rgba(100,116,139,.15); color:var(--muted); }
+
+  /* ── User Management ── */
+  .user-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
+  .user-row:last-child { border-bottom:none; }
+  .user-name { font-weight:500; min-width:120px; }
+  .user-elo { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--gold); min-width:60px; }
+  .user-meta { font-size:11px; color:var(--muted); flex:1; }
+  .admin-badge { font-size:10px; padding:2px 7px; border-radius:99px; background:rgba(245,158,11,.15); color:var(--gold); font-weight:700; }
+  .promote-form { display:flex; gap:8px; align-items:center; margin-top:12px; flex-wrap:wrap; }
+  .promote-form input { background:var(--card); border:1px solid var(--border-light); border-radius:var(--radius);
+    color:var(--text); padding:7px 12px; font-size:13px; width:200px; }
+  .promote-form input:focus { outline:none; border-color:var(--gold); }
+  .promote-msg { font-size:12px; margin-top:8px; }
 </style>
 </head>
 <body>
 
 <div id="authGate">
   <div style="font-family:'Playfair Display',serif;font-size:24px;color:var(--gold)">Project Dashboard</div>
-  <div style="font-size:13px;color:var(--muted)">Log in on <a href="/beta" style="color:var(--gold)">/beta</a> first, then come back here</div>
-  <input type="text" id="authInput" placeholder="Or paste JWT token manually" autocomplete="off" />
-  <button class="btn-gold" onclick="tryAuth()">Sign In</button>
-  <div id="authError" style="color:var(--red);font-size:12px;display:none">Invalid or expired token</div>
+  <div id="authMsg" style="font-size:13px;color:var(--muted);text-align:center;max-width:320px;line-height:1.5">
+    This page is for admins only. Log in to <a href="/" style="color:var(--gold)">the main site</a> with your admin account, then return here — your token is picked up automatically.
+  </div>
+  <div id="authError" style="color:var(--red);font-size:12px;display:none;text-align:center"></div>
 </div>
 
 <div class="page" id="dashboard" style="display:none">
   <div class="page-header">
     <div>
-      <div class="page-title">Acquire – Project Dashboard</div>
+      <div class="page-title">Acquire – Admin Dashboard</div>
       <div class="page-sub" id="lastSeen"></div>
     </div>
     <div style="display:flex;gap:12px;align-items:center">
@@ -122,6 +149,18 @@
     </div>
   </div>
 
+  <!-- User Management -->
+  <div class="section">
+    <div class="section-title">User Management</div>
+    <div id="userList"><div class="digest-empty">Loading…</div></div>
+    <div class="promote-form">
+      <input type="text" id="promoteInput" placeholder="Username to promote/demote" autocomplete="off" />
+      <button class="fb-btn" onclick="promoteUser(true)">Make Admin</button>
+      <button class="fb-btn" onclick="promoteUser(false)">Remove Admin</button>
+    </div>
+    <div id="promoteMsg" class="promote-msg"></div>
+  </div>
+
   <!-- Daily Digest -->
   <div class="section">
     <div class="section-title">Daily Digest — New Since Yesterday</div>
@@ -142,6 +181,12 @@
     <div id="feedbackList"><div class="digest-empty">Loading…</div></div>
   </div>
 
+  <!-- Personas -->
+  <div class="section">
+    <div class="section-title">User Personas</div>
+    <div id="personaGrid"></div>
+  </div>
+
   <!-- Roadmap -->
   <div class="section">
     <div class="section-title">Roadmap</div>
@@ -154,22 +199,18 @@
 const API_BASE = window.location.pathname.startsWith('/beta') ? '/beta' : '';
 
 /* ── Auth ───────────────────────────────────────── */
-// Use the same token as the main app — no separate login needed
-let token = localStorage.getItem('acquire_auth_token') || localStorage.getItem('plan_token') || '';
+// Reads the same token stored by the main app — no separate login needed
+let token = localStorage.getItem('acquire_auth_token') || '';
 let allFeedback = [];
 let currentFilter = 'all';
-
-function tryAuth() {
-  token = document.getElementById('authInput').value.trim();
-  localStorage.setItem('plan_token', token);
-  loadDashboard();
-}
+let allUsers = [];
 
 function signOut() {
-  localStorage.removeItem('plan_token');
   token = '';
   document.getElementById('dashboard').style.display = 'none';
   document.getElementById('authGate').style.display = 'flex';
+  document.getElementById('authError').style.display = 'none';
+  document.getElementById('authMsg').style.display = 'block';
 }
 
 /* ── Init ───────────────────────────────────────── */
@@ -177,13 +218,21 @@ if (token) loadDashboard();
 else { document.getElementById('authGate').style.display = 'flex'; }
 
 async function loadDashboard() {
-  const res = await fetch(API_BASE + '/api/plan/data', { headers: { Authorization: 'Bearer ' + token } });
-  if (res.status === 401 || res.status === 403) {
+  const [dataRes, usersRes] = await Promise.all([
+    fetch(API_BASE + '/api/plan/data',  { headers: { Authorization: 'Bearer ' + token } }),
+    fetch(API_BASE + '/api/plan/users', { headers: { Authorization: 'Bearer ' + token } }),
+  ]);
+  if (dataRes.status === 401 || dataRes.status === 403) {
     document.getElementById('authGate').style.display = 'flex';
+    document.getElementById('authMsg').style.display = 'none';
     document.getElementById('authError').style.display = 'block';
+    document.getElementById('authError').textContent = dataRes.status === 403
+      ? 'Access denied — admin account required.'
+      : 'Session expired. Log in on the main site and return here.';
     return;
   }
-  const data = await res.json();
+  const data = await dataRes.json();
+  allUsers = usersRes.ok ? (await usersRes.json()).users || [] : [];
   document.getElementById('authGate').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
 
@@ -215,6 +264,12 @@ async function loadDashboard() {
     ? `Last visit: ${new Date(Number(lastSeen)).toLocaleString()} · ${newCount} new since then`
     : 'First visit';
   localStorage.setItem('plan_last_seen', Date.now());
+
+  // User list
+  renderUserList();
+
+  // Personas
+  renderPersonas();
 
   // Roadmap
   renderRoadmap();
@@ -395,6 +450,82 @@ const ROADMAP = [
     ],
   },
 ];
+
+/* ── User Management ─────────────────────────────── */
+function renderUserList() {
+  const el = document.getElementById('userList');
+  if (!allUsers.length) { el.innerHTML = '<div class="digest-empty">No users yet.</div>'; return; }
+  el.innerHTML = allUsers.map(u => {
+    const since = new Date(u.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    return `<div class="user-row">
+      <span class="user-name">${escHtml(u.username)}${u.is_admin ? ' <span class="admin-badge">admin</span>' : ''}</span>
+      <span class="user-elo">${u.elo} ELO</span>
+      <span class="user-meta">${u.games_played} games · joined ${since}</span>
+    </div>`;
+  }).join('');
+}
+
+async function promoteUser(makeAdmin) {
+  const username = document.getElementById('promoteInput').value.trim();
+  const msgEl = document.getElementById('promoteMsg');
+  if (!username) { msgEl.style.color = 'var(--red)'; msgEl.textContent = 'Enter a username.'; return; }
+  try {
+    const res = await fetch(API_BASE + '/api/plan/users/promote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+      body: JSON.stringify({ username, isAdmin: makeAdmin }),
+    });
+    const data = await res.json();
+    if (data.error) { msgEl.style.color = 'var(--red)'; msgEl.textContent = data.error; return; }
+    msgEl.style.color = 'var(--green)';
+    msgEl.textContent = makeAdmin ? `${username} is now an admin.` : `${username} admin status removed.`;
+    document.getElementById('promoteInput').value = '';
+    // Refresh user list
+    const uRes = await fetch(API_BASE + '/api/plan/users', { headers: { Authorization: 'Bearer ' + token } });
+    if (uRes.ok) { allUsers = (await uRes.json()).users || []; renderUserList(); }
+  } catch { msgEl.style.color = 'var(--red)'; msgEl.textContent = 'Request failed.'; }
+}
+
+/* ── Personas ────────────────────────────────────── */
+const PERSONAS = [
+  // ── Completed ──
+  { role: 'Player', story: 'I want to play a solo game of Acquire against AI bots so I can learn or practice without needing friends online.', status: 'done' },
+  { role: 'Player', story: 'I want to create a multiplayer room and invite friends with a code so we can play together in real time.', status: 'done' },
+  { role: 'Player', story: 'I want to spectate a game in progress without playing, so I can watch and learn.', status: 'done' },
+  { role: 'Player', story: 'I want to reconnect to a game I was disconnected from without losing my spot.', status: 'done' },
+  { role: 'Player', story: 'I want to vote to end a game early if everyone agrees, so we don\'t have to play out an unwinnable position.', status: 'done' },
+  { role: 'Registered User', story: 'I want to create an account with my phone number so my identity is verified without a password.', status: 'done' },
+  { role: 'Registered User', story: 'I want to log in from any device using my username and a code sent to my phone.', status: 'done' },
+  { role: 'Registered User', story: 'I want to see my ELO rating, games played, and win rate in my profile.', status: 'done' },
+  { role: 'Registered User', story: 'I want to see my past games with rank, opponents, and ELO change so I can track my progress.', status: 'done' },
+  { role: 'Registered User', story: 'I want to replay any of my past games step by step to see how they played out.', status: 'done' },
+  { role: 'Any User', story: 'I want to report a bug or submit a suggestion from inside the game without leaving the page.', status: 'done' },
+  { role: 'Admin', story: 'I want a dashboard showing live stats, player feedback, and recent sessions so I can monitor the health of the game.', status: 'done' },
+  { role: 'Admin', story: 'I want to triage user feedback and mark items as done so I can track what\'s been addressed.', status: 'done' },
+  // ── In Progress / Planned ──
+  { role: 'Admin', story: 'I want to promote or demote another user to admin from the dashboard without touching the server.', status: 'done', note: 'Just shipped' },
+  { role: 'Admin', story: 'I want a feedback item to automatically create a GitHub issue so I don\'t have to copy-paste manually.', status: 'in-progress', note: 'Button opens pre-filled GitHub form; auto-create requires GITHUB_TOKEN API integration' },
+  { role: 'Player', story: 'I want to see a public leaderboard of top ELO players so there\'s something to compete for.', status: 'planned' },
+  { role: 'Player', story: 'I want to browse open multiplayer tables looking for players so I can join a game without needing a code.', status: 'planned' },
+  { role: 'Registered User', story: 'I want a custom avatar or display picture on my profile.', status: 'planned' },
+  { role: 'Registered User', story: 'I want to view another player\'s public profile and game history.', status: 'planned', note: 'DB schema ready; UI shows "coming soon"' },
+  { role: 'Player', story: 'I want better mobile layout so the game is playable on my phone without constant scrolling.', status: 'planned' },
+  { role: 'Player', story: 'I want contextual hints during my first game so I don\'t have to read the full rules to get started.', status: 'planned' },
+];
+
+function renderPersonas() {
+  const el = document.getElementById('personaGrid');
+  const statusOrder = { done: 0, 'in-progress': 1, planned: 2 };
+  const sorted = [...PERSONAS].sort((a, b) => statusOrder[a.status] - statusOrder[b.status]);
+  const label = { done: 'Done', 'in-progress': 'In Progress', planned: 'Planned' };
+  el.innerHTML = '<div class="persona-grid">' + sorted.map(p => `
+    <div class="persona-card ${p.status}">
+      <div class="persona-role">${escHtml(p.role)}</div>
+      <div class="persona-story">"${escHtml(p.story)}"</div>
+      ${p.note ? `<div class="persona-note">${escHtml(p.note)}</div>` : ''}
+      <span class="persona-status ${p.status}">${label[p.status]}</span>
+    </div>`).join('') + '</div>';
+}
 
 function renderRoadmap() {
   const stored = JSON.parse(localStorage.getItem('roadmap_checked') || '{}');

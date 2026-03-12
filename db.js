@@ -136,6 +136,9 @@ module.exports = {
   getHistory(userId) { return stmts.getHistory.all(userId); },
 
   setAdmin(userId, isAdmin) { stmts.setAdmin.run(isAdmin ? 1 : 0, userId); },
+  getAllUsers(limit = 200) {
+    return db.prepare('SELECT id, username, created_at, elo, games_played, games_won, is_admin FROM users ORDER BY created_at DESC LIMIT ?').all(limit);
+  },
   setPublicProfile(userId, isPublic) { stmts.setPublicProfile.run(isPublic ? 1 : 0, userId); },
 
   // Feedback

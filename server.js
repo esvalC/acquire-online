@@ -266,6 +266,23 @@ app.post('/api/plan/feedback/:id/status', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
+// Promote/demote a user to admin (admin only — no secret env var needed from dashboard)
+app.post('/api/plan/users/promote', requireAdmin, (req, res) => {
+  const { username, isAdmin } = req.body;
+  if (!username) return res.status(400).json({ error: 'username required' });
+  const user = db.findByUsername(username);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.id === req.userId) return res.status(400).json({ error: 'Cannot change your own admin status' });
+  db.setAdmin(user.id, isAdmin !== false);
+  res.json({ ok: true, username: user.username, isAdmin: isAdmin !== false });
+});
+
+// List users (admin only)
+app.get('/api/plan/users', requireAdmin, (req, res) => {
+  const users = db.getAllUsers();
+  res.json({ users });
+});
+
 // Serve index.html for all known routes (client-side routing)
 const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback'];
 app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
