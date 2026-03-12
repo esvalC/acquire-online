@@ -38,36 +38,56 @@ function issuedShares(game, chain) {
   return game.players.reduce((sum, p) => sum + (p.stocks[chain] || 0), 0);
 }
 
+/* ── End-game detection ──────────────────────────────────────── */
+// The game can end (or will end soon) when 2+ chains are safe (≥11 tiles).
+// Hard bots shift to a liquidation strategy when this is true.
+function safeChainCount(game) {
+  return engine.HOTEL_CHAINS.filter(c =>
+    game.chains[c].active && game.chains[c].tiles.length >= 11
+  ).length;
+}
+
+// Returns the max shares any opponent holds in a chain
+function maxOpponentShares(game, chain, myIdx) {
+  return game.players
+    .filter((_, i) => i !== myIdx)
+    .reduce((m, p) => Math.max(m, p.stocks[chain] || 0), 0);
+}
+
 /* ── Tile scoring ────────────────────────────────────────────── */
 function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
   const analysis = engine.analyzeTilePlacement(game, tile);
   if (!analysis.legal) return -Infinity;
 
-  const player = game.players[botIdx];
+  const player  = game.players[botIdx];
+  const endgame = difficulty === 'hard' && safeChainCount(game) >= 2;
 
   switch (analysis.type) {
     case 'expand': {
       const myShares = player.stocks[analysis.chain] || 0;
+      const oppShares = maxOpponentShares(game, analysis.chain, botIdx);
       if (myShares === 0) {
         if (difficulty === 'hard') {
           // Penalize expanding chains where an opponent is well-established
-          const maxOpp = game.players
-            .filter((_, i) => i !== botIdx)
-            .reduce((m, p) => Math.max(m, p.stocks[analysis.chain] || 0), 0);
-          return maxOpp > 3 ? 0.3 : 1.5;
+          return oppShares > 3 ? 0.3 : 1.5;
         }
         return 1.5;
       }
-      // Expanding own chain is always top-2 priority — score always beats mergers
+      // Expanding own chain is always top-2 priority
       let score = 15 + myShares * 0.2;
       if (difficulty === 'hard') {
         const chainSize = game.chains[analysis.chain].tiles.length;
+        // Push chain toward safe size (lock in majority bonus)
         if (chainSize >= 8 && chainSize < 11) score += 2.5;
+        // Endgame: extra bonus for growing chains where we lead
+        if (endgame && myShares > oppShares) score += 3;
       }
       return score;
     }
     case 'found':
       // Founding a hotel is always the top priority for all bots
+      // Endgame: founding is less useful — no time to build it up
+      if (endgame) return 8;
       return 20;
     case 'merge': {
       const chains = analysis.chains;
@@ -75,10 +95,17 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
         .map(c => ({ chain: c, size: game.chains[c].tiles.length, myShares: player.stocks[c] || 0 }))
         .sort((a, b) => b.size - a.size);
       const survivorMyShares = sorted[0].myShares;
-      const defunctMyShares = sorted.slice(1).reduce((s, x) => s + x.myShares, 0);
+      const defunctMyShares  = sorted.slice(1).reduce((s, x) => s + x.myShares, 0);
       let score = 2 + survivorMyShares * 0.1 + defunctMyShares * 0.3;
       // mergerSeeking trait: positive = bonus for merge tiles, negative = penalty
       score += traits.mergerSeeking * mult * 2.5;
+      // Hard endgame: trigger mergers only if we win the defunct chain payout
+      if (endgame) {
+        const defunctChain = sorted[1];
+        const defunctOpp   = maxOpponentShares(game, defunctChain.chain, botIdx);
+        if (defunctChain.myShares > defunctOpp) score += 4; // we get the payout
+        else if (defunctChain.myShares === 0)   score -= 2; // waste of a turn
+      }
       return score;
     }
     case 'lone':
@@ -213,8 +240,9 @@ function chainDesirability(c, botIdx, game, traits, mult) {
 /* ── Stock buying ────────────────────────────────────────────── */
 function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) {
   const player = game.players[botIdx];
+  const endgame = difficulty === 'hard' && safeChainCount(game) >= 2;
 
-  const candidates = engine.HOTEL_CHAINS
+  let candidates = engine.HOTEL_CHAINS
     .filter(c => game.chains[c].active)
     .map(c => {
       const size     = game.chains[c].tiles.length;
@@ -226,6 +254,19 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
     .filter(c => c.price > 0 && c.room > 0 && c.price <= player.cash);
 
   if (candidates.length === 0) return {};
+
+  // End-game filter (hard bots only): skip chains where we can't realistically lead.
+  // In the final stretch, buying into a losing chain is burning cash for no equity.
+  if (endgame) {
+    const viable = candidates.filter(c => {
+      const myShares  = c.myShares;
+      const oppShares = maxOpponentShares(game, c.chain, botIdx);
+      // Keep if we're already leading, could lead with a few buys, or no opponent holds any
+      return myShares >= oppShares || oppShares === 0 || (myShares + 3) >= oppShares;
+    });
+    if (viable.length > 0) candidates = viable;
+    // If no viable chain passes, fall back to all candidates (better to buy something)
+  }
 
   const MAX_SHARES_PER_CHAIN = 13;
   const MAX_BUY = 3;
@@ -262,6 +303,19 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
     chainDesirability(b, botIdx, game, traits, mult) -
     chainDesirability(a, botIdx, game, traits, mult)
   );
+
+  // Hard endgame: double down on chains we lead — don't spread thin
+  if (endgame && personality !== 'diversified') {
+    const leading = candidates.filter(c => c.myShares >= maxOpponentShares(game, c.chain, botIdx));
+    if (leading.length > 0) {
+      const target = leading[0];
+      while (bought < MAX_BUY) { if (!tryBuy(target.chain)) break; }
+      if (bought < MAX_BUY && leading.length > 1) {
+        while (bought < MAX_BUY) { if (!tryBuy(leading[1].chain)) break; }
+      }
+      return purchases;
+    }
+  }
 
   // Personality controls spread; trait-sorted order controls which chains are targeted
   if (personality === 'focused') {
@@ -300,6 +354,20 @@ function decideBotAction(game, botIdx, personality, difficulty, botName) {
   const traits = BOT_TRAITS[botName] || { mergerSeeking: 0, riskAppetite: 0, chainLoyalty: 0 };
   const mult   = DIFF_MULT[difficulty] || 1.0;
 
+  // MCTS mode: use Monte Carlo for tile/merger decisions; heuristic for the rest
+  if (difficulty === 'mcts') {
+    const mcts   = require('./ai/mcts');
+    const action = mcts.decideMctsAction(game, botIdx);
+    if (action !== null) {
+      // MCTS produced an action — apply and return
+      mcts.applyAction(game, botIdx, action);
+      return true;
+    }
+    // null = MCTS defers to heuristic for this phase
+    // Fall through to standard heuristic logic below, using 'hard' difficulty
+    difficulty = 'hard';
+  }
+
   const phase = game.phase;
 
   if (phase === 'placeTile' && game.currentPlayerIdx === botIdx) {
@@ -307,7 +375,8 @@ function decideBotAction(game, botIdx, personality, difficulty, botName) {
     if (tile) {
       engine.placeTile(game, botIdx, tile);
     } else {
-      engine.buyStock(game, botIdx, {});
+      const result = engine.passTile(game, botIdx);
+      if (result && result.error) return false; // can't advance — don't claim we acted
     }
     return true;
   }
@@ -339,4 +408,4 @@ function decideBotAction(game, botIdx, personality, difficulty, botName) {
   return false;
 }
 
-module.exports = { decideBotAction, BOT_ROSTER };
+module.exports = { decideBotAction, BOT_ROSTER, BOT_TRAITS_EXPORT: BOT_TRAITS, decideBotBuyStock };

@@ -696,6 +696,50 @@
   .bot-diff-btn.active { background: rgba(245,158,11,0.15); border-color: var(--gold); color: var(--gold); }
   .bot-diff-btn:hover:not(.active) { background: var(--bg-card-hover); }
 
+  /* ── Finance Road ─────────────────────────────── */
+  #financeRoad {
+    flex-direction: column; align-items: center;
+    min-height: 100vh; gap: 20px; padding: 40px 24px 60px;
+  }
+  .fr-tiers {
+    display: flex; flex-direction: column; gap: 10px;
+    width: 100%; max-width: 560px;
+  }
+  .fr-tier {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 16px 20px;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .fr-tier-beaten { border-color: rgba(16,185,129,0.4); }
+  .fr-tier-header { display: flex; align-items: center; gap: 8px; }
+  .fr-tier-num {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
+    color: var(--text-muted);
+  }
+  .fr-tier-status {
+    font-size: 11px; font-weight: 600; margin-left: auto;
+    padding: 2px 8px; border-radius: 10px;
+  }
+  .fr-tier-status.beaten { background: rgba(16,185,129,0.15); color: var(--green); }
+  .fr-tier-name {
+    font-family: 'Playfair Display', serif; font-size: 17px; color: var(--gold);
+  }
+  .fr-tier-flavor { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
+  .fr-tier-levels { display: flex; gap: 8px; margin-top: 4px; }
+  .fr-level-btn {
+    flex: 1; background: var(--bg-dark); border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px 4px; text-align: center;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+    transition: all 0.15s;
+  }
+  .fr-level-btn.beaten  { border-color: rgba(16,185,129,0.5); background: rgba(16,185,129,0.06); cursor: pointer; }
+  .fr-level-btn.current { border-color: var(--gold); background: rgba(245,158,11,0.06); cursor: pointer; }
+  .fr-level-btn.locked  { opacity: 0.4; cursor: not-allowed; }
+  .fr-level-btn.beaten:hover, .fr-level-btn.current:hover {
+    transform: translateY(-2px); box-shadow: 0 4px 16px rgba(245,158,11,0.12);
+  }
+  .fr-name-row { display: flex; gap: 12px; align-items: center; }
+
   /* ── Bot indicator in scoreboard ─────────────── */
   .bot-badge {
     font-size: 9px; text-transform: uppercase; letter-spacing: 1px;
@@ -1025,6 +1069,11 @@
       <div class="mode-card-icon">📖</div>
       <div class="mode-card-title">Rules</div>
       <div class="mode-card-desc">Complete guide to Acquire — strategy, mergers, and more</div>
+    </div>
+    <div class="mode-card" onclick="goFinanceRoad()">
+      <div class="mode-card-icon">📈</div>
+      <div class="mode-card-title">Finance Road</div>
+      <div class="mode-card-desc">5 tiers of increasingly skilled opponents — same challenge for everyone</div>
     </div>
     <div class="mode-card" onclick="openFeedbackModal()">
       <div class="mode-card-icon">💬</div>
@@ -1361,12 +1410,26 @@
   </div>
 </div>
 
+<!-- ═══ FINANCE ROAD ═══ -->
+<div id="financeRoad" class="screen">
+  <div class="logo-title" style="font-size:36px;">Finance Road</div>
+  <div style="font-size:13px;color:var(--text-muted);text-align:center;max-width:440px;line-height:1.6;margin-top:-12px;">
+    Five tiers. The same opponents for every player. Beat a tier to unlock the next.
+  </div>
+  <div class="fr-name-row">
+    <input type="text" id="frPlayerName" placeholder="Your name" maxlength="20"
+      style="width:220px;text-align:center;" />
+  </div>
+  <div class="fr-tiers" id="frTierList"></div>
+  <button class="btn btn-secondary" style="width:auto;padding:10px 28px;" onclick="goHome()">← Back</button>
+</div>
+
 <!-- ═══ GAME OVER OVERLAY ═══ -->
 <div class="game-over-overlay" id="gameOverOverlay" style="display:none;">
   <div class="game-over-card">
-    <h2>Game Over</h2>
+    <h2 id="gameOverTitle">Game Over</h2>
     <div id="standingsDisplay"></div>
-    <div style="display:flex; gap:8px; justify-content:center; margin-top:20px;">
+    <div id="gameOverButtons" style="display:flex; gap:8px; justify-content:center; margin-top:20px; flex-wrap:wrap;">
       <button class="btn" onclick="playAgain()">Play Again</button>
       <button class="btn btn-secondary btn-sm" style="width:auto" onclick="goHome()">Main Menu</button>
     </div>
@@ -1535,6 +1598,8 @@ let logEntryCount = 0;
 let isSoloGame = false;
 let selectedBotCount = 2;
 let botSettings = []; // per-bot state: { difficulty, useCustomDiv, divVal }
+let currentFinanceRoadTier  = null; // null = not in Finance Road, 0–4 = tier index
+let currentFinanceRoadLevel = null; // 0–2 = level within tier
 let prevBoard = null;
 let recentTiles = new Set();
 let recentTileTimer = null;
@@ -1554,6 +1619,150 @@ const HUMAN_TITLES = ['The Investor', 'The CEO', 'The Visionary', 'The Magnate',
 function getHumanTitle(name) {
   // Deterministic but fun — based on name length
   return HUMAN_TITLES[name.length % HUMAN_TITLES.length];
+}
+
+/* ── Finance Road ─────────────────────────────── */
+// 5 tiers × 3 levels = 15 stages. Tier L1 is always unlocked (jump in anywhere).
+// Within a tier, beating L1 unlocks L2, beating L2 unlocks L3.
+// Tier 5 placeholder = all hard bots for now; will upgrade to MCTS when ready.
+const FINANCE_ROAD_TIERS = [
+  {
+    name: 'Street Level',
+    desc: 'Learn the market. Opponents who make mistakes — but not always.',
+    levels: [
+      { name: 'Warm-Up',     bots: [{ botName:'Aria', personality:'balanced',    difficulty:'easy'   }, { botName:'Rex',  personality:'focused',     difficulty:'easy'   }, { botName:'Nova', personality:'diversified', difficulty:'easy'   }] },
+      { name: 'Stepping Up', bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'easy'   }, { botName:'Colt', personality:'focused',     difficulty:'easy'   }] },
+      { name: 'Earning It',  bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'easy'   }] },
+    ],
+  },
+  {
+    name: 'The Circuit',
+    desc: 'Three confident traders who know what they want.',
+    levels: [
+      { name: 'Foundations', bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
+      { name: 'Competition', bots: [{ botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
+      { name: 'The Floor',   bots: [{ botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
+    ],
+  },
+  {
+    name: 'The Exchange',
+    desc: 'Hard bots enter. No room for sloppy play.',
+    levels: [
+      { name: 'First Edge',  bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
+      { name: 'The Press',   bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
+      { name: 'High Water',  bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'medium' }] },
+    ],
+  },
+  {
+    name: 'The Summit',
+    desc: 'Full-strength opponents pushing every edge.',
+    levels: [
+      { name: 'The Climb',   bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
+      { name: 'Thin Air',    bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'hard'   }] },
+      { name: 'The Peak',    bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Colt', personality:'focused',     difficulty:'hard'   }] },
+    ],
+  },
+  {
+    name: 'The Trust',
+    desc: 'AI-powered opponents. Each level adds another MCTS bot to the table.',
+    levels: [
+      { name: 'Initiation',       bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'hard'   }, { botName:'Colt', personality:'focused', difficulty:'hard'   }] },
+      { name: 'The Inner Circle', bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'mcts'   }, { botName:'Colt', personality:'focused', difficulty:'hard'   }] },
+      { name: 'Godmode',          bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'mcts'   }, { botName:'Colt', personality:'focused', difficulty:'mcts'   }] },
+    ],
+  },
+];
+
+function getFRProgress() {
+  // Progress per tier: { beaten: number[], unlocked: number }
+  // All tiers start with unlocked: 0 (L1 always accessible — jump in anywhere)
+  try {
+    const raw = JSON.parse(localStorage.getItem('acquire_fr2') || 'null');
+    if (raw && Array.isArray(raw.tiers)) return raw;
+  } catch {}
+  return { tiers: FINANCE_ROAD_TIERS.map(() => ({ beaten: [], unlocked: 0 })) };
+}
+function saveFRProgress(p) {
+  localStorage.setItem('acquire_fr2', JSON.stringify(p));
+}
+
+function goFinanceRoad() {
+  document.getElementById('gameOverOverlay').style.display = 'none';
+  stopTurnClock();
+  if (isSoloGame) socket.emit('leaveRoom');
+  isSoloGame = false;
+  currentFinanceRoadTier  = null;
+  currentFinanceRoadLevel = null;
+  const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
+  history.pushState({}, '', base + '/finance-road');
+  const el = document.getElementById('frPlayerName');
+  if (el && myName && !el.value) el.value = myName;
+  renderFinanceRoad();
+  showScreen('financeRoad');
+}
+
+function renderFinanceRoad() {
+  const progress = getFRProgress();
+  const container = document.getElementById('frTierList');
+  const DL = { easy: 'Easy', medium: 'Mid', hard: 'Hard' };
+  container.innerHTML = FINANCE_ROAD_TIERS.map((tier, ti) => {
+    const tp = progress.tiers[ti] || { beaten: [], unlocked: 0 };
+    const beatenSet = new Set(tp.beaten);
+    const tierBeaten = tp.beaten.length === 3;
+    const levelBtns = tier.levels.map((lv, li) => {
+      const isBeaten   = beatenSet.has(li);
+      const isUnlocked = li <= tp.unlocked;
+      let cls = 'fr-level-btn';
+      let icon = '';
+      if (isBeaten)         { cls += ' beaten';  icon = '✓ '; }
+      else if (isUnlocked)  { cls += ' current'; icon = '▶ '; }
+      else                  { cls += ' locked';  icon = '🔒 '; }
+      const botLine = lv.bots.map(b => `${b.botName[0]}:${DL[b.difficulty][0]}`).join(' ');
+      const clickAttr = isUnlocked ? `onclick="startFinanceRoadLevel(${ti},${li})"` : '';
+      return `<div class="${cls}" ${clickAttr}>
+        <span style="font-size:11px;font-weight:600;">${icon}L${li+1}</span>
+        <span style="font-size:10px;color:var(--text-muted);">${lv.name}</span>
+        <span style="font-size:9px;color:var(--text-muted);opacity:0.7">${botLine}</span>
+      </div>`;
+    }).join('');
+    return `<div class="fr-tier${tierBeaten ? ' fr-tier-beaten' : ''}">
+      <div class="fr-tier-header">
+        <span class="fr-tier-num">Tier ${ti+1}</span>
+        ${tierBeaten ? '<span class="fr-tier-status beaten">✓ Complete</span>' : ''}
+      </div>
+      <div class="fr-tier-name">${tier.name}</div>
+      <div class="fr-tier-flavor">${tier.desc}</div>
+      <div class="fr-tier-levels">${levelBtns}</div>
+    </div>`;
+  }).join('');
+}
+
+function startFinanceRoadLevel(tierIdx, levelIdx) {
+  const nameEl = document.getElementById('frPlayerName');
+  const name = (nameEl && nameEl.value.trim()) || myName;
+  if (!name) { showError('Enter your name to play'); return; }
+  const tier  = FINANCE_ROAD_TIERS[tierIdx];
+  const level = tier && tier.levels[levelIdx];
+  if (!level) return;
+
+  myName = name;
+  currentFinanceRoadTier  = tierIdx;
+  currentFinanceRoadLevel = levelIdx;
+  isSoloGame = true;
+
+  socket.emit('createSoloGame', {
+    name,
+    botCount: 3,
+    quickstart: true,
+    botConfigs: level.bots,
+    authToken,
+  }, (res) => {
+    if (res.error) { showError(res.error); return; }
+    saveSession(res.code, name, res.token);
+    document.getElementById('gameOverOverlay').style.display = 'none';
+    showScreen('game');
+    startTurnClock();
+  });
 }
 
 function sliderToPersonality(val) {
@@ -1581,6 +1790,8 @@ function goHome() {
   recentTiles = new Set();
   if (isSoloGame) socket.emit('leaveRoom');
   isSoloGame = false;
+  currentFinanceRoadTier  = null;
+  currentFinanceRoadLevel = null;
   history.pushState({}, '', window.location.pathname.startsWith('/beta') ? '/beta' : '/');
   showScreen('newLanding');
   loadRecentGames();
@@ -1609,9 +1820,12 @@ function goRules() {
 /* ── Browser back/forward button support ──────── */
 window.addEventListener('popstate', () => {
   const path = window.location.pathname;
-  if (path === '/rules')       { showScreen('rulesPage'); return; }
-  if (path === '/solo')        { showScreen('soloSetup'); return; }
-  if (path === '/multiplayer') { showScreen('landing');   return; }
+  if (path === '/rules')                                   { showScreen('rulesPage'); return; }
+  if (path === '/solo')                                    { showScreen('soloSetup'); return; }
+  if (path === '/multiplayer')                             { showScreen('landing');   return; }
+  if (path === '/finance-road' || path === '/beta/finance-road') {
+    renderFinanceRoad(); showScreen('financeRoad'); return;
+  }
   // Default: home — don't call goHome() since URL is already correct
   document.getElementById('gameOverOverlay').style.display = 'none';
   showScreen('newLanding');
@@ -1800,6 +2014,12 @@ function attemptReconnect(code, name, token) {
 (function handleUrlOnLoad() {
   const path = window.location.pathname;
 
+  // /finance-road
+  if (path === '/finance-road' || path === '/beta/finance-road') {
+    renderFinanceRoad();
+    showScreen('financeRoad');
+    return;
+  }
   // /solo
   if (path === '/solo') {
     renderBotRoster();
@@ -2426,6 +2646,46 @@ function renderGameOver() {
   document.getElementById('standingsDisplay').innerHTML = (gameState.standings||[]).map((s,i)=>
     `<div class="standing-row"><span class="place">${places[i]||''}</span><span class="sname">${escapeHtml(s.name)}</span><span class="scash">$${s.cash.toLocaleString()}</span></div>`
   ).join('');
+
+  const title = document.getElementById('gameOverTitle');
+  const btns  = document.getElementById('gameOverButtons');
+
+  if (currentFinanceRoadTier !== null && currentFinanceRoadLevel !== null) {
+    const ti  = currentFinanceRoadTier;
+    const li  = currentFinanceRoadLevel;
+    const myRank = (gameState.standings || []).findIndex(s => s.name === myName);
+    const won = myRank === 0;
+
+    if (won) {
+      const progress = getFRProgress();
+      const tp = progress.tiers[ti];
+      if (!tp.beaten.includes(li)) tp.beaten.push(li);
+      tp.unlocked = Math.max(tp.unlocked, Math.min(2, li + 1));
+      saveFRProgress(progress);
+    }
+
+    const tierName  = FINANCE_ROAD_TIERS[ti]?.name || '';
+    const levelName = FINANCE_ROAD_TIERS[ti]?.levels[li]?.name || '';
+    title.textContent = won ? `${tierName} L${li+1} Complete! 🏆` : `${levelName} — Try Again`;
+
+    // Determine "next" destination
+    const hasNextLevel = li < 2;
+    const hasNextTier  = ti < 4;
+    let html = '';
+    if (won && hasNextLevel) {
+      html += `<button class="btn" onclick="startFinanceRoadLevel(${ti},${li+1})">Next Level →</button>`;
+    } else if (won && hasNextTier) {
+      html += `<button class="btn" onclick="startFinanceRoadLevel(${ti+1},0)">Next Tier →</button>`;
+    }
+    html += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="startFinanceRoadLevel(${ti},${li})">Replay</button>`;
+    html += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="goFinanceRoad()">Finance Road</button>`;
+    html += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="goHome()">Main Menu</button>`;
+    btns.innerHTML = html;
+  } else {
+    title.textContent = 'Game Over';
+    btns.innerHTML = `<button class="btn" onclick="playAgain()">Play Again</button><button class="btn btn-secondary btn-sm" style="width:auto" onclick="goHome()">Main Menu</button>`;
+  }
+
   // Reload profile in background so ELO + history update
   if (authToken) setTimeout(() => loadProfile(), 1500);
 }

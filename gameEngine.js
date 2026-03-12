@@ -519,6 +519,17 @@ function finalizeSingleDefunct(state) {
   state.phase = 'buyStock';
 }
 
+/* ── Pass tile (no playable tiles) ────────────────────────── */
+// Called when a player genuinely has no playable tiles. Advances phase to buyStock.
+function passTile(state, playerIdx) {
+  if (state.phase !== 'placeTile') return { error: 'Wrong phase' };
+  if (state.currentPlayerIdx !== playerIdx) return { error: 'Not your turn' };
+  const { playable } = getPlayableTiles(state);
+  if (playable.length > 0) return { error: 'You have playable tiles' };
+  state.phase = 'buyStock';
+  return { ok: true };
+}
+
 /* ── Buy stock ─────────────────────────────────────────────── */
 function buyStock(state, playerIdx, purchases) {
   if (state.phase !== 'buyStock') return { error: 'Wrong phase' };
@@ -595,16 +606,24 @@ function advanceTurn(state) {
   state.turnNumber++;
   state.phase = 'placeTile';
 
-  const { playable } = getPlayableTiles(state);
-  if (playable.length === 0 && state.players[state.currentPlayerIdx].tiles.length === 0) {
-    state.log.push(`${state.players[state.currentPlayerIdx].name} has no tiles, skipping`);
-    if (state.tileBag.length > 0) {
-      state.players[state.currentPlayerIdx].tiles.push(state.tileBag.pop());
+  // Skip players with no playable tiles (iteratively, not recursively)
+  let skips = 0;
+  while (skips < state.players.length) {
+    const { playable } = getPlayableTiles(state);
+    if (playable.length > 0) break; // current player has a move
+
+    const cur = state.players[state.currentPlayerIdx];
+    if (cur.tiles.length === 0 && state.tileBag.length > 0) {
+      // Draw a tile and recheck
+      cur.tiles.push(state.tileBag.pop());
+      const { playable: p2 } = getPlayableTiles(state);
+      if (p2.length > 0) break;
     }
-    const { playable: p2 } = getPlayableTiles(state);
-    if (p2.length === 0) {
-      advanceTurn(state);
-    }
+
+    state.log.push(`${cur.name} has no tiles, skipping`);
+    state.currentPlayerIdx = (state.currentPlayerIdx + 1) % state.players.length;
+    state.turnNumber++;
+    skips++;
   }
 }
 
@@ -753,6 +772,7 @@ function getClientState(state, forPlayerIdx) {
 module.exports = {
   createGame,
   placeTile,
+  passTile,
   chooseChain,
   chooseMergerSurvivor,
   mergerDecision,

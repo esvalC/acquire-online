@@ -284,7 +284,7 @@ app.get('/api/plan/users', requireAdmin, (req, res) => {
 });
 
 // Serve index.html for all known routes (client-side routing)
-const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback'];
+const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback', '/finance-road'];
 app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
 for (const route of clientRoutes) {
   app.get(route, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
@@ -515,16 +515,20 @@ io.on('connection', (socket) => {
     const payload = authToken ? verifyToken(authToken) : null;
     const userId  = payload ? payload.sub : null;
 
-    const bots = BOT_ROSTER.slice(0, Math.min(Math.max(botCount || 1, 1), 5));
+    const count = Math.min(Math.max(botCount || 1, 1), 5);
+    const bots = BOT_ROSTER.slice(0, count);
 
     const players = [
       { name, socketId: socket.id, ready: true, idx: 0, token, isBot: false, userId },
       ...bots.map((b, i) => {
         const cfg = (botConfigs && botConfigs[i]) || {};
+        // Finance Road and custom modes can override the bot name (must be a valid roster name)
+        const botEntry = cfg.botName ? BOT_ROSTER.find(x => x.name === cfg.botName) : null;
+        const resolved = botEntry || b;
         return {
-          name: b.name, socketId: null, ready: true,
+          name: resolved.name, socketId: null, ready: true,
           idx: i + 1, token: null, isBot: true,
-          personality: cfg.personality || 'balanced',
+          personality: cfg.personality || resolved.personality || 'balanced',
           difficulty: cfg.difficulty || 'medium',
         };
       }),
