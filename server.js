@@ -284,7 +284,7 @@ app.get('/api/plan/users', requireAdmin, (req, res) => {
 });
 
 // Serve index.html for all known routes (client-side routing)
-const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback', '/finance-road'];
+const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback', '/finance-road', '/finance-road/:tier/:level', '/quick-master'];
 app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
 for (const route of clientRoutes) {
   app.get(route, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));

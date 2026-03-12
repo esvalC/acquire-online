@@ -762,8 +762,8 @@
     border-radius: 0 8px 8px 0; margin-left: 1px;
   }
   .fr-level-row + .fr-level-row { border-top: 1px solid rgba(255,255,255,0.04); }
-  .fr-level-row.beaten  { border-left-color: rgba(16,185,129,0.5); }
-  .fr-level-row.current { border-left-color: var(--gold); }
+  .fr-level-row.beaten  { border-left-color: rgba(16,185,129,0.5); cursor: pointer; }
+  .fr-level-row.current { border-left-color: var(--gold); cursor: pointer; }
   .fr-level-row.locked  { opacity: 0.38; cursor: not-allowed; pointer-events: none; }
   .fr-level-row.beaten:hover, .fr-level-row.current:hover {
     background: rgba(255,255,255,0.03);
@@ -1830,17 +1830,38 @@ function renderFinanceRoad() {
 }
 
 function startFinanceRoadLevel(tierIdx, levelIdx) {
-  const nameEl = document.getElementById('frPlayerName');
-  const name = (nameEl && nameEl.value.trim()) || myName;
-  if (!name) { showError('Enter your name to play'); return; }
   const tier  = FINANCE_ROAD_TIERS[tierIdx];
   const level = tier && tier.levels[levelIdx];
   if (!level) return;
+
+  const nameEl = document.getElementById('frPlayerName');
+  const name = (currentUser && currentUser.username) || (nameEl && nameEl.value.trim()) || myName;
+
+  if (!name) {
+    // Show name modal then re-call after confirmation
+    const el = document.getElementById('qmName');
+    if (el) el.value = '';
+    document.getElementById('quickMasterModal').classList.add('open');
+    document.getElementById('quickMasterModal').dataset.pendingTier  = tierIdx;
+    document.getElementById('quickMasterModal').dataset.pendingLevel = levelIdx;
+    setTimeout(() => el && el.focus(), 80);
+    return;
+  }
+
+  _launchFinanceRoadLevel(tierIdx, levelIdx, name);
+}
+
+function _launchFinanceRoadLevel(tierIdx, levelIdx, name) {
+  const tier  = FINANCE_ROAD_TIERS[tierIdx];
+  const level = tier.levels[levelIdx];
 
   myName = name;
   currentFinanceRoadTier  = tierIdx;
   currentFinanceRoadLevel = levelIdx;
   isSoloGame = true;
+
+  const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
+  history.pushState({}, '', `${base}/finance-road/${tierIdx + 1}/${levelIdx + 1}`);
 
   socket.emit('createSoloGame', {
     name,
@@ -1873,8 +1894,17 @@ function confirmQuickMaster() {
   const el = document.getElementById('qmName');
   const name = el && el.value.trim();
   if (!name) { el && el.focus(); return; }
+  const modal = document.getElementById('quickMasterModal');
+  const pendingTier  = modal.dataset.pendingTier;
+  const pendingLevel = modal.dataset.pendingLevel;
   closeQuickMasterModal();
-  _launchQuickMaster(name);
+  if (pendingTier !== undefined && pendingLevel !== undefined) {
+    delete modal.dataset.pendingTier;
+    delete modal.dataset.pendingLevel;
+    _launchFinanceRoadLevel(+pendingTier, +pendingLevel, name);
+  } else {
+    _launchQuickMaster(name);
+  }
 }
 function closeQuickMasterModal() {
   document.getElementById('quickMasterModal').classList.remove('open');
@@ -1882,6 +1912,8 @@ function closeQuickMasterModal() {
 function _launchQuickMaster(name) {
   myName   = name;
   isSoloGame = true;
+  const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
+  history.pushState({}, '', `${base}/quick-master`);
   socket.emit('createSoloGame', {
     name,
     botCount: 3,
@@ -1955,14 +1987,13 @@ function goRules() {
 
 /* ── Browser back/forward button support ──────── */
 window.addEventListener('popstate', () => {
-  const path = window.location.pathname;
-  if (path === '/rules')                                   { showScreen('rulesPage'); return; }
-  if (path === '/solo')                                    { showScreen('soloSetup'); return; }
-  if (path === '/multiplayer')                             { showScreen('landing');   return; }
-  if (path === '/finance-road' || path === '/beta/finance-road') {
-    renderFinanceRoad(); showScreen('financeRoad'); return;
-  }
-  // Default: home — don't call goHome() since URL is already correct
+  const path = window.location.pathname.replace(/^\/beta/, '');
+  if (path === '/rules')       { showScreen('rulesPage'); return; }
+  if (path === '/solo')        { showScreen('soloSetup'); return; }
+  if (path === '/multiplayer') { showScreen('landing');   return; }
+  if (path === '/quick-master') { showScreen('newLanding'); loadRecentGames(); return; }
+  if (path.startsWith('/finance-road')) { renderFinanceRoad(); showScreen('financeRoad'); return; }
+  // Default: home
   document.getElementById('gameOverOverlay').style.display = 'none';
   showScreen('newLanding');
   loadRecentGames();
@@ -2150,10 +2181,16 @@ function attemptReconnect(code, name, token) {
 (function handleUrlOnLoad() {
   const path = window.location.pathname;
 
-  // /finance-road
-  if (path === '/finance-road' || path === '/beta/finance-road') {
+  // /finance-road (and /finance-road/T/L level URLs)
+  if (path.startsWith('/finance-road') || path.startsWith('/beta/finance-road')) {
     renderFinanceRoad();
     showScreen('financeRoad');
+    return;
+  }
+  // /quick-master — treat as home (can't restore a live game on reload)
+  if (path === '/quick-master' || path === '/beta/quick-master') {
+    showScreen('newLanding');
+    loadRecentGames();
     return;
   }
   // /solo
