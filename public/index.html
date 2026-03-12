@@ -1155,6 +1155,7 @@
       <span id="replayStepLabel">Loading…</span>
       <button class="btn-replay" id="replayNextBtn" onclick="replayNext()">Next →</button>
     </div>
+    <button class="btn-replay" id="replayShareBtn" onclick="shareReplay()" style="display:none;">🔗 Share</button>
     <button class="btn-replay-exit" onclick="closeReplay()">✕ Exit Replay</button>
   </div>
   <div class="replay-body">
@@ -1372,6 +1373,7 @@
     <div style="display:flex; gap:6px;">
       <button class="btn btn-sm btn-secondary" id="btnDeclareEnd" onclick="declareEnd()" style="display:none;">End Game</button>
       <button class="btn btn-sm btn-danger" onclick="initiateConcedeVote()">Vote End</button>
+      <button class="btn btn-sm btn-secondary" id="btnRestartSolo" onclick="restartSoloGame()" style="display:none;" title="Restart this game">↺ Restart</button>
     </div>
   </div>
 
@@ -1997,6 +1999,8 @@ window.addEventListener('popstate', () => {
   if (path === '/multiplayer') { showScreen('landing');   return; }
   if (path === '/quick-master') { showScreen('newLanding'); loadRecentGames(); return; }
   if (path.startsWith('/finance-road')) { renderFinanceRoad(); showScreen('financeRoad'); return; }
+  const _rm = path.match(/\/replay\/(\d+)$/);
+  if (_rm) { document.getElementById('replayOverlay').style.display = 'none'; showScreen('newLanding'); loadRecentGames(); return; }
   // Default: home
   document.getElementById('gameOverOverlay').style.display = 'none';
   showScreen('newLanding');
@@ -2223,6 +2227,14 @@ function attemptReconnect(code, name, token) {
   if (path.startsWith('/finance-road') || path.startsWith('/beta/finance-road')) {
     renderFinanceRoad();
     showScreen('financeRoad');
+    return;
+  }
+  // /replay/:id — open replay overlay on top of landing
+  const replayMatch = path.match(/\/replay\/(\d+)$/);
+  if (replayMatch) {
+    showScreen('newLanding');
+    loadRecentGames();
+    openReplay(Number(replayMatch[1]));
     return;
   }
   // /solo
@@ -2822,6 +2834,7 @@ function renderHeader() {
   document.getElementById('turnLabel').textContent = `Turn ${gameState.turnNumber}`;
   document.getElementById('currentPlayerLabel').textContent = gameState.players[gameState.currentPlayerIdx]?.name || '';
   document.getElementById('btnDeclareEnd').style.display = (gameState.canDeclareEnd && gameState.currentPlayerIdx === myIdx) ? 'inline-block' : 'none';
+  document.getElementById('btnRestartSolo').style.display = isSoloGame ? 'inline-block' : 'none';
   // Spectator badge
   document.getElementById('spectatorBadge').style.display = myIdx === -1 ? '' : 'none';
   // Last action strip (most recent log entry)
@@ -2845,6 +2858,19 @@ function renderConcedeBanner() {
 }
 
 /* ── Game Over ─────────────────────────────────── */
+function restartSoloGame() {
+  if (currentFinanceRoadTier !== null && currentFinanceRoadLevel !== null) {
+    // Finance Road: restart same level
+    const ti = currentFinanceRoadTier, li = currentFinanceRoadLevel;
+    socket.emit('leaveRoom');
+    isSoloGame = false;
+    currentFinanceRoadTier = null; currentFinanceRoadLevel = null;
+    _launchFinanceRoadLevel(ti, li, myName);
+  } else {
+    goSolo();
+  }
+}
+
 function renderGameOver() {
   clearLastSolo(); // game is over — don't resume it on reload
   document.getElementById('gameOverOverlay').style.display = 'flex';
@@ -2883,13 +2909,17 @@ function renderGameOver() {
     } else if (won && hasNextTier) {
       html += `<button class="btn" onclick="startFinanceRoadLevel(${ti+1},0)">Next Tier →</button>`;
     }
-    html += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="startFinanceRoadLevel(${ti},${li})">Replay</button>`;
+    html += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="startFinanceRoadLevel(${ti},${li})">↺ Retry</button>`;
     html += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="goFinanceRoad()">Finance Road</button>`;
     html += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="goHome()">Main Menu</button>`;
+    if (gameState.sessionId) html += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="openReplay(${gameState.sessionId})">▶ Watch Replay</button>`;
     btns.innerHTML = html;
   } else {
     title.textContent = 'Game Over';
-    btns.innerHTML = `<button class="btn" onclick="playAgain()">Play Again</button><button class="btn btn-secondary btn-sm" style="width:auto" onclick="goHome()">Main Menu</button>`;
+    let html = `<button class="btn" onclick="playAgain()">Play Again</button>`;
+    html += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="goHome()">Main Menu</button>`;
+    if (gameState.sessionId) html += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="openReplay(${gameState.sessionId})">▶ Watch Replay</button>`;
+    btns.innerHTML = html;
   }
 
   // Reload profile in background so ELO + history update
@@ -3460,22 +3490,30 @@ const REPLAY_CHAIN_COLORS = {
   Worldwide: '#8b5cf6', Festival: '#06b6d4', Imperial: '#10b981', Continental: '#eab308',
 };
 
+let currentReplaySessionId = null;
+
 async function openReplay(sessionId, event) {
   if (event) event.stopPropagation();
+  currentReplaySessionId = sessionId;
   const overlay = document.getElementById('replayOverlay');
   overlay.style.display = 'flex';
   document.getElementById('replayStepLabel').textContent = 'Loading…';
   document.getElementById('replayPrevBtn').disabled = true;
   document.getElementById('replayNextBtn').disabled = true;
+  document.getElementById('replayShareBtn').style.display = 'none';
   document.getElementById('replayBoard').innerHTML = '';
   document.getElementById('replayScoreboard').innerHTML = '';
   document.getElementById('replayStockMarket').innerHTML = '';
   document.getElementById('replayLog').innerHTML = '';
   document.getElementById('replayPhaseLabel').textContent = '';
 
+  // Update URL to shareable /replay/:id
+  const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
+  history.pushState({}, '', `${base}/replay/${sessionId}`);
+
   try {
-    const base = window.location.pathname.startsWith('/beta') ? '/beta/api' : '/api';
-    const res = await fetch(`${base}/sessions/${sessionId}/replay`);
+    const apiBase = base ? base + '/api' : '/api';
+    const res = await fetch(`${apiBase}/sessions/${sessionId}/replay`);
     const data = await res.json();
     replaySnapshots = data.snapshots || [];
     replayIdx = 0;
@@ -3483,6 +3521,7 @@ async function openReplay(sessionId, event) {
       document.getElementById('replayStepLabel').textContent = 'No replay data for this game.';
       return;
     }
+    document.getElementById('replayShareBtn').style.display = '';
     renderReplayFrame();
   } catch (err) {
     document.getElementById('replayStepLabel').textContent = 'Failed to load replay.';
@@ -3493,6 +3532,18 @@ function closeReplay() {
   document.getElementById('replayOverlay').style.display = 'none';
   replaySnapshots = [];
   replayIdx = 0;
+  currentReplaySessionId = null;
+  // Go back to wherever the user was before opening the replay
+  history.back();
+}
+
+function shareReplay() {
+  const url = `${location.origin}${location.pathname.startsWith('/beta') ? '/beta' : ''}/replay/${currentReplaySessionId}`;
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(url).then(() => showError('Replay link copied!'));
+  } else {
+    prompt('Copy this link:', url);
+  }
 }
 
 function replayPrev() {

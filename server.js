@@ -284,7 +284,7 @@ app.get('/api/plan/users', requireAdmin, (req, res) => {
 });
 
 // Serve index.html for all known routes (client-side routing)
-const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback', '/finance-road', '/finance-road/:tier/:level', '/quick-master'];
+const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback', '/finance-road', '/finance-road/:tier/:level', '/quick-master', '/replay/:id'];
 app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
 for (const route of clientRoutes) {
   app.get(route, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
@@ -314,6 +314,7 @@ function broadcastState(code) {
     if (p.socketId && !p.isBot) {
       const clientState = engine.getClientState(room.game, p.idx);
       clientState.playerList = playerList;
+      if (room.sessionId) clientState.sessionId = room.sessionId;
       io.to(p.socketId).emit('gameState', clientState);
     }
   }
@@ -378,6 +379,7 @@ function recordGameEnd(code) {
   try {
     const sessionId = db.recordSession(room.isSolo, room.players.length, humanCount, durationSeconds, turnCount, sessionStandings, room.replaySnapshots || []);
     console.log(`[session] recorded: solo=${room.isSolo} players=${room.players.length} turns=${turnCount} id=${sessionId} snapshots=${(room.replaySnapshots||[]).length}`);
+    room.sessionId = sessionId; // store so broadcastState can include it in gameOver state
   } catch (err) {
     console.error('[session] recordSession failed:', err.message);
   }
