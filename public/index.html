@@ -696,48 +696,101 @@
   .bot-diff-btn.active { background: rgba(245,158,11,0.15); border-color: var(--gold); color: var(--gold); }
   .bot-diff-btn:hover:not(.active) { background: var(--bg-card-hover); }
 
+  /* ── Mode card variants ───────────────────────── */
+  .mode-card-featured {
+    border-color: rgba(245,158,11,0.4);
+    background: linear-gradient(135deg, var(--bg-card) 0%, rgba(245,158,11,0.04) 100%);
+  }
+  .mode-card-master {
+    border-color: rgba(139,92,246,0.4);
+    background: linear-gradient(135deg, var(--bg-card) 0%, rgba(139,92,246,0.04) 100%);
+  }
+  .mode-card-master:hover {
+    border-color: #8b5cf6;
+    box-shadow: 0 12px 40px rgba(139,92,246,0.18);
+  }
+  .mode-card-master .mode-card-title { color: #a78bfa; }
+
+  /* ── Quick Master name modal ─────────────────── */
+  #quickMasterModal {
+    display: none; position: fixed; inset: 0; z-index: 200;
+    background: rgba(0,0,0,0.7); align-items: center; justify-content: center;
+  }
+  #quickMasterModal.open { display: flex; }
+  .qm-card {
+    background: var(--bg-card); border: 1px solid rgba(139,92,246,0.4);
+    border-radius: 16px; padding: 32px; width: 320px;
+    display: flex; flex-direction: column; gap: 16px; align-items: center;
+    text-align: center;
+  }
+  .qm-card h3 { font-family: 'Playfair Display', serif; font-size: 20px; color: #a78bfa; }
+  .qm-card p { font-size: 13px; color: var(--text-muted); line-height: 1.5; }
+
   /* ── Finance Road ─────────────────────────────── */
   #financeRoad {
     flex-direction: column; align-items: center;
     min-height: 100vh; gap: 20px; padding: 40px 24px 60px;
   }
   .fr-tiers {
-    display: flex; flex-direction: column; gap: 10px;
-    width: 100%; max-width: 560px;
+    display: flex; flex-direction: column; gap: 28px;
+    width: 100%; max-width: 660px;
   }
-  .fr-tier {
-    background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: 12px; padding: 16px 20px;
-    display: flex; flex-direction: column; gap: 6px;
+  .fr-tier-section { display: flex; flex-direction: column; }
+  .fr-tier-heading {
+    display: flex; align-items: baseline; gap: 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2px;
   }
-  .fr-tier-beaten { border-color: rgba(16,185,129,0.4); }
-  .fr-tier-header { display: flex; align-items: center; gap: 8px; }
-  .fr-tier-num {
-    font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px;
-    color: var(--text-muted);
+  .fr-tier-badge {
+    font-size: 9px; text-transform: uppercase; letter-spacing: 2px;
+    color: var(--text-muted); background: var(--bg-dark);
+    border: 1px solid var(--border); border-radius: 4px;
+    padding: 2px 8px; white-space: nowrap;
   }
-  .fr-tier-status {
-    font-size: 11px; font-weight: 600; margin-left: auto;
-    padding: 2px 8px; border-radius: 10px;
+  .fr-tier-badge.done { border-color: rgba(16,185,129,0.4); color: var(--green); background: rgba(16,185,129,0.08); }
+  .fr-tier-title {
+    font-family: 'Playfair Display', serif; font-size: 21px; color: var(--gold);
   }
-  .fr-tier-status.beaten { background: rgba(16,185,129,0.15); color: var(--green); }
-  .fr-tier-name {
-    font-family: 'Playfair Display', serif; font-size: 17px; color: var(--gold);
+  .fr-tier-desc { font-size: 11px; color: var(--text-dim); margin-left: auto; align-self: center; white-space: nowrap; }
+  .fr-levels { display: flex; flex-direction: column; }
+  .fr-level-row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 13px 14px 13px 20px;
+    border-left: 2px solid var(--border);
+    cursor: pointer; transition: all 0.15s;
+    border-radius: 0 8px 8px 0; margin-left: 1px;
   }
-  .fr-tier-flavor { font-size: 12px; color: var(--text-dim); line-height: 1.4; }
-  .fr-tier-levels { display: flex; gap: 8px; margin-top: 4px; }
-  .fr-level-btn {
-    flex: 1; background: var(--bg-dark); border: 1px solid var(--border);
-    border-radius: 8px; padding: 10px 4px; text-align: center;
-    display: flex; flex-direction: column; align-items: center; gap: 3px;
-    transition: all 0.15s;
+  .fr-level-row + .fr-level-row { border-top: 1px solid rgba(255,255,255,0.04); }
+  .fr-level-row.beaten  { border-left-color: rgba(16,185,129,0.5); }
+  .fr-level-row.current { border-left-color: var(--gold); }
+  .fr-level-row.locked  { opacity: 0.38; cursor: not-allowed; pointer-events: none; }
+  .fr-level-row.beaten:hover, .fr-level-row.current:hover {
+    background: rgba(255,255,255,0.03);
   }
-  .fr-level-btn.beaten  { border-color: rgba(16,185,129,0.5); background: rgba(16,185,129,0.06); cursor: pointer; }
-  .fr-level-btn.current { border-color: var(--gold); background: rgba(245,158,11,0.06); cursor: pointer; }
-  .fr-level-btn.locked  { opacity: 0.4; cursor: not-allowed; }
-  .fr-level-btn.beaten:hover, .fr-level-btn.current:hover {
-    transform: translateY(-2px); box-shadow: 0 4px 16px rgba(245,158,11,0.12);
+  .fr-level-status { font-size: 15px; width: 18px; flex-shrink: 0; text-align: center; }
+  .fr-level-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  .fr-level-name-row { display: flex; align-items: baseline; gap: 10px; }
+  .fr-level-name { font-size: 14px; font-weight: 600; color: var(--text); }
+  .fr-level-elo {
+    font-size: 11px; color: var(--gold); opacity: 0.75;
+    font-variant-numeric: tabular-nums;
   }
+  .fr-bots { display: flex; gap: 5px; flex-wrap: wrap; }
+  .fr-bot-chip {
+    display: flex; align-items: center; gap: 5px;
+    font-size: 11px; padding: 3px 9px; border-radius: 20px;
+    border: 1px solid var(--border); background: var(--bg-dark);
+    transition: border-color 0.15s;
+  }
+  .fr-bot-chip .chip-diff {
+    font-size: 9px; letter-spacing: 0.5px; opacity: 0.6; text-transform: uppercase;
+  }
+  .fr-bot-chip.diff-easy   { border-color: rgba(16,185,129,0.25); }
+  .fr-bot-chip.diff-medium { border-color: rgba(59,130,246,0.25); }
+  .fr-bot-chip.diff-hard   { border-color: rgba(239,68,68,0.3); }
+  .fr-bot-chip.diff-mcts   { border-color: rgba(139,92,246,0.5); color: #a78bfa; }
+  .fr-level-arrow { font-size: 13px; color: var(--text-muted); flex-shrink: 0; }
   .fr-name-row { display: flex; gap: 12px; align-items: center; }
 
   /* ── Bot indicator in scoreboard ─────────────── */
@@ -1055,6 +1108,16 @@
   <div class="home-title">ACQUIRE</div>
   <div class="home-subtitle">The classic board game, digitized</div>
   <div class="mode-cards">
+    <div class="mode-card mode-card-featured" onclick="goFinanceRoad()">
+      <div class="mode-card-icon">📈</div>
+      <div class="mode-card-title">Finance Road</div>
+      <div class="mode-card-desc">15 levels across 5 tiers — the same challenge for every player. How far can you go?</div>
+    </div>
+    <div class="mode-card mode-card-master" onclick="startQuickMaster()">
+      <div class="mode-card-icon">🧠</div>
+      <div class="mode-card-title">Quick Master</div>
+      <div class="mode-card-desc">You vs 3 MCTS bots — the hardest game available, no setup required</div>
+    </div>
     <div class="mode-card" onclick="goSolo()">
       <div class="mode-card-icon">🤖</div>
       <div class="mode-card-title">Solo</div>
@@ -1069,11 +1132,6 @@
       <div class="mode-card-icon">📖</div>
       <div class="mode-card-title">Rules</div>
       <div class="mode-card-desc">Complete guide to Acquire — strategy, mergers, and more</div>
-    </div>
-    <div class="mode-card" onclick="goFinanceRoad()">
-      <div class="mode-card-icon">📈</div>
-      <div class="mode-card-title">Finance Road</div>
-      <div class="mode-card-desc">5 tiers of increasingly skilled opponents — same challenge for everyone</div>
     </div>
     <div class="mode-card" onclick="openFeedbackModal()">
       <div class="mode-card-icon">💬</div>
@@ -1413,8 +1471,9 @@
 <!-- ═══ FINANCE ROAD ═══ -->
 <div id="financeRoad" class="screen">
   <div class="logo-title" style="font-size:36px;">Finance Road</div>
-  <div style="font-size:13px;color:var(--text-muted);text-align:center;max-width:440px;line-height:1.6;margin-top:-12px;">
-    Five tiers. The same opponents for every player. Beat a tier to unlock the next.
+  <div style="font-size:13px;color:var(--text-muted);text-align:center;max-width:500px;line-height:1.6;margin-top:-12px;">
+    15 levels across 5 tiers. Every player faces the same opponents — no luck in the bracket.<br>
+    The first level of any tier is always open. Beat it to unlock the next.
   </div>
   <div class="fr-name-row">
     <input type="text" id="frPlayerName" placeholder="Your name" maxlength="20"
@@ -1422,6 +1481,20 @@
   </div>
   <div class="fr-tiers" id="frTierList"></div>
   <button class="btn btn-secondary" style="width:auto;padding:10px 28px;" onclick="goHome()">← Back</button>
+</div>
+
+<!-- ═══ QUICK MASTER NAME MODAL ═══ -->
+<div id="quickMasterModal">
+  <div class="qm-card">
+    <h3>🧠 Quick Master</h3>
+    <p>You vs Rex, Vera &amp; Colt — all running MCTS AI. Good luck.</p>
+    <input type="text" id="qmName" placeholder="Your name" maxlength="20"
+      style="width:100%;text-align:center;" onkeydown="if(event.key==='Enter')confirmQuickMaster()" />
+    <div style="display:flex;gap:10px;width:100%">
+      <button class="btn btn-secondary btn-sm" style="flex:1" onclick="closeQuickMasterModal()">Cancel</button>
+      <button class="btn btn-sm" style="flex:1;background:#7c3aed;border-color:#7c3aed;" onclick="confirmQuickMaster()">Play</button>
+    </div>
+  </div>
 </div>
 
 <!-- ═══ GAME OVER OVERLAY ═══ -->
@@ -1622,53 +1695,53 @@ function getHumanTitle(name) {
 }
 
 /* ── Finance Road ─────────────────────────────── */
-// 5 tiers × 3 levels = 15 stages. Tier L1 is always unlocked (jump in anywhere).
+// 5 tiers × 3 levels = 15 stages. Tier L1 is always accessible (jump in anywhere).
 // Within a tier, beating L1 unlocks L2, beating L2 unlocks L3.
-// Tier 5 placeholder = all hard bots for now; will upgrade to MCTS when ready.
+// ELO values are chess-comparable (casual ~800, club ~1500, master ~2200, GM ~2500+).
 const FINANCE_ROAD_TIERS = [
   {
     name: 'Street Level',
-    desc: 'Learn the market. Opponents who make mistakes — but not always.',
+    desc: 'Learn the market',
     levels: [
-      { name: 'Warm-Up',     bots: [{ botName:'Aria', personality:'balanced',    difficulty:'easy'   }, { botName:'Rex',  personality:'focused',     difficulty:'easy'   }, { botName:'Nova', personality:'diversified', difficulty:'easy'   }] },
-      { name: 'Stepping Up', bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'easy'   }, { botName:'Colt', personality:'focused',     difficulty:'easy'   }] },
-      { name: 'Earning It',  bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'easy'   }] },
+      { name: 'Warm-Up',     elo: 600,  bots: [{ botName:'Aria', personality:'balanced',    difficulty:'easy'   }, { botName:'Rex',  personality:'focused',     difficulty:'easy'   }, { botName:'Nova', personality:'diversified', difficulty:'easy'   }] },
+      { name: 'Stepping Up', elo: 750,  bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'easy'   }, { botName:'Colt', personality:'focused',     difficulty:'easy'   }] },
+      { name: 'Earning It',  elo: 900,  bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'easy'   }] },
     ],
   },
   {
     name: 'The Circuit',
-    desc: 'Three confident traders who know what they want.',
+    desc: 'Confident traders',
     levels: [
-      { name: 'Foundations', bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
-      { name: 'Competition', bots: [{ botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
-      { name: 'The Floor',   bots: [{ botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
+      { name: 'Foundations', elo: 1050, bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
+      { name: 'Competition', elo: 1200, bots: [{ botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
+      { name: 'The Floor',   elo: 1350, bots: [{ botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
     ],
   },
   {
     name: 'The Exchange',
-    desc: 'Hard bots enter. No room for sloppy play.',
+    desc: 'No room for sloppy play',
     levels: [
-      { name: 'First Edge',  bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
-      { name: 'The Press',   bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
-      { name: 'High Water',  bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'medium' }] },
+      { name: 'First Edge',  elo: 1500, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
+      { name: 'The Press',   elo: 1650, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
+      { name: 'High Water',  elo: 1800, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'medium' }] },
     ],
   },
   {
     name: 'The Summit',
-    desc: 'Full-strength opponents pushing every edge.',
+    desc: 'Pushing every edge',
     levels: [
-      { name: 'The Climb',   bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
-      { name: 'Thin Air',    bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'hard'   }] },
-      { name: 'The Peak',    bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Colt', personality:'focused',     difficulty:'hard'   }] },
+      { name: 'The Climb',   elo: 1950, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
+      { name: 'Thin Air',    elo: 2100, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'hard'   }] },
+      { name: 'The Peak',    elo: 2250, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Colt', personality:'focused',     difficulty:'hard'   }] },
     ],
   },
   {
     name: 'The Trust',
-    desc: 'AI-powered opponents. Each level adds another MCTS bot to the table.',
+    desc: 'AI-powered opponents',
     levels: [
-      { name: 'Initiation',       bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'hard'   }, { botName:'Colt', personality:'focused', difficulty:'hard'   }] },
-      { name: 'The Inner Circle', bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'mcts'   }, { botName:'Colt', personality:'focused', difficulty:'hard'   }] },
-      { name: 'Godmode',          bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'mcts'   }, { botName:'Colt', personality:'focused', difficulty:'mcts'   }] },
+      { name: 'Initiation',       elo: 2450, bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'hard'   }, { botName:'Colt', personality:'focused', difficulty:'hard'   }] },
+      { name: 'The Inner Circle', elo: 2650, bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'mcts'   }, { botName:'Colt', personality:'focused', difficulty:'hard'   }] },
+      { name: 'Godmode',          elo: 2900, bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'mcts'   }, { botName:'Colt', personality:'focused', difficulty:'mcts'   }] },
     ],
   },
 ];
@@ -1702,37 +1775,56 @@ function goFinanceRoad() {
 }
 
 function renderFinanceRoad() {
-  const progress = getFRProgress();
+  const progress  = getFRProgress();
   const container = document.getElementById('frTierList');
-  const DL = { easy: 'Easy', medium: 'Mid', hard: 'Hard' };
+  const DIFF_LABEL = { easy: 'Easy', medium: 'Mid', hard: 'Hard', mcts: 'MCTS' };
+
   container.innerHTML = FINANCE_ROAD_TIERS.map((tier, ti) => {
-    const tp = progress.tiers[ti] || { beaten: [], unlocked: 0 };
+    const tp        = progress.tiers[ti] || { beaten: [], unlocked: 0 };
     const beatenSet = new Set(tp.beaten);
-    const tierBeaten = tp.beaten.length === 3;
-    const levelBtns = tier.levels.map((lv, li) => {
+    const tierDone  = tp.beaten.length === 3;
+
+    const levelRows = tier.levels.map((lv, li) => {
       const isBeaten   = beatenSet.has(li);
-      const isUnlocked = li <= tp.unlocked;
-      let cls = 'fr-level-btn';
-      let icon = '';
-      if (isBeaten)         { cls += ' beaten';  icon = '✓ '; }
-      else if (isUnlocked)  { cls += ' current'; icon = '▶ '; }
-      else                  { cls += ' locked';  icon = '🔒 '; }
-      const botLine = lv.bots.map(b => `${b.botName[0]}:${DL[b.difficulty][0]}`).join(' ');
+      const isUnlocked = li === 0 || li <= tp.unlocked; // L1 always open
+      let rowCls = 'fr-level-row';
+      let statusIcon = '';
+      if (isBeaten)        { rowCls += ' beaten';  statusIcon = '✓'; }
+      else if (isUnlocked) { rowCls += ' current'; statusIcon = '▶'; }
+      else                 { rowCls += ' locked';  statusIcon = '🔒'; }
+
       const clickAttr = isUnlocked ? `onclick="startFinanceRoadLevel(${ti},${li})"` : '';
-      return `<div class="${cls}" ${clickAttr}>
-        <span style="font-size:11px;font-weight:600;">${icon}L${li+1}</span>
-        <span style="font-size:10px;color:var(--text-muted);">${lv.name}</span>
-        <span style="font-size:9px;color:var(--text-muted);opacity:0.7">${botLine}</span>
+
+      const botChips = lv.bots.map(b => {
+        const diffCls = `diff-${b.difficulty}`;
+        return `<div class="fr-bot-chip ${diffCls}">
+          <span>${b.botName}</span>
+          <span class="chip-diff">${DIFF_LABEL[b.difficulty]}</span>
+        </div>`;
+      }).join('');
+
+      const arrow = isUnlocked ? `<span class="fr-level-arrow">›</span>` : '';
+
+      return `<div class="${rowCls}" ${clickAttr}>
+        <span class="fr-level-status">${statusIcon}</span>
+        <div class="fr-level-info">
+          <div class="fr-level-name-row">
+            <span class="fr-level-name">${lv.name}</span>
+            <span class="fr-level-elo">${lv.elo} ELO</span>
+          </div>
+          <div class="fr-bots">${botChips}</div>
+        </div>
+        ${arrow}
       </div>`;
     }).join('');
-    return `<div class="fr-tier${tierBeaten ? ' fr-tier-beaten' : ''}">
-      <div class="fr-tier-header">
-        <span class="fr-tier-num">Tier ${ti+1}</span>
-        ${tierBeaten ? '<span class="fr-tier-status beaten">✓ Complete</span>' : ''}
+
+    return `<div class="fr-tier-section">
+      <div class="fr-tier-heading">
+        <span class="fr-tier-badge${tierDone ? ' done' : ''}">TIER ${ti + 1}${tierDone ? ' ✓' : ''}</span>
+        <span class="fr-tier-title">${tier.name}</span>
+        <span class="fr-tier-desc">${tier.desc}</span>
       </div>
-      <div class="fr-tier-name">${tier.name}</div>
-      <div class="fr-tier-flavor">${tier.desc}</div>
-      <div class="fr-tier-levels">${levelBtns}</div>
+      <div class="fr-levels">${levelRows}</div>
     </div>`;
   }).join('');
 }
@@ -1755,6 +1847,50 @@ function startFinanceRoadLevel(tierIdx, levelIdx) {
     botCount: 3,
     quickstart: true,
     botConfigs: level.bots,
+    authToken,
+  }, (res) => {
+    if (res.error) { showError(res.error); return; }
+    saveSession(res.code, name, res.token);
+    document.getElementById('gameOverOverlay').style.display = 'none';
+    showScreen('game');
+    startTurnClock();
+  });
+}
+
+/* ── Quick Master ──────────────────────────────── */
+function startQuickMaster() {
+  const name = (currentUser && currentUser.username) || myName;
+  if (name) {
+    _launchQuickMaster(name);
+  } else {
+    const el = document.getElementById('qmName');
+    if (el) el.value = '';
+    document.getElementById('quickMasterModal').classList.add('open');
+    setTimeout(() => el && el.focus(), 80);
+  }
+}
+function confirmQuickMaster() {
+  const el = document.getElementById('qmName');
+  const name = el && el.value.trim();
+  if (!name) { el && el.focus(); return; }
+  closeQuickMasterModal();
+  _launchQuickMaster(name);
+}
+function closeQuickMasterModal() {
+  document.getElementById('quickMasterModal').classList.remove('open');
+}
+function _launchQuickMaster(name) {
+  myName   = name;
+  isSoloGame = true;
+  socket.emit('createSoloGame', {
+    name,
+    botCount: 3,
+    quickstart: true,
+    botConfigs: [
+      { botName: 'Rex',  personality: 'focused',  difficulty: 'mcts' },
+      { botName: 'Vera', personality: 'balanced',  difficulty: 'mcts' },
+      { botName: 'Colt', personality: 'focused',   difficulty: 'mcts' },
+    ],
     authToken,
   }, (res) => {
     if (res.error) { showError(res.error); return; }
