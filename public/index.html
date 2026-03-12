@@ -1861,7 +1861,8 @@ function _launchFinanceRoadLevel(tierIdx, levelIdx, name) {
   isSoloGame = true;
 
   const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
-  history.pushState({}, '', `${base}/finance-road/${tierIdx + 1}/${levelIdx + 1}`);
+  const levelPath = `${base}/finance-road/${tierIdx + 1}/${levelIdx + 1}`;
+  history.pushState({}, '', levelPath);
 
   socket.emit('createSoloGame', {
     name,
@@ -1872,6 +1873,7 @@ function _launchFinanceRoadLevel(tierIdx, levelIdx, name) {
   }, (res) => {
     if (res.error) { showError(res.error); return; }
     saveSession(res.code, name, res.token);
+    saveLastSolo(res.code, levelPath);
     document.getElementById('gameOverOverlay').style.display = 'none';
     showScreen('game');
     startTurnClock();
@@ -1913,7 +1915,8 @@ function _launchQuickMaster(name) {
   myName   = name;
   isSoloGame = true;
   const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
-  history.pushState({}, '', `${base}/quick-master`);
+  const qmPath = `${base}/quick-master`;
+  history.pushState({}, '', qmPath);
   socket.emit('createSoloGame', {
     name,
     botCount: 3,
@@ -1927,6 +1930,7 @@ function _launchQuickMaster(name) {
   }, (res) => {
     if (res.error) { showError(res.error); return; }
     saveSession(res.code, name, res.token);
+    saveLastSolo(res.code, qmPath);
     document.getElementById('gameOverOverlay').style.display = 'none';
     showScreen('game');
     startTurnClock();
@@ -2148,6 +2152,12 @@ function saveSession(code, name, token) {
   localStorage.setItem('acquire_token_' + code, token);
   localStorage.setItem('acquire_name_' + code, name);
 }
+function saveLastSolo(code, resumePath) {
+  localStorage.setItem('acquire_last_solo', JSON.stringify({ code, resumePath }));
+}
+function clearLastSolo() {
+  localStorage.removeItem('acquire_last_solo');
+}
 
 function clearSession(code) {
   localStorage.removeItem('acquire_token_' + code);
@@ -2181,16 +2191,38 @@ function attemptReconnect(code, name, token) {
 (function handleUrlOnLoad() {
   const path = window.location.pathname;
 
-  // /finance-road (and /finance-road/T/L level URLs)
+  // /finance-road/T/L and /quick-master — try to resume an active solo game first
+  const isSoloGameUrl = path.match(/\/finance-road\/\d+\/\d+$/) || path.match(/\/quick-master$/);
+  if (isSoloGameUrl) {
+    const saved = (() => { try { return JSON.parse(localStorage.getItem('acquire_last_solo')); } catch { return null; } })();
+    if (saved && saved.code) {
+      const token = localStorage.getItem('acquire_token_' + saved.code);
+      const name  = localStorage.getItem('acquire_name_'  + saved.code);
+      if (token && name) {
+        myName = name;
+        isSoloGame = true;
+        socket.emit('rejoinRoom', { code: saved.code, token, name }, (res) => {
+          if (!res.error && res.inGame) {
+            showScreen('game');
+            startTurnClock();
+          } else {
+            clearLastSolo();
+            renderFinanceRoad();
+            showScreen('financeRoad');
+          }
+        });
+        return;
+      }
+    }
+    // No saved session — show Finance Road list (or home for quick-master)
+    if (path.match(/\/quick-master$/)) { showScreen('newLanding'); loadRecentGames(); }
+    else { renderFinanceRoad(); showScreen('financeRoad'); }
+    return;
+  }
+  // /finance-road (base path — no level specified)
   if (path.startsWith('/finance-road') || path.startsWith('/beta/finance-road')) {
     renderFinanceRoad();
     showScreen('financeRoad');
-    return;
-  }
-  // /quick-master — treat as home (can't restore a live game on reload)
-  if (path === '/quick-master' || path === '/beta/quick-master') {
-    showScreen('newLanding');
-    loadRecentGames();
     return;
   }
   // /solo
@@ -2814,6 +2846,7 @@ function renderConcedeBanner() {
 
 /* ── Game Over ─────────────────────────────────── */
 function renderGameOver() {
+  clearLastSolo(); // game is over — don't resume it on reload
   document.getElementById('gameOverOverlay').style.display = 'flex';
   const places = ['🥇','🥈','🥉','4th','5th','6th'];
   document.getElementById('standingsDisplay').innerHTML = (gameState.standings||[]).map((s,i)=>
