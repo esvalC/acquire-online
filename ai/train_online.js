@@ -30,7 +30,7 @@ const TIME_LIMIT  = getArg('--time-limit') ? parseInt(getArg('--time-limit')) * 
 const STATS_FILE  = getArg('--stats') || null;
 
 const WEIGHTS_PATH = path.join(__dirname, 'models', 'master_weights.json');
-const ARCH = [149, 256, 128, 64, 1];
+const ARCH = [150, 256, 128, 64, 1]; // 150 = 149 base + 1 tile bag count
 
 const BOTS = [
   { name: 'Aria',  personality: 'balanced',    difficulty: 'hard' },
@@ -182,7 +182,8 @@ function adamStep(weights, adamState, gradW, gradB, t) {
 }
 
 /* ── State encoder (matches masterBot.js exactly) ────────────── */
-const INPUT_DIM = 149;
+const INPUT_DIM = 150; // 108 board + 35 chains + 1 myCash + 4 oppCash + 1 bagCount
+const BAG_TOTAL = 102; // tiles in bag at game start (108 - 6 quickstart)
 function encodeFlat(game, playerIdx) {
   const player = game.players[playerIdx];
   const CHAIN_IDX = {};
@@ -209,6 +210,7 @@ function encodeFlat(game, playerIdx) {
   vec[vi++] = player.cash / 6000.0;
   const opps = game.players.filter((_, i) => i !== playerIdx);
   for (let k = 0; k < 4; k++) vec[vi++] = (opps[k] ? opps[k].cash / 6000.0 : 0);
+  vec[vi++] = (game.tileBag ? game.tileBag.length : 0) / BAG_TOTAL; // game phase signal
   return vec;
 }
 
@@ -256,11 +258,17 @@ function runGame(bots) {
   }
 
   if (!game.standings) return null;
-  const winner = game.standings[0].name;
+
+  // Ranking loss: normalize each player's final cash across all players.
+  // Gives continuous signal (0.0–1.0) instead of binary win/lose.
+  // A player with 40% of total cash gets outcome=0.4 — much richer than 0 or 1.
+  const totalCash = game.standings.reduce((s, p) => s + p.cash, 0) || 1;
+  const outcomeByName = {};
+  for (const p of game.standings) outcomeByName[p.name] = p.cash / totalCash;
 
   return pending.map(r => ({
     state:   r.state,
-    outcome: r.name === winner ? 1 : 0,
+    outcome: outcomeByName[r.name] ?? 0.2, // fallback to equal share
   }));
 }
 

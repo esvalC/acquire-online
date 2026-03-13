@@ -22,7 +22,8 @@ const fs   = require('fs');
 const engine = require('../gameEngine');
 
 const WEIGHTS_PATH = path.join(__dirname, 'models', 'master_weights.json');
-const INPUT_DIM    = 149;
+const INPUT_DIM    = 150; // 108 board + 35 chains + 1 myCash + 4 oppCash + 1 bagCount
+const BAG_TOTAL    = 102;
 
 /* ── Weight loading (sync, done once) ───────────────────────── */
 let _weights    = null;
@@ -95,8 +96,9 @@ function encodeState(game, playerIdx) {
   return {
     board,
     chains,
-    myCash:  player.cash / 6000,
-    oppCash: game.players.filter((_, i) => i !== playerIdx).map(p => p.cash / 6000),
+    myCash:    player.cash / 6000,
+    oppCash:   game.players.filter((_, i) => i !== playerIdx).map(p => p.cash / 6000),
+    bagCount:  (game.tileBag ? game.tileBag.length : 0) / BAG_TOTAL,
   };
 }
 
@@ -112,8 +114,9 @@ function flattenState(s) {
     vec[i++] = c[4];
   }
   vec[i++] = s.myCash;
-  const opp = (s.oppCash.concat([0,0,0,0,0])).slice(0, 5);
+  const opp = (s.oppCash.concat([0,0,0,0,0])).slice(0, 4);
   for (const v of opp) vec[i++] = v;
+  vec[i++] = s.bagCount ?? 1.0; // 1.0 = full bag (early game), 0.0 = empty (late game)
   return vec;
 }
 
