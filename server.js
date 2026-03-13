@@ -160,11 +160,11 @@ app.post('/api/login', async (req, res) => {
 });
 
 // Get current user profile (requires auth)
-// is_admin is intentionally stripped — never expose admin status to the client
 app.get('/api/me', requireAuth, (req, res) => {
   const raw = db.findById(req.userId);
   if (!raw) return res.status(404).json({ error: 'User not found' });
-  const { is_admin, ...user } = raw; // eslint-disable-line no-unused-vars
+  const { is_admin, ...user } = raw;
+  user.role = is_admin ? 'admin' : 'member';
   // Add masked phone for display — never expose raw or encrypted value
   if (user.phone_encrypted) {
     try { user.phone_masked = maskPhone(decryptPhone(user.phone_encrypted)); }
