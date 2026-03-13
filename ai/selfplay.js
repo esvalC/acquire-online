@@ -185,7 +185,7 @@ function updateElo(ratings, standings) {
  * and print win-rate statistics. Exports training data if exportFile is set.
  * If opts.statsFile is set, writes live JSON stats every 10 games for the dashboard.
  */
-function runBenchmark(totalGames, opts = {}) {
+async function runBenchmark(totalGames, opts = {}) {
   const wins    = {};
   const podiums = {};
   const cashes  = {};
@@ -273,11 +273,15 @@ function runBenchmark(totalGames, opts = {}) {
       cashes[name].push(cash);
     }
 
-    // Write training records
+    // Write training records — respect backpressure to avoid OOM
     if (exportStream && result.records) {
       for (const rec of result.records) {
-        exportStream.write(JSON.stringify(rec) + '\n');
+        const ok = exportStream.write(JSON.stringify(rec) + '\n');
         exportedRecords++;
+        if (!ok) {
+          // Buffer full — wait for drain before writing more
+          await new Promise(resolve => exportStream.once('drain', resolve));
+        }
       }
     }
 
@@ -348,4 +352,5 @@ if (!quiet) {
   console.log(`Bots: ${BOTS.map(b => `${b.name}(${b.difficulty})`).join(', ')}\n`);
 }
 
-runBenchmark(effectiveGames, { quiet, timeLimitSecs, exportFile, statsFile });
+runBenchmark(effectiveGames, { quiet, timeLimitSecs, exportFile, statsFile })
+  .catch(err => { console.error('Fatal:', err); process.exit(1); });
