@@ -252,7 +252,28 @@ function decideBotMerger(game, botIdx, difficulty) {
     }
   }
 
-  return { sell: defunctShares - trade, trade };
+  // "Hold for re-founding" strategy: defunct chains can be re-founded later.
+  // If you lead in the defunct chain and the game isn't almost over, hold a few
+  // shares. When the chain gets re-founded, your shares are worth full price again
+  // and you already lead — a huge positional advantage for free.
+  //
+  // Only worth it when:
+  //   a) not endgame (enough tiles left for a re-founding to realistically happen)
+  //   b) we lead in defunct shares (we'll lead when re-founded too)
+  //   c) the defunct chain was reasonably valuable (not tower/luxor in late game)
+  //   d) hard difficulty (this is a nuanced mid-game play)
+  let hold = 0;
+  const endgame = safeChainCount(game) >= 2;
+  if (difficulty === 'hard' && !endgame && (game.tileBag?.length ?? 0) > 40) {
+    const maxOppDefunct = maxOpponentShares(game, defunctChain, botIdx);
+    const remainingAfterTrade = defunctShares - trade;
+    if (remainingAfterTrade >= 2 && (defunctShares > maxOppDefunct)) {
+      // Hold 2 shares — enough to stay relevant when re-founded without over-committing
+      hold = Math.min(2, remainingAfterTrade);
+    }
+  }
+
+  return { sell: defunctShares - trade - hold, trade };
 }
 
 /* ── Early game detection ────────────────────────────────────── */
