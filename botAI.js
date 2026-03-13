@@ -201,39 +201,90 @@ function decideBotMerger(game, botIdx, difficulty) {
   const defunctPrice  = engine.stockPrice(defunctChain, defunctSize);
   const survivorRoom  = 25 - issuedShares(game, pm.survivor);
 
+  const mySurvivorShares  = player.stocks[pm.survivor] || 0;
+  const maxOppSurvivor    = maxOpponentShares(game, pm.survivor, botIdx);
+
   let trade = 0;
-  if (survivorPrice >= defunctPrice && survivorRoom > 0) {
+  if (survivorRoom > 0) {
     const maxTradeByDefunct  = Math.floor(defunctShares / 2) * 2;
     const maxTradeBySurvivor = survivorRoom * 2;
-    trade = Math.min(maxTradeByDefunct, maxTradeBySurvivor);
+    const maxPossibleTrade   = Math.min(maxTradeByDefunct, maxTradeBySurvivor);
+
+    if (maxPossibleTrade > 0) {
+      // World-champion insight (WBC 2023 final): trade defunct shares into the
+      // dominant chain to secure majority. Trading is especially valuable when:
+      //   a) trading gives us the lead (or tie) in the survivor chain, OR
+      //   b) survivor is more valuable than defunct chain
+      const sharesFromFullTrade = Math.floor(maxPossibleTrade / 2);
+      const wouldLead  = (mySurvivorShares + sharesFromFullTrade) > maxOppSurvivor;
+      const wouldTie   = (mySurvivorShares + sharesFromFullTrade) >= maxOppSurvivor;
+      const valueRatio = survivorPrice / Math.max(defunctPrice, 1);
+
+      if (wouldLead || wouldTie) {
+        // Trade enough to secure majority/tie — this is the top priority
+        trade = maxPossibleTrade;
+      } else if (valueRatio >= 1.0) {
+        // Survivor is at least as valuable — trade everything we can
+        trade = maxPossibleTrade;
+      } else if (valueRatio >= 0.7) {
+        // Survivor is somewhat cheaper but survivor chain dominance matters
+        trade = Math.floor(maxPossibleTrade / 2) * 2; // trade half
+      }
+      // Otherwise sell everything (defunct stock is more valuable than survivor)
+    }
   }
 
   return { sell: defunctShares - trade, trade };
 }
 
+/* ── Early game detection ────────────────────────────────────── */
+// tileBag starts at 108 tiles. Early game = most tiles still unplayed.
+function isEarlyGame(game) {
+  return (game.tileBag?.length ?? 0) > 80;
+}
+
 /* ── Chain desirability score for stock buying ───────────────── */
-function chainDesirability(c, botIdx, game, traits, mult) {
+// Incorporates two world-champion insights:
+//   1. "I like ties" (Mike Topczewski, 2025 WSBG): deliberately buying to
+//      TIE the leader is often better than racing for sole majority.
+//      A co-investor wants the merger too — cooperation beats competition.
+//   2. "Policing" (WBC 2023 strategy): buying 1 share into an opponent's
+//      chain to deny them uncontested cheap majority has real defensive value.
+function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
   const maxOpp = game.players.filter((_, i) => i !== botIdx)
     .reduce((m, p) => Math.max(m, p.stocks[c.chain] || 0), 0);
   const isLeading  = c.myShares > maxOpp;
+  const isTied     = c.myShares === maxOpp && maxOpp > 0;
   const couldLead  = c.myShares > 0 && (c.myShares + 3) > maxOpp;
+  const wouldTie   = (c.myShares + 1) === maxOpp && maxOpp > 0;
 
   let score = 0;
 
   // Base position value
-  if (isLeading)      score += 10;
-  else if (couldLead) score += 5;
+  if (isLeading)       score += 10;
+  else if (isTied)     score += 8;  // tie is almost as good as leading
+  else if (couldLead)  score += 5;
   else if (c.myShares > 0) score += 2;
 
+  // "I like ties" (Mike Topczewski, 2025 WSBG): small bonus for buying into
+  // a tie — a co-investor hunts the merge tile with you instead of against you.
+  if (wouldTie && difficulty === 'hard') score += 1.0;
+
+  // "Policing" (hard only): small incentive to buy 1 into a chain where an
+  // opponent has 2+ uncontested shares — denies free majority.
+  // Only applies when we have no shares (pure defensive play).
+  if (c.myShares === 0 && maxOpp >= 2 && difficulty === 'hard') score += 0.7;
+
   // chainLoyalty: amplifies value of chains already invested in
-  // high loyalty → really want to stay in own chains
-  // low loyalty  → less attached, open to switching
-  const posBonus = isLeading ? 4 : couldLead ? 2 : c.myShares > 0 ? 0.5 : 0;
+  const posBonus = isLeading ? 4 : (isTied || couldLead) ? 2 : c.myShares > 0 ? 0.5 : 0;
   score += traits.chainLoyalty * mult * posBonus;
 
   // riskAppetite: positive prefers expensive chains, negative prefers cheap ones
-  // prices roughly 200–1200; normalize to ~0–1.5 range
   score += traits.riskAppetite * mult * (c.price / 800);
+
+  // Early-game liquidity preference: small chains are cheap and keep you liquid
+  // (Mike: "I generally try to get a cheap hotel on the board early")
+  if (isEarlyGame(game) && c.price <= 400) score += 1.0;
 
   // Near-safe-size bonus (always applies)
   if (c.size >= 8 && c.size < 11) score += 1.5;
@@ -304,8 +355,8 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
 
   // Medium + Hard: sort by trait-adjusted desirability score (descending)
   candidates.sort((a, b) =>
-    chainDesirability(b, botIdx, game, traits, mult) -
-    chainDesirability(a, botIdx, game, traits, mult)
+    chainDesirability(b, botIdx, game, traits, mult, difficulty) -
+    chainDesirability(a, botIdx, game, traits, mult, difficulty)
   );
 
   // Hard endgame: double down on chains we lead — don't spread thin
