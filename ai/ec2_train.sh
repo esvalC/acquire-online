@@ -43,7 +43,7 @@
 #
 set -e
 
-TIME_LIMIT_HOURS=5
+TIME_LIMIT_HOURS=10
 TIME_LIMIT_SECS=$((TIME_LIMIT_HOURS * 3600))
 S3_BUCKET="${S3_BUCKET:-acquire-training-data}"
 REPO_URL="${REPO_URL:-https://github.com/esvalC/acquire-online.git}"
