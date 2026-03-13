@@ -3577,6 +3577,10 @@ function closeReplay() {
   replaySnapshots = [];
   replayIdx = 0;
   currentReplaySessionId = null;
+  const base = window.location.pathname.startsWith('/beta') ? '/beta' : '/';
+  history.pushState({}, '', base);
+  showScreen('newLanding');
+  loadRecentGames();
 }
 
 function shareReplay() {
