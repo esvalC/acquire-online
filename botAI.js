@@ -332,10 +332,15 @@ function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
   // a tie — a co-investor hunts the merge tile with you instead of against you.
   if (wouldTie && difficulty === 'hard') score += 1.0;
 
-  // "Policing" (hard only): small incentive to buy 1 into a chain where an
-  // opponent has 2+ uncontested shares — denies free majority.
-  // Only applies when we have no shares (pure defensive play).
-  if (c.myShares === 0 && maxOpp >= 2 && difficulty === 'hard') score += 0.7;
+  // "Policing" (hard only): incentive to buy into a chain where an opponent
+  // is building an uncontested majority. Scales with dominance — the more
+  // shares they have with nobody contesting, the more urgent the response.
+  //   opponent 2–3 shares: minor interest
+  //   opponent 4–5 shares: moderate urgency (~matches "could lead" value)
+  //   opponent 6+ shares: high urgency — they're dominating, must respond
+  if (c.myShares === 0 && maxOpp >= 2 && difficulty === 'hard') {
+    score += Math.min(0.5 + maxOpp * 0.5, 5.0);
+  }
 
   // chainLoyalty: amplifies value of chains already invested in
   const posBonus = isLeading ? 4 : (isTied || couldLead) ? 2 : c.myShares > 0 ? 0.5 : 0;
@@ -438,6 +443,18 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
     chainDesirability(b, botIdx, game, traits, mult, difficulty) -
     chainDesirability(a, botIdx, game, traits, mult, difficulty)
   );
+
+  // Hard bots: force-contest any chain where an opponent has 4+ shares
+  // and nobody else (including us) has entered yet. Without this, focused
+  // bots never break from their main chain even when an opponent is running away.
+  if (difficulty === 'hard' && bought < MAX_BUY) {
+    for (const c of candidates) {
+      if (bought >= MAX_BUY) break;
+      if (c.myShares > 0) continue; // already in this chain
+      const oppMax = maxOpponentShares(game, c.chain, botIdx);
+      if (oppMax >= 4) tryBuy(c.chain); // force at least 1 share in
+    }
+  }
 
   // Hard endgame: double down on chains we lead — don't spread thin
   if (endgame && personality !== 'diversified') {
