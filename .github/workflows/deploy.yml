@@ -1,18 +1,30 @@
-name: Deploy to AWS
+name: Deploy
 
 on:
+  # Every push to main → beta only (staging)
   push:
     branches: [main]
 
-# Required for OIDC token request
+  # Manual trigger → production (run from GitHub Actions tab)
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Deploy target'
+        required: true
+        default: 'production'
+        type: choice
+        options: [production, beta]
+
 permissions:
   id-token: write
   contents: read
 
 jobs:
-  deploy:
-    name: Deploy to EC2
+  # ── Auto: push to main → beta ─────────────────────────────────
+  deploy-beta:
+    name: Deploy → Beta
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
 
     steps:
       - name: Configure AWS credentials via OIDC
@@ -21,46 +33,110 @@ jobs:
           role-to-assume: arn:aws:iam::654654349405:role/acquire-online-github-actions-role
           aws-region: us-east-1
 
-      - name: Deploy via SSM
+      - name: Deploy to beta (acquire-online, port 3001)
         run: |
           COMMAND_ID=$(aws ssm send-command \
             --instance-ids i-0bbc6c13fd3dfe6ab \
             --document-name "AWS-RunShellScript" \
-            --comment "Deploy from GitHub Actions - ${{ github.sha }}" \
+            --comment "Beta deploy - ${{ github.sha }}" \
             --parameters 'commands=[
               "sudo -u ubuntu GIT_SSH_COMMAND=\"ssh -i /home/ubuntu/.ssh/deploy_key\" git -C /home/ubuntu/acquire-online pull origin main",
               "sudo -u ubuntu npm --prefix /home/ubuntu/acquire-online install --omit=dev",
               "sudo -u ubuntu pm2 restart acquire-online",
-              "git -C /home/ubuntu/acquire-main -c safe.directory=/home/ubuntu/acquire-main pull origin main",
-              "npm --prefix /home/ubuntu/acquire-main install --omit=dev",
-              "pm2 restart acquire-main",
-              "echo DEPLOY_DONE"
+              "echo BETA_DEPLOY_DONE"
             ]' \
-            --query "Command.CommandId" \
-            --output text)
+            --query "Command.CommandId" --output text)
 
-          echo "SSM Command ID: $COMMAND_ID"
-
-          # Wait for the command to finish (up to 2 min)
           aws ssm wait command-executed \
             --command-id "$COMMAND_ID" \
             --instance-id i-0bbc6c13fd3dfe6ab
 
-          # Print the output
           aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
             --instance-id i-0bbc6c13fd3dfe6ab \
-            --query "StandardOutputContent" \
-            --output text
+            --query "StandardOutputContent" --output text
 
-          # Fail the workflow if the command failed
           STATUS=$(aws ssm get-command-invocation \
             --command-id "$COMMAND_ID" \
             --instance-id i-0bbc6c13fd3dfe6ab \
-            --query "Status" \
-            --output text)
+            --query "Status" --output text)
+          [ "$STATUS" = "Success" ] || exit 1
 
-          if [ "$STATUS" != "Success" ]; then
-            echo "Deploy failed with status: $STATUS"
-            exit 1
-          fi
+  # ── Manual: promote to production ─────────────────────────────
+  deploy-production:
+    name: Deploy → Production
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'production'
+
+    steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::654654349405:role/acquire-online-github-actions-role
+          aws-region: us-east-1
+
+      - name: Deploy to production (acquire-main, port 3000)
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids i-0bbc6c13fd3dfe6ab \
+            --document-name "AWS-RunShellScript" \
+            --comment "Production deploy - ${{ github.sha }}" \
+            --parameters 'commands=[
+              "git -C /home/ubuntu/acquire-main -c safe.directory=/home/ubuntu/acquire-main pull origin main",
+              "npm --prefix /home/ubuntu/acquire-main install --omit=dev",
+              "pm2 restart acquire-main",
+              "echo PROD_DEPLOY_DONE"
+            ]' \
+            --query "Command.CommandId" --output text)
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id i-0bbc6c13fd3dfe6ab
+
+          aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id i-0bbc6c13fd3dfe6ab \
+            --query "StandardOutputContent" --output text
+
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id i-0bbc6c13fd3dfe6ab \
+            --query "Status" --output text)
+          [ "$STATUS" = "Success" ] || exit 1
+
+  # ── Manual: deploy only beta via workflow_dispatch ─────────────
+  deploy-beta-manual:
+    name: Deploy → Beta (manual)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' && github.event.inputs.target == 'beta'
+
+    steps:
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::654654349405:role/acquire-online-github-actions-role
+          aws-region: us-east-1
+
+      - name: Deploy to beta (acquire-online, port 3001)
+        run: |
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids i-0bbc6c13fd3dfe6ab \
+            --document-name "AWS-RunShellScript" \
+            --comment "Beta manual deploy - ${{ github.sha }}" \
+            --parameters 'commands=[
+              "sudo -u ubuntu GIT_SSH_COMMAND=\"ssh -i /home/ubuntu/.ssh/deploy_key\" git -C /home/ubuntu/acquire-online pull origin main",
+              "sudo -u ubuntu npm --prefix /home/ubuntu/acquire-online install --omit=dev",
+              "sudo -u ubuntu pm2 restart acquire-online",
+              "echo BETA_DEPLOY_DONE"
+            ]' \
+            --query "Command.CommandId" --output text)
+
+          aws ssm wait command-executed \
+            --command-id "$COMMAND_ID" \
+            --instance-id i-0bbc6c13fd3dfe6ab
+
+          STATUS=$(aws ssm get-command-invocation \
+            --command-id "$COMMAND_ID" \
+            --instance-id i-0bbc6c13fd3dfe6ab \
+            --query "Status" --output text)
+          [ "$STATUS" = "Success" ] || exit 1
