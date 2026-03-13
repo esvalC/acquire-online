@@ -61,12 +61,24 @@ echo "  S3: s3://$S3_BUCKET/"
 echo "=============================================="
 
 # ── Install dependencies (EC2 Amazon Linux / Ubuntu) ──────────
-if ! command -v node &>/dev/null; then
-  echo "[setup] Installing Node.js..."
-  if command -v apt-get &>/dev/null; then
+if command -v apt-get &>/dev/null; then
+  # Ubuntu
+  if ! command -v node &>/dev/null; then
+    echo "[setup] Installing Node.js (Ubuntu)..."
     curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
     sudo apt-get install -y nodejs
-  else
+  fi
+  if ! command -v git &>/dev/null; then
+    sudo apt-get install -y git
+  fi
+else
+  # Amazon Linux / RHEL
+  if ! command -v git &>/dev/null; then
+    echo "[setup] Installing git..."
+    sudo yum install -y git
+  fi
+  if ! command -v node &>/dev/null; then
+    echo "[setup] Installing Node.js (Amazon Linux)..."
     curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
     sudo yum install -y nodejs
   fi
