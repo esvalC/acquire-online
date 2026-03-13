@@ -134,6 +134,11 @@ function runGame(bots, opts = {}) {
         if (stateBefore) {
           pendingRecords.push({ playerIdx: i, playerName: gp.name, state: stateBefore });
         }
+        // In selfplay bots don't call declareGameEnd, so we trigger it here
+        // when conditions are met. No-op if conditions aren't met.
+        if (game.phase !== 'gameOver') {
+          engine.declareGameEnd(game, game.currentPlayerIdx);
+        }
         break;
       }
     }
