@@ -354,6 +354,36 @@ function decideBotAction(game, botIdx, personality, difficulty, botName) {
   const traits = BOT_TRAITS[botName] || { mergerSeeking: 0, riskAppetite: 0, chainLoyalty: 0 };
   const mult   = DIFF_MULT[difficulty] || 1.0;
 
+  // Master mode: neural network value function (async — schedules action then returns)
+  if (difficulty === 'master') {
+    const master = require('./ai/masterBot');
+    // Master bot is async; we schedule it and return false to keep the turn alive.
+    // The server's bot scheduler calls decideBotAction again after a short delay,
+    // so we store the in-flight promise on the game object and resolve on next call.
+    if (!game._masterPending) {
+      game._masterPending = true;
+      master.decideMasterAction(game, botIdx).then(action => {
+        game._masterAction = action;
+        game._masterPending = false;
+      }).catch(() => {
+        game._masterAction = null;
+        game._masterPending = false;
+      });
+      return false; // not done yet
+    }
+    if (game._masterPending) return false; // still computing
+    const action = game._masterAction;
+    game._masterAction   = null;
+    game._masterPending  = false;
+    if (action) {
+      const mcts = require('./ai/mcts'); // reuse applyAction
+      mcts.applyAction(game, botIdx, action);
+      return true;
+    }
+    // Master deferred or model unavailable — fall through to hard heuristic
+    difficulty = 'hard';
+  }
+
   // MCTS mode: use Monte Carlo for tile/merger decisions; heuristic for the rest
   if (difficulty === 'mcts') {
     const mcts   = require('./ai/mcts');

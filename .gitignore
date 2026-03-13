@@ -22,3 +22,8 @@ pids/
 dist/
 build/
 data/
+
+# AI training data and models (large files)
+ai/data/
+ai/models/*.onnx
+ai/models/*.pt
