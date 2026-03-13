@@ -2234,9 +2234,16 @@ function attemptReconnect(code, name, token) {
         return;
       }
     }
-    // No saved session — show Finance Road list (or home for quick-master)
-    if (path.match(/\/quick-master$/)) { showScreen('newLanding'); loadRecentGames(); }
-    else { renderFinanceRoad(); showScreen('financeRoad'); }
+    // No saved session — auto-launch the level if T/L are in the URL
+    if (path.match(/\/quick-master$/)) { showScreen('newLanding'); loadRecentGames(); return; }
+    const frAutoMatch = path.match(/\/finance-road\/(\d+)\/(\d+)$/);
+    if (frAutoMatch) {
+      const ti = parseInt(frAutoMatch[1]) - 1;
+      const li = parseInt(frAutoMatch[2]) - 1;
+      startFinanceRoadLevel(ti, li);
+      return;
+    }
+    renderFinanceRoad(); showScreen('financeRoad');
     return;
   }
   // /finance-road (base path — no level specified)
