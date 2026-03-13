@@ -625,6 +625,12 @@ function advanceTurn(state) {
     state.turnNumber++;
     skips++;
   }
+
+  // If every player was skipped (bag empty, all tiles unplayable), force end the game
+  if (skips >= state.players.length) {
+    state.log.push('No player has a legal move — game ends automatically.');
+    endGame(state);
+  }
 }
 
 /* ── End game conditions ───────────────────────────────────── */
