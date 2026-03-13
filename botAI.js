@@ -88,11 +88,26 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
       }
       return score;
     }
-    case 'found':
+    case 'found': {
       // Founding a hotel is always the top priority for all bots
       // Endgame: founding is less useful — no time to build it up
       if (endgame) return 8;
+      // Center preference: a chain founded in the middle of the board has more
+      // room to grow in all 4 directions. Tiles on the outer rows/cols are
+      // already constrained. Hard bots add up to +2 for a dead-center tile.
+      if (difficulty !== 'easy') {
+        const num = parseInt(tile);
+        const letter = tile.replace(/[0-9]/g, '');
+        const row = num - 1; // 0-8
+        const col = letter.charCodeAt(0) - 65; // 0-11
+        const rowDist = Math.abs(row - 4) / 4;   // 0=center, 1=edge
+        const colDist = Math.abs(col - 5.5) / 5.5;
+        const edginess = (rowDist + colDist) / 2;
+        const centerBonus = difficulty === 'hard' ? (1 - edginess) * 2.0 : (1 - edginess) * 1.0;
+        return 20 + centerBonus;
+      }
       return 20;
+    }
     case 'merge': {
       const chains = analysis.chains;
       const sorted = chains
@@ -308,12 +323,21 @@ function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
   // riskAppetite: positive prefers expensive chains, negative prefers cheap ones
   score += traits.riskAppetite * mult * (c.price / 800);
 
+  // Chain tier preference: premium chains (Continental, Imperial) pay larger bonuses
+  // at the same size, so a share is worth more long-term. Slight constant advantage.
+  const tierBonus = { Continental: 0.6, Imperial: 0.6, Festival: 0.3, Worldwide: 0.3, American: 0.3, Tower: 0, Luxor: 0 };
+  if (difficulty !== 'easy') score += tierBonus[c.chain] || 0;
+
   // Early-game liquidity preference: small chains are cheap and keep you liquid
   // (Mike: "I generally try to get a cheap hotel on the board early")
   if (isEarlyGame(game) && c.price <= 400) score += 1.0;
 
-  // Near-safe-size bonus (always applies)
-  if (c.size >= 8 && c.size < 11) score += 1.5;
+  // Safe-size push: urgency ramps up the closer a chain is to locking in bonuses.
+  // Size 10 = one tile from safe (critical to hold majority before it locks).
+  // Size 8-9 = approaching fast. Hard bots feel this most.
+  if (c.size === 10) score += difficulty === 'hard' ? 3.5 : 2.0;
+  else if (c.size === 9) score += difficulty === 'hard' ? 2.5 : 1.5;
+  else if (c.size === 8) score += difficulty === 'hard' ? 1.5 : 1.0;
 
   // Edge-position penalty: chains hugging the board edge grow slowly and rarely
   // become merger targets. Scale the penalty by how edgy the chain is.
@@ -430,6 +454,33 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
     // 1 in each of top 3
     for (const c of candidates) {
       if (bought >= MAX_BUY) break;
+      tryBuy(c.chain);
+    }
+  }
+
+  // End-game cash drain: unspent cash at game-end is dead money.
+  // If we still have buys left, spend them on the cheapest chain we can afford
+  // rather than passing. Only applies in endgame for medium/hard bots.
+  if (endgame && bought < MAX_BUY) {
+    const allActive = engine.HOTEL_CHAINS
+      .filter(c => game.chains[c].active)
+      .map(c => {
+        const size  = game.chains[c].tiles.length;
+        const price = engine.stockPrice(c, size);
+        const room  = 25 - issuedShares(game, c);
+        return { chain: c, price, room };
+      })
+      .filter(c => c.price > 0 && c.room > 0 && c.price <= moneyLeft)
+      .sort((a, b) => a.price - b.price); // cheapest first — just spend the cash
+
+    for (const c of allActive) {
+      if (bought >= MAX_BUY) break;
+      // Re-use tryBuy — it checks room, owned cap, and moneyLeft
+      const existing = candidates.find(x => x.chain === c.chain);
+      if (!existing) {
+        // Add to candidates so tryBuy can find it
+        candidates.push({ chain: c.chain, size: 0, price: c.price, room: c.room, myShares: player.stocks[c.chain] || 0 });
+      }
       tryBuy(c.chain);
     }
   }
