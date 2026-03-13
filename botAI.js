@@ -113,7 +113,10 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
       return score;
     }
     case 'lone':
-      return 0.5;
+      // Tile-timing insight: play isolated lone tiles now to preserve tiles that
+      // could expand/found/merge chains for a more strategic moment later.
+      // Hard bots actively prefer burning lone tiles over keeping them in hand.
+      return difficulty === 'hard' ? 2.0 : 0.5;
     default:
       return 0;
   }
@@ -243,6 +246,29 @@ function isEarlyGame(game) {
   return (game.tileBag?.length ?? 0) > 80;
 }
 
+/* ── Edge-position penalty ───────────────────────────────────── */
+// Strategy guides warn: "You may not want to invest lots of cash buying stock
+// for a corporation that is positioned on the edge of the gameboard and away
+// from other corporations." Edge chains have fewer neighbors, grow slower,
+// and are harder to merge — so they're usually bad long-term investments.
+//
+// Returns a 0–1 penalty (1 = maximally edgy). We count what fraction of the
+// chain's tiles sit on the outer two rows/cols of the 9×12 board.
+function edgePenalty(chain, game) {
+  const tiles = game.chains[chain].tiles;
+  if (!tiles || tiles.length === 0) return 0;
+  const ROWS = 9, COLS = 12;
+  let edgeCount = 0;
+  for (const tile of tiles) {
+    const num = parseInt(tile);
+    const letter = tile.replace(/[0-9]/g, '');
+    const row = num - 1;
+    const col = letter.charCodeAt(0) - 65;
+    if (row === 0 || row === ROWS - 1 || col === 0 || col === COLS - 1) edgeCount++;
+  }
+  return edgeCount / tiles.length;
+}
+
 /* ── Chain desirability score for stock buying ───────────────── */
 // Incorporates two world-champion insights:
 //   1. "I like ties" (Mike Topczewski, 2025 WSBG): deliberately buying to
@@ -288,6 +314,15 @@ function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
 
   // Near-safe-size bonus (always applies)
   if (c.size >= 8 && c.size < 11) score += 1.5;
+
+  // Edge-position penalty: chains hugging the board edge grow slowly and rarely
+  // become merger targets. Scale the penalty by how edgy the chain is.
+  // Hard bots fully avoid edge-trapped chains; medium bots are less deterred.
+  const edgeFrac = edgePenalty(c.chain, game);
+  if (edgeFrac > 0) {
+    const penaltyStrength = difficulty === 'hard' ? 2.5 : difficulty === 'medium' ? 1.5 : 0.5;
+    score -= edgeFrac * penaltyStrength;
+  }
 
   return score;
 }
