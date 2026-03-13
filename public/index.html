@@ -1876,7 +1876,7 @@ function _launchFinanceRoadLevel(tierIdx, levelIdx, name) {
   myName = name;
   currentFinanceRoadTier  = tierIdx;
   currentFinanceRoadLevel = levelIdx;
-  isSoloGame = true;
+  isSoloGame = true; window._endConditionNotified = false;
 
   const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
   const levelPath = `${base}/finance-road/${tierIdx + 1}/${levelIdx + 1}`;
@@ -1931,7 +1931,7 @@ function closeQuickMasterModal() {
 }
 function _launchQuickMaster(name) {
   myName   = name;
-  isSoloGame = true;
+  isSoloGame = true; window._endConditionNotified = false;
   const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
   const qmPath = `${base}/quick-master`;
   history.pushState({}, '', qmPath);
@@ -2150,7 +2150,7 @@ function startSoloGame() {
   const name = (currentUser ? currentUser.username : document.getElementById('soloName').value.trim());
   if (!name) return showError('Enter your name');
   myName = name;
-  isSoloGame = true;
+  isSoloGame = true; window._endConditionNotified = false;
   const quickstart = document.getElementById('soloQuickstartToggle').checked;
   ensureBotSettings();
   const botConfigs = BOT_ROSTER_CLIENT.slice(0, selectedBotCount).map((_, i) => {
@@ -2220,7 +2220,7 @@ function attemptReconnect(code, name, token) {
       const name  = localStorage.getItem('acquire_name_'  + saved.code);
       if (token && name) {
         myName = name;
-        isSoloGame = true;
+        isSoloGame = true; window._endConditionNotified = false;
         socket.emit('rejoinRoom', { code: saved.code, token, name }, (res) => {
           if (!res.error && res.inGame) {
             showScreen('game');
@@ -2871,7 +2871,13 @@ function renderLog() {
 function renderHeader() {
   document.getElementById('turnLabel').textContent = `Turn ${gameState.turnNumber}`;
   document.getElementById('currentPlayerLabel').textContent = gameState.players[gameState.currentPlayerIdx]?.name || '';
-  document.getElementById('btnDeclareEnd').style.display = (gameState.canDeclareEnd && gameState.currentPlayerIdx === myIdx) ? 'inline-block' : 'none';
+  const canEnd = gameState.canDeclareEnd;
+  document.getElementById('btnDeclareEnd').style.display = (canEnd && gameState.currentPlayerIdx === myIdx) ? 'inline-block' : 'none';
+  // Show a one-time toast the first time end conditions are met
+  if (canEnd && !window._endConditionNotified) {
+    window._endConditionNotified = true;
+    showToast('Game can now end — use "End Game" when ready');
+  }
   document.getElementById('btnRestartSolo').style.display = isSoloGame ? 'inline-block' : 'none';
   // Spectator badge
   document.getElementById('spectatorBadge').style.display = myIdx === -1 ? '' : 'none';
@@ -2991,8 +2997,13 @@ function isBot(playerIdx) {
 /* ── Error toast ───────────────────────────────── */
 function showError(msg) {
   const el = document.getElementById('errorToast');
-  el.textContent = msg; el.classList.add('show');
+  el.textContent = msg; el.style.background = ''; el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 3000);
+}
+function showToast(msg) {
+  const el = document.getElementById('errorToast');
+  el.textContent = msg; el.style.background = 'rgba(245,158,11,0.92)'; el.style.color = '#000'; el.classList.add('show');
+  setTimeout(() => { el.classList.remove('show'); el.style.background = ''; el.style.color = ''; }, 4000);
 }
 
 /* ── Player Chat ───────────────────────────────── */

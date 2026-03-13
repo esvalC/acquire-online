@@ -566,10 +566,10 @@ function buyStock(state, playerIdx, purchases) {
 
   replaceDeadTiles(state, playerIdx);
 
-  if (checkGameEnd(state)) {
-    endGame(state);
-    return { ok: true, gameOver: true };
-  }
+  // End conditions are met — but DON'T auto-end. Let the current player
+  // choose when to pull the trigger via declareGameEnd(). canDeclareEnd
+  // will show "VOTE END" in the UI so they know the option is available.
+  // (Previously auto-ended here, cutting games short without player consent.)
 
   advanceTurn(state);
   return { ok: true };
