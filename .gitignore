@@ -23,7 +23,7 @@ dist/
 build/
 data/
 
-# AI training data and models (large files)
+# AI training data (large files — not committed)
 ai/data/
-ai/models/*.onnx
+# Model weights (*.json committed, intermediate pytorch *.pt not)
 ai/models/*.pt

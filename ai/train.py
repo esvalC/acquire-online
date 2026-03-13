@@ -11,13 +11,16 @@ cloned game state, the resulting state is encoded + fed through the network,
 and the action with the highest predicted win probability is chosen.
 
 Usage:
-  pip install torch onnx numpy
-  python ai/train.py --data ai/data/games.jsonl --out ai/models/master.onnx
+  pip install torch numpy
+  python ai/train.py --data ai/data/games.jsonl --out ai/models/master_weights.json
 
   # Optional flags:
   --epochs 20        (default: 20)
   --batch  512       (default: 512)
   --hidden 256       (default: 256)
+
+The output is a plain JSON file with weights + biases that masterBot.js
+loads directly — no native dependencies required on the server.
 
 Input feature vector (149 floats):
   board[108]     — board cell chain index, divided by 7 (empty=0, lone=-1/7, chain=1–7/7)
@@ -34,7 +37,7 @@ import numpy as np
 # ── Parse args ─────────────────────────────────────────────────────────────
 parser = argparse.ArgumentParser()
 parser.add_argument('--data',    default='ai/data/games.jsonl')
-parser.add_argument('--out',     default='ai/models/master.onnx')
+parser.add_argument('--out',     default='ai/models/master_weights.json')
 parser.add_argument('--epochs',  type=int, default=20)
 parser.add_argument('--batch',   type=int, default=512)
 parser.add_argument('--hidden',  type=int, default=256)
@@ -180,26 +183,33 @@ for epoch in range(1, args.epochs + 1):
         best_val_loss = val_loss
         best_state = {k: v.clone() for k, v in model.state_dict().items()}
 
-# ── Export best model to ONNX ───────────────────────────────────────────────
+# ── Export weights as JSON (loaded by masterBot.js, no native deps) ─────────
 model.load_state_dict(best_state)
 model.eval()
 
-os.makedirs(os.path.dirname(args.out), exist_ok=True)
+os.makedirs(os.path.dirname(args.out) or '.', exist_ok=True)
 
-dummy = torch.zeros(1, INPUT_DIM)
-try:
-    import onnx
-    torch.onnx.export(
-        model, dummy, args.out,
-        input_names=['state'],
-        output_names=['win_prob'],
-        dynamic_axes={'state': {0: 'batch'}, 'win_prob': {0: 'batch'}},
-        opset_version=11,
-    )
-    print(f"\nModel saved → {args.out}  (val_loss={best_val_loss:.4f})")
-    print("Ready to use with onnxruntime-node in masterBot.js")
-except ImportError:
-    print("\nERROR: onnx package not installed. Run: pip install onnx")
-    # Save as PyTorch fallback
-    torch.save(best_state, args.out.replace('.onnx', '.pt'))
-    print(f"Saved PyTorch state dict → {args.out.replace('.onnx', '.pt')}")
+# Extract weights from the Sequential net (Linear layers only)
+layers = []
+with torch.no_grad():
+    for module in model.net:
+        if hasattr(module, 'weight'):
+            layers.append({
+                'W': module.weight.numpy().tolist(),   # [out, in]
+                'b': module.bias.numpy().tolist(),     # [out]
+            })
+
+weights_json = {
+    'layers':    layers,
+    'input_dim': INPUT_DIM,
+    'val_loss':  round(best_val_loss, 6),
+    'trained_on': len(X),
+}
+
+with open(args.out, 'w') as f:
+    import json as _json
+    _json.dump(weights_json, f, separators=(',', ':'))
+
+size_kb = os.path.getsize(args.out) / 1024
+print(f"\nWeights saved → {args.out}  ({size_kb:.0f} KB,  val_loss={best_val_loss:.4f})")
+print(f"Commit this file and redeploy — masterBot.js loads it automatically.")
