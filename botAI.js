@@ -479,10 +479,11 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
     }
   }
 
-  // End-game cash drain: unspent cash at game-end is dead money.
-  // If we still have buys left, spend them on the cheapest chain we can afford
-  // rather than passing. Only applies in endgame for medium/hard bots.
-  if (endgame && bought < MAX_BUY) {
+  // Always spend all 3 buys: cash is worthless at game end, and only getting
+  // to buy 3 stocks per turn means every skipped buy is permanent lost equity.
+  // If the main buying logic left slots open, fill them with the cheapest
+  // affordable chain — even a "wrong" stock is better than holding cash.
+  if (bought < MAX_BUY) {
     const allActive = engine.HOTEL_CHAINS
       .filter(c => game.chains[c].active)
       .map(c => {
