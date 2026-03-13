@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Acquire Master Bot — Training Guide</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    background: #fff;
+    color: #1a1a2e;
+    font-size: 13px;
+    line-height: 1.6;
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 40px;
+  }
+
+  /* ── Cover ── */
+  .cover {
+    text-align: center;
+    padding: 32px 0 40px;
+    border-bottom: 3px solid #f59e0b;
+    margin-bottom: 36px;
+  }
+  .cover-icon { font-size: 48px; margin-bottom: 12px; }
+  .cover h1 {
+    font-size: 28px; font-weight: 700; color: #1a1a2e;
+    letter-spacing: -0.5px; margin-bottom: 6px;
+  }
+  .cover .subtitle {
+    font-size: 14px; color: #64748b; margin-bottom: 16px;
+  }
+  .cover .badge {
+    display: inline-block; background: #fef3c7; color: #92400e;
+    border: 1px solid #f59e0b; border-radius: 20px;
+    font-size: 11px; font-weight: 600; padding: 3px 12px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  /* ── Section headers ── */
+  h2 {
+    font-size: 16px; font-weight: 700; color: #1a1a2e;
+    margin: 32px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 2px solid #f1f5f9;
+    display: flex; align-items: center; gap: 8px;
+  }
+  h2 .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 24px; height: 24px; border-radius: 50%;
+    background: #f59e0b; color: #fff;
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+  }
+  h3 {
+    font-size: 13px; font-weight: 600; color: #374151;
+    margin: 18px 0 6px;
+  }
+
+  /* ── Callout boxes ── */
+  .callout {
+    border-radius: 8px; padding: 12px 16px; margin: 14px 0;
+    font-size: 12.5px;
+  }
+  .callout.info    { background: #eff6ff; border-left: 4px solid #3b82f6; color: #1e3a5f; }
+  .callout.success { background: #f0fdf4; border-left: 4px solid #22c55e; color: #14532d; }
+  .callout.warn    { background: #fffbeb; border-left: 4px solid #f59e0b; color: #78350f; }
+  .callout.tip     { background: #faf5ff; border-left: 4px solid #a855f7; color: #3b0764; }
+  .callout strong  { font-weight: 600; }
+
+  /* ── Code blocks ── */
+  pre {
+    background: #0f172a; color: #e2e8f0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px; line-height: 1.7;
+    border-radius: 8px; padding: 14px 16px;
+    margin: 10px 0; overflow-x: auto;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11.5px; background: #f1f5f9;
+    color: #be185d; padding: 1px 5px; border-radius: 4px;
+  }
+  pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+
+  /* ── Steps ── */
+  .step {
+    display: flex; gap: 14px; margin: 10px 0; align-items: flex-start;
+  }
+  .step-num {
+    flex-shrink: 0; width: 22px; height: 22px;
+    border-radius: 50%; background: #1a1a2e; color: #f59e0b;
+    font-size: 11px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+    margin-top: 1px;
+  }
+  .step-body { flex: 1; }
+  .step-body p { margin-bottom: 4px; }
+
+  /* ── Table ── */
+  table {
+    width: 100%; border-collapse: collapse; margin: 12px 0;
+    font-size: 12px;
+  }
+  th {
+    background: #f8fafc; text-align: left;
+    padding: 8px 12px; font-weight: 600; color: #374151;
+    border: 1px solid #e2e8f0;
+  }
+  td { padding: 7px 12px; border: 1px solid #e2e8f0; color: #374151; }
+  tr:nth-child(even) td { background: #f8fafc; }
+
+  /* ── Architecture diagram ── */
+  .arch {
+    background: #0f172a; border-radius: 8px;
+    padding: 16px 20px; margin: 12px 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: #94a3b8; line-height: 1.9;
+  }
+  .arch .gold  { color: #f59e0b; }
+  .arch .green { color: #4ade80; }
+  .arch .blue  { color: #60a5fa; }
+  .arch .purple{ color: #c084fc; }
+
+  /* ── Print ── */
+  @media print {
+    body { padding: 20px 28px; font-size: 12px; }
+    .cover { padding: 16px 0 24px; margin-bottom: 24px; }
+    pre, .arch { font-size: 10.5px; }
+    h2 { margin-top: 24px; }
+    .page-break { page-break-before: always; }
+  }
+
+  p { margin-bottom: 8px; }
+  ul, ol { padding-left: 20px; margin-bottom: 8px; }
+  li { margin-bottom: 3px; }
+  hr { border: none; border-top: 1px solid #e2e8f0; margin: 24px 0; }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="cover-icon">🤖</div>
+  <h1>Acquire Master Bot</h1>
+  <p class="subtitle">Training Guide — How to generate data, train the neural network,<br>and deploy a stronger bot to the live server</p>
+  <span class="badge">playonlineacquire.com</span>
+</div>
+
+<!-- ════════════════════════════════════ -->
+<h2><span class="num">1</span> How It Works</h2>
+
+<p>The Master bot uses a <strong>value network</strong> — a small neural network that predicts "how likely am I to win from this position?" For every legal action on its turn, the bot clones the game, applies the action, encodes the resulting state, scores it with the network, and picks the highest-scoring move.</p>
+
+<div class="arch">
+<span class="gold">selfplay.js</span> → games.jsonl → <span class="green">train.py</span> → master_weights.json → <span class="blue">masterBot.js</span>
+<br>
+<span class="gold">  (EC2 runs 5h)</span>          <span class="green">  (trains on Mac)</span>    <span class="blue">  (inference on server)</span>
+</div>
+
+<p>The network architecture is a 4-layer MLP with 80,000 parameters:</p>
+
+<div class="arch">
+Input (149)  →  Dense 256  →  Dense 128  →  Dense 64  →  Output (1)
+<span class="blue">board(108) + chains(35) + cash(6)</span>    ReLU    ReLU    ReLU     <span class="green">sigmoid → win %</span>
+</div>
+
+<div class="callout info">
+  <strong>Why a value network (not a policy network)?</strong><br>
+  We don't need to capture which action the bot took — just whether it won. A value network learns what game positions are good and then uses one-step lookahead to find the best action. Simpler training data, equally strong results.
+</div>
+
+<hr>
+
+<!-- ════════════════════════════════════ -->
+<h2><span class="num">2</span> One-Time Setup</h2>
+
+<h3>Install Python dependencies (Mac)</h3>
+<pre><code>pip install torch numpy</code></pre>
+
+<h3>Verify AWS access</h3>
+<pre><code>aws s3 ls s3://acquire-training-data/</code></pre>
+
+<div class="callout warn">
+  <strong>No output = no training data yet.</strong> Run a selfplay session first (Section 3).
+</div>
+
+<hr>
+
+<!-- ════════════════════════════════════ -->
+<h2><span class="num">3</span> Generate Training Data (EC2)</h2>
+
+<p>This launches a spot instance that plays bots against each other for 5 hours (~$0.10/hr × 5h = <strong>$0.50 per run</strong>), then uploads the results to S3 and self-terminates.</p>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-body">
+    <p><strong>Launch the training instance</strong></p>
+    <pre><code>aws ec2 run-instances \
+  --image-id ami-0c421724a94bba6d6 \
+  --instance-type c5n.xlarge \
+  --instance-market-options '{"MarketType":"spot"}' \
+  --iam-instance-profile Name=acquire-online-ec2-role \
+  --security-group-ids sg-0689315c5c119b6ff \
+  --user-data "$(base64 -i ai/ec2_train.sh)" \
+  --instance-initiated-shutdown-behavior terminate \
+  --tag-specifications \
+    'ResourceType=instance,Tags=[{Key=Name,Value=acquire-training}]' \
+  --query 'Instances[0].[InstanceId,PublicIpAddress]' \
+  --output text</code></pre>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-body">
+    <p><strong>Get the instance IP (if it wasn't shown)</strong></p>
+    <pre><code>aws ec2 describe-instances \
+  --filters 'Name=tag:Name,Values=acquire-training' \
+            'Name=instance-state-name,Values=running' \
+  --query 'Reservations[0].Instances[0].PublicIpAddress' \
+  --output text</code></pre>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-body">
+    <p><strong>Watch the live dashboard</strong></p>
+    <p>Open <code>http://&lt;IP&gt;:8080</code> in your browser. You'll see games/sec, ELO ratings per bot, and time remaining. Wait ~5 minutes for startup.</p>
+  </div>
+</div>
+
+<div class="callout success">
+  <strong>The instance auto-terminates after 5 hours.</strong> You don't need to clean anything up. Check S3 for the output: <code>aws s3 ls s3://acquire-training-data/</code>
+</div>
+
+<hr class="page-break">
+
+<!-- ════════════════════════════════════ -->
+<h2><span class="num">4</span> Train the Neural Network (Mac)</h2>
+
+<h3>Option A — One command does everything</h3>
+<p>The <code>retrain.sh</code> script handles download → train → commit → deploy automatically:</p>
+<pre><code>bash ai/retrain.sh</code></pre>
+
+<p>Optional flags:</p>
+<table>
+  <tr><th>Flag</th><th>Effect</th></tr>
+  <tr><td><code>--skip-download</code></td><td>Use existing <code>ai/data/games.jsonl</code> instead of fetching from S3</td></tr>
+  <tr><td><code>--skip-deploy</code></td><td>Train and commit but don't push to the server</td></tr>
+  <tr><td><code>--epochs 30</code></td><td>Override training epochs (default: 20)</td></tr>
+</table>
+
+<h3>Option B — Manual steps</h3>
+
+<div class="step">
+  <div class="step-num">1</div>
+  <div class="step-body">
+    <p><strong>Download training data</strong></p>
+    <pre><code>aws s3 cp s3://acquire-training-data/latest.jsonl ai/data/games.jsonl</code></pre>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">2</div>
+  <div class="step-body">
+    <p><strong>Train the model</strong></p>
+    <pre><code>python3 ai/train.py \
+  --data ai/data/games.jsonl \
+  --out  ai/models/master_weights.json \
+  --epochs 20</code></pre>
+    <p>Takes ~5 minutes on a Mac. Watch for <code>val_loss</code> decreasing each epoch — lower is better.</p>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">3</div>
+  <div class="step-body">
+    <p><strong>Commit the weights</strong></p>
+    <pre><code>git add ai/models/master_weights.json
+git commit -m "Train Master bot: 50000 records, val_loss=0.2314"
+git push origin main</code></pre>
+  </div>
+</div>
+
+<div class="step">
+  <div class="step-num">4</div>
+  <div class="step-body">
+    <p><strong>Deploy to server</strong></p>
+    <pre><code>aws ssm send-command \
+  --instance-ids i-0bbc6c13fd3dfe6ab \
+  --document-name "AWS-RunShellScript" \
+  --parameters 'commands=[
+    "sudo -u ubuntu GIT_SSH_COMMAND=\"ssh -i /home/ubuntu/.ssh/deploy_key\" git -C /home/ubuntu/acquire-online pull origin main",
+    "sudo -u ubuntu pm2 restart acquire-online"
+  ]'</code></pre>
+  </div>
+</div>
+
+<hr>
+
+<!-- ════════════════════════════════════ -->
+<h2><span class="num">5</span> Iterating — Making the Bot Stronger</h2>
+
+<p>Each training run improves the bot. Here's the cycle:</p>
+
+<div class="arch">
+<span class="gold">Launch EC2</span>  →  <span class="blue">5h selfplay</span>  →  <span class="green">retrain.sh</span>  →  <span class="purple">deploy</span>  →  repeat
+   $0.50                ~50k records    ~5 min on Mac      live in 30s
+</div>
+
+<h3>Signs of improvement</h3>
+<table>
+  <tr><th>Metric</th><th>What to look for</th></tr>
+  <tr><td>val_loss</td><td>Lower is better. First run: ~0.30. Good: &lt;0.25. Great: &lt;0.22.</td></tr>
+  <tr><td>val_acc</td><td>% of outcomes predicted correctly. Target: &gt;65%.</td></tr>
+  <tr><td>Play test</td><td>Start a game vs Master at <code>/beta</code> — it should feel aggressive and hard to beat.</td></tr>
+</table>
+
+<h3>How to accumulate more data over time</h3>
+<p>The S3 bucket stores every run. To train on <em>all</em> historical data combined:</p>
+<pre><code># Download all runs and concatenate
+aws s3 cp s3://acquire-training-data/ ai/data/all/ --recursive
+cat ai/data/all/*.jsonl > ai/data/games_combined.jsonl
+
+# Train on the combined dataset
+python3 ai/train.py \
+  --data ai/data/games_combined.jsonl \
+  --epochs 30 \
+  --out ai/models/master_weights.json</code></pre>
+
+<div class="callout tip">
+  <strong>More data = stronger bot.</strong> After 3–4 runs (~200k records total), val_loss typically drops below 0.22 and the Master bot noticeably outplays the hard heuristic bots.
+</div>
+
+<h3>Adjusting training hyperparameters</h3>
+<table>
+  <tr><th>Flag</th><th>Default</th><th>When to change</th></tr>
+  <tr><td><code>--epochs</code></td><td>20</td><td>Increase to 40–50 when you have &gt;200k records</td></tr>
+  <tr><td><code>--hidden</code></td><td>256</td><td>Increase to 512 for &gt;500k records (larger model)</td></tr>
+  <tr><td><code>--batch</code></td><td>512</td><td>Increase for speed on large datasets</td></tr>
+</table>
+
+<hr>
+
+<!-- ════════════════════════════════════ -->
+<h2><span class="num">6</span> Key File Reference</h2>
+
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>ai/selfplay.js</code></td><td>Runs bot-vs-bot games headlessly, exports JSONL training records</td></tr>
+  <tr><td><code>ai/ec2_train.sh</code></td><td>EC2 bootstrap script — runs selfplay for 5h, uploads to S3, terminates instance</td></tr>
+  <tr><td><code>ai/dashboard.js</code></td><td>HTTP server on port 8080 showing live training stats</td></tr>
+  <tr><td><code>ai/train.py</code></td><td>PyTorch training script — reads JSONL, trains value network, exports weights JSON</td></tr>
+  <tr><td><code>ai/retrain.sh</code></td><td>Full pipeline automation: download → train → commit → deploy</td></tr>
+  <tr><td><code>ai/masterBot.js</code></td><td>Inference — loads weights JSON, runs forward pass, picks best action</td></tr>
+  <tr><td><code>ai/models/master_weights.json</code></td><td>Trained model weights (committed to git, ~1MB)</td></tr>
+  <tr><td><code>ai/data/games.jsonl</code></td><td>Training data (gitignored — re-download from S3 as needed)</td></tr>
+</table>
+
+<hr>
+
+<!-- ════════════════════════════════════ -->
+<h2><span class="num">7</span> Quick Reference</h2>
+
+<h3>Most common commands</h3>
+<pre><code># 1. Start a training run on EC2 (~$0.50, 5 hours)
+bash ai/ec2_train.sh   # or use the full aws ec2 run-instances command above
+
+# 2. When it finishes — retrain and deploy in one step
+bash ai/retrain.sh
+
+# 3. Check if a training instance is running
+aws ec2 describe-instances \
+  --filters 'Name=tag:Name,Values=acquire-training' \
+            'Name=instance-state-name,Values=running' \
+  --query 'Reservations[0].Instances[0].[InstanceId,PublicIpAddress,LaunchTime]' \
+  --output text
+
+# 4. Check what's in S3
+aws s3 ls s3://acquire-training-data/
+
+# 5. View beta server logs
+aws ssm send-command \
+  --instance-ids i-0bbc6c13fd3dfe6ab \
+  --document-name "AWS-RunShellScript" \
+  --parameters 'commands=["sudo -u ubuntu pm2 logs acquire-online --lines 20 --nostream"]'</code></pre>
+
+<div class="callout success">
+  <strong>Master bot is live when</strong> <code>ai/models/master_weights.json</code> is committed and deployed. Until then it automatically falls back to the hard heuristic bot. No downtime during upgrades.
+</div>
+
+<hr>
+<p style="text-align:center; color:#94a3b8; font-size:11px; margin-top:24px;">
+  playonlineacquire.com · Acquire Master Bot Training Guide · Generated 2026-03-13
+</p>
+
+</body>
+</html>
