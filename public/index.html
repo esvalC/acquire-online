@@ -1146,6 +1146,11 @@
       <div class="mode-card-title">Feedback</div>
       <div class="mode-card-desc">Still in beta — report bugs or share suggestions</div>
     </div>
+    <div id="adminBetaCard" class="mode-card" style="display:none;border-color:rgba(168,85,247,0.4);background:linear-gradient(135deg,var(--bg-card) 0%,rgba(168,85,247,0.06) 100%)" onclick="window.open('/beta','_blank')">
+      <div class="mode-card-icon">🛠️</div>
+      <div class="mode-card-title" style="color:#c084fc">Beta Site</div>
+      <div class="mode-card-desc">Preview the latest changes before they go live</div>
+    </div>
   </div>
 
   <div class="recent-games-section">
@@ -3121,6 +3126,7 @@ function switchAuthTab(tab) {
 }
 
 function renderDrawerLoggedOut() {
+  document.getElementById('adminBetaCard').style.display = 'none';
   document.getElementById('drawerLoggedOut').style.display = 'flex';
   document.getElementById('drawerLoggedIn').style.display  = 'none';
   document.getElementById('drawerTitle').textContent = 'Account';
@@ -3137,6 +3143,7 @@ function renderDrawerLoggedIn(user, history, sessions = []) {
   document.getElementById('drawerTitle').textContent = 'Profile';
   document.getElementById('profileAvatar').textContent   = user.username[0].toUpperCase();
   document.getElementById('profileUsername').textContent  = user.username;
+  document.getElementById('adminBetaCard').style.display = user.role === 'admin' ? '' : 'none';
   const roleBadge = document.getElementById('profileRoleBadge');
   const role = user.role || 'member';
   roleBadge.textContent = role.charAt(0).toUpperCase() + role.slice(1);
