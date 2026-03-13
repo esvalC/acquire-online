@@ -22,12 +22,16 @@ const BOT_ROSTER = [
 ];
 
 // Hardcoded per-character traits
+// Tuned against 83k selfplay games (2026-03-13):
+//   - riskAppetite reduced across the board (high-price bias was a consistent losing strategy)
+//   - Aria given a real identity instead of all-zeros
+//   - Nova's negative riskAppetite added (buy cheap growing chains, not expensive stagnant ones)
 const BOT_TRAITS = {
-  Aria: { mergerSeeking:  0.0, riskAppetite:  0.0, chainLoyalty:  0.0 }, // The Broker: pure balanced
-  Rex:  { mergerSeeking:  1.0, riskAppetite:  1.0, chainLoyalty: -1.0 }, // The Shark: merger-hungry, bold, opportunistic
-  Nova: { mergerSeeking: -0.5, riskAppetite:  1.0, chainLoyalty: -0.5 }, // The Maverick: avoids mergers, big bets, low loyalty
-  Colt: { mergerSeeking: -0.5, riskAppetite: -1.0, chainLoyalty:  1.0 }, // The Tycoon: anti-merger, conservative, fortress builder
-  Vera: { mergerSeeking:  1.0, riskAppetite: -0.5, chainLoyalty:  0.5 }, // The Mogul: patient merger specialist, somewhat loyal
+  Aria: { mergerSeeking:  0.7, riskAppetite: -0.3, chainLoyalty:  0.2 }, // The Broker: patient merger hunter, avoids expensive chains
+  Rex:  { mergerSeeking:  0.8, riskAppetite:  0.0, chainLoyalty:  0.2 }, // The Shark: merger-hungry, neutral on price, loosely loyal
+  Nova: { mergerSeeking: -0.4, riskAppetite: -0.3, chainLoyalty: -0.7 }, // The Maverick: avoids mergers, buys cheap growing chains, no loyalty
+  Colt: { mergerSeeking: -0.4, riskAppetite: -0.8, chainLoyalty:  0.7 }, // The Tycoon: fortress builder, prefers cheap chains, very loyal
+  Vera: { mergerSeeking:  0.6, riskAppetite: -0.4, chainLoyalty:  0.4 }, // The Mogul: merger specialist, safe cheap chains, patient
 };
 
 // Trait amplification by difficulty
@@ -319,9 +323,13 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
 
   // Personality controls spread; trait-sorted order controls which chains are targeted
   if (personality === 'focused') {
-    // All 3 into the top-ranked chain
+    // All 3 into the top-ranked chain; fall back to second if primary is maxed/unaffordable
     const target = candidates[0];
     while (bought < MAX_BUY) { if (!tryBuy(target.chain)) break; }
+    if (bought < MAX_BUY && candidates.length > 1) {
+      const fallback = candidates[1];
+      while (bought < MAX_BUY) { if (!tryBuy(fallback.chain)) break; }
+    }
 
   } else if (personality === 'balanced') {
     // 2 in top-ranked, 1 in second
