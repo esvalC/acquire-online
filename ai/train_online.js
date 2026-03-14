@@ -73,19 +73,38 @@ function loadOrInit() {
   }
 }
 
-const S3_BUCKET = process.env.S3_BUCKET || 'acquire-training-data';
-const S3_KEY    = 'master_weights.json';
+const S3_BUCKET  = process.env.S3_BUCKET || 'acquire-training-data';
+const S3_KEY     = 'master_weights.json';
+const LOG_PATH   = getArg('--log') || null;
+const MAX_LOG_KB = 256; // keep log under 256KB — truncate oldest lines when exceeded
+
+// Write a log line — if a log file is set, append there and rotate if too big.
+// Otherwise just write to stdout.
+function log(msg) {
+  process.stdout.write(msg);
+  if (!LOG_PATH) return;
+  try {
+    fs.appendFileSync(LOG_PATH, msg);
+    const stat = fs.statSync(LOG_PATH);
+    if (stat.size > MAX_LOG_KB * 1024) {
+      // Keep only the last half of the file
+      const content = fs.readFileSync(LOG_PATH, 'utf8');
+      const lines   = content.split('\n');
+      fs.writeFileSync(LOG_PATH, lines.slice(Math.floor(lines.length / 2)).join('\n'));
+    }
+  } catch {}
+}
 
 function saveWeights(weights) {
   fs.mkdirSync(path.dirname(WEIGHTS_PATH), { recursive: true });
-  fs.writeFileSync(WEIGHTS_PATH, JSON.stringify(weights));
+  fs.writeFileSync(WEIGHTS_PATH, JSON.stringify(weights)); // always overwrites same file
   // Upload to S3 so weights survive instance termination and the live
   // server can hot-reload them automatically.
   try {
     execSync(`aws s3 cp "${WEIGHTS_PATH}" s3://${S3_BUCKET}/${S3_KEY}`, { timeout: 30000, stdio: 'pipe' });
-    process.stdout.write(`  [s3] uploaded → s3://${S3_BUCKET}/${S3_KEY}\n`);
+    log(`  [s3] uploaded → s3://${S3_BUCKET}/${S3_KEY}\n`);
   } catch (e) {
-    process.stdout.write(`  [s3] upload failed (non-fatal): ${e.message}\n`);
+    log(`  [s3] upload failed (non-fatal): ${e.message}\n`);
   }
 }
 
@@ -353,9 +372,7 @@ async function train() {
     if (t % 10 === 0) {
       const elapsedS = ((Date.now() - t0) / 1000).toFixed(0);
       const avgLoss  = (totalLoss / lossCnt).toFixed(4);
-      process.stdout.write(
-        `\r  step=${t} games=${gamesTotal} loss=${avgLoss} elapsed=${elapsedS}s errors=${errors}   `
-      );
+      log(`  step=${t} games=${gamesTotal} loss=${avgLoss} elapsed=${elapsedS}s errors=${errors}\n`);
       totalLoss = 0; lossCnt = 0;
 
       if (STATS_FILE) {
@@ -373,7 +390,7 @@ async function train() {
     // Save weights periodically
     if (gamesTotal % SAVE_EVERY < BATCH_SIZE) {
       saveWeights(weights);
-      process.stdout.write(`\n  [saved] step=${t} games=${gamesTotal}\n`);
+      log(`  [saved] step=${t} games=${gamesTotal}\n`);
     }
 
     // Allow event loop to breathe (drain write streams etc)
