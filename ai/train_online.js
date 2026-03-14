@@ -396,6 +396,11 @@ function runGame(bots, weights, masterSlots) {
           : game.currentPlayerIdx === i;
       if (isActive) try { stateBefore = encodeFlat(game, i); } catch {}
 
+      // Only attempt action when it is actually this player's turn.
+      // Heuristic bots self-check via decideBotAction, but random/master
+      // paths don't — without this guard they corrupt the game state.
+      if (!isActive) continue;
+
       // ε-greedy: explore with random action
       if (Math.random() < EPS) {
         acted = takeRandomAction(game, i);
