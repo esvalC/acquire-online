@@ -423,11 +423,18 @@ function runGame(bots, weights, masterSlots) {
 
   if (!game.standings) return null;
 
-  // Ranking loss: normalize each player's final cash across all players.
-  // Gives continuous signal (0.0–1.0) instead of binary win/lose.
+  // Blended reward: 70% relative rank + 30% absolute cash quality.
+  // Relative rank alone lets the bot "win" low-cash games with the same
+  // signal as winning $50k+ games. The absolute component explicitly
+  // rewards high-value play — a $50k game scores 1.0, a $25k game 0.5.
+  const TARGET_CASH   = 50000;
   const totalCash = game.standings.reduce((s, p) => s + p.cash, 0) || 1;
   const outcomeByName = {};
-  for (const p of game.standings) outcomeByName[p.name] = p.cash / totalCash;
+  for (const p of game.standings) {
+    const relative = p.cash / totalCash;
+    const absolute = Math.min(p.cash / TARGET_CASH, 1.0);
+    outcomeByName[p.name] = 0.7 * relative + 0.3 * absolute;
+  }
 
   const records = pending.map(r => ({
     state:   r.state,
