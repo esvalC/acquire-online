@@ -19,8 +19,9 @@
 
 const engine        = require('../gameEngine');
 const { decideBotAction } = require('../botAI');
-const fs   = require('fs');
-const path = require('path');
+const fs            = require('fs');
+const path          = require('path');
+const { execSync }  = require('child_process');
 
 /* ── Config ──────────────────────────────────────────────────── */
 const BATCH_SIZE  = 200;   // games per gradient step
@@ -72,9 +73,20 @@ function loadOrInit() {
   }
 }
 
+const S3_BUCKET = process.env.S3_BUCKET || 'acquire-training-data';
+const S3_KEY    = 'master_weights.json';
+
 function saveWeights(weights) {
   fs.mkdirSync(path.dirname(WEIGHTS_PATH), { recursive: true });
   fs.writeFileSync(WEIGHTS_PATH, JSON.stringify(weights));
+  // Upload to S3 so weights survive instance termination and the live
+  // server can hot-reload them automatically.
+  try {
+    execSync(`aws s3 cp "${WEIGHTS_PATH}" s3://${S3_BUCKET}/${S3_KEY}`, { timeout: 30000, stdio: 'pipe' });
+    process.stdout.write(`  [s3] uploaded → s3://${S3_BUCKET}/${S3_KEY}\n`);
+  } catch (e) {
+    process.stdout.write(`  [s3] upload failed (non-fatal): ${e.message}\n`);
+  }
 }
 
 /* ── Adam optimizer state ────────────────────────────────────── */

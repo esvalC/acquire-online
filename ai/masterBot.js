@@ -19,13 +19,18 @@
 
 const path = require('path');
 const fs   = require('fs');
+const { exec } = require('child_process');
 const engine = require('../gameEngine');
 
 const WEIGHTS_PATH = path.join(__dirname, 'models', 'master_weights.json');
 const INPUT_DIM    = 150; // 108 board + 35 chains + 1 myCash + 4 oppCash + 1 bagCount
 const BAG_TOTAL    = 102;
+const S3_BUCKET    = process.env.S3_BUCKET || 'acquire-training-data';
+const S3_KEY       = 'master_weights.json';
+const TMP_PATH     = '/tmp/master_weights_s3.json';
+const POLL_INTERVAL_MS = 10 * 60 * 1000; // check S3 every 10 minutes
 
-/* ── Weight loading (sync, done once) ───────────────────────── */
+/* ── Weight loading (sync, done once at startup) ─────────────── */
 let _weights    = null;
 let _loadError  = null;
 
@@ -35,12 +40,41 @@ function loadWeights() {
   try {
     const raw = fs.readFileSync(WEIGHTS_PATH, 'utf8');
     _weights = JSON.parse(raw);
+    console.log('[masterBot] Weights loaded from disk.');
     return _weights;
   } catch (err) {
-    _loadError = `master_weights.json not found — train the model first (see ai/train.py)`;
+    _loadError = `master_weights.json not found — train the model first`;
     return null;
   }
 }
+
+/* ── S3 hot-reload — pulls updated weights without restarting ── */
+function tryReloadFromS3() {
+  exec(`aws s3 cp s3://${S3_BUCKET}/${S3_KEY} "${TMP_PATH}" 2>/dev/null`, (err) => {
+    if (err) return; // S3 not accessible (no IAM role, or no weights yet) — silent no-op
+    try {
+      const raw = fs.readFileSync(TMP_PATH, 'utf8');
+      const candidate = JSON.parse(raw);
+      if (!candidate.layers || candidate.layers.length === 0) return;
+      // Sanity check: input dim must match
+      if (candidate.layers[0].W[0].length !== INPUT_DIM) {
+        console.warn('[masterBot] S3 weights have wrong input dim — skipping.');
+        return;
+      }
+      _weights   = candidate;
+      _loadError = null;
+      // Also persist locally so it survives next server restart
+      fs.mkdirSync(path.dirname(WEIGHTS_PATH), { recursive: true });
+      fs.copyFileSync(TMP_PATH, WEIGHTS_PATH);
+      console.log(`[masterBot] Hot-reloaded weights from S3 (${new Date().toISOString()})`);
+    } catch {}
+  });
+}
+
+// Poll S3 every 10 minutes — runs silently in the background
+setInterval(tryReloadFromS3, POLL_INTERVAL_MS);
+// Also check once shortly after startup (weights may already be in S3)
+setTimeout(tryReloadFromS3, 5000);
 
 /* ── Pure-JS MLP forward pass ────────────────────────────────── */
 // weights format: { layers: [ {W: [[...]], b: [...]}, ... ] }
