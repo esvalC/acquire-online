@@ -14,11 +14,12 @@
 const engine = require('./gameEngine');
 
 const BOT_ROSTER = [
-  { name: 'Aria',  personality: 'balanced'    },
-  { name: 'Rex',   personality: 'focused'     },
-  { name: 'Nova',  personality: 'diversified' },
-  { name: 'Colt',  personality: 'focused'     },
-  { name: 'Vera',  personality: 'balanced'    },
+  { name: 'Aria',   personality: 'balanced'    },
+  { name: 'Rex',    personality: 'focused'     },
+  { name: 'Nova',   personality: 'diversified' },
+  { name: 'Colt',   personality: 'focused'     },
+  { name: 'Vera',   personality: 'balanced'    },
+  { name: 'Master', personality: 'balanced', difficulty: 'master' },
 ];
 
 // Hardcoded per-character traits

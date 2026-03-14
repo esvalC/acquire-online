@@ -27,3 +27,4 @@ data/
 ai/data/
 # Model weights (*.json committed, intermediate pytorch *.pt not)
 ai/models/*.pt
+docs/
