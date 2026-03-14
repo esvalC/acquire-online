@@ -2111,7 +2111,7 @@ function renderBotRoster() {
     const diffBtns = ['Easy','Medium','Hard'].map(d =>
       `<button class="bot-diff-btn${s.difficulty === d.toLowerCase() ? ' active' : ''}"
         onclick="setBotDifficulty(${i},'${d.toLowerCase()}')">${d}</button>`
-    ).join('') + `<button class="bot-diff-btn" disabled title="Neural net bot — training in progress" style="opacity:0.45;cursor:default;font-size:10px;">Master<span style="font-size:8px;color:var(--gold);display:block;line-height:1;">soon</span></button>`;
+    ).join('') + `<button class="bot-diff-btn${s.difficulty === 'master' ? ' active' : ''}" onclick="setBotDifficulty(${i},'master')" title="Neural net bot — trained via self-play" style="font-size:10px;${s.difficulty !== 'master' ? 'background:linear-gradient(135deg,#4c1d95,#78350f);border-color:#7c3aed;' : ''}">⚡ Master</button>`;
     const divSlider = s.useCustomDiv ? `
       <div style="margin-top:6px;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
