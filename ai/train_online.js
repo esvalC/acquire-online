@@ -325,29 +325,9 @@ function takeMasterAction(game, playerIdx, weights) {
       return true;
     }
     if (phase === 'buyStock') {
-      // Enumerate a subset of buy options and pick best
-      const player = game.players[playerIdx];
-      const affordable = engine.HOTEL_CHAINS.filter(c => {
-        const ch = game.chains[c];
-        return ch.active && engine.stockPrice(c, ch.tiles.length) <= player.cash
-            && game.players.reduce((s,p)=>s+(p.stocks[c]||0),0) < 25;
-      });
-      const options = [{}]; // buy nothing
-      for (const c of affordable) {
-        const price = engine.stockPrice(c, game.chains[c].tiles.length);
-        const maxN  = Math.min(3, Math.floor(player.cash / price));
-        for (let n = 1; n <= maxN; n++) options.push({ [c]: n });
-      }
-      if (options.length === 1) { engine.buyStock(game, playerIdx, {}); return true; }
-      let best = {}, bestScore = -1;
-      for (const purchases of options) {
-        const sim = JSON.parse(JSON.stringify(game));
-        engine.buyStock(sim, playerIdx, purchases);
-        const { yHat } = forwardFull(weights, encodeFlat(sim, playerIdx));
-        if (yHat > bestScore) { bestScore = yHat; best = purchases; }
-      }
-      engine.buyStock(game, playerIdx, best);
-      return true;
+      // Skip lookahead for buyStock — enumerating all purchase combos is too expensive
+      // in a tight training loop. Random is fine; the network learns from outcomes anyway.
+      return takeRandomAction(game, playerIdx);
     }
   } catch {}
   // For other phases fall back to random (they're rare/low-impact)
