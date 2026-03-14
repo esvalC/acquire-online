@@ -355,8 +355,20 @@ function takeMasterAction(game, playerIdx, weights) {
 }
 
 /* ── Self-play ────────────────────────────────────────────────── */
-const EPS          = 0.10;  // 10% random exploration every game
-const MASTER_SHARE = 0.25;  // 25% of games include the master bot as a player
+const EPS = 0.10; // 10% random exploration — always on, every slot
+
+// Each bot slot independently has this probability of using master weights,
+// ramping up as training matures so the bot increasingly faces itself:
+//   warmup  (<5k)  : 0%   — learn from heuristic opponents first
+//   early   (<15k) : 30%  — ~1.5 master bots/game on average
+//   mid     (<30k) : 60%  — ~3 master bots/game (majority master vs master)
+//   mature  (30k+) : 85%  — ~4.25/game (near-full self-play)
+function masterShareForGame(gamesTotal) {
+  if (gamesTotal < 5000)  return 0;
+  if (gamesTotal < 15000) return 0.30;
+  if (gamesTotal < 30000) return 0.60;
+  return 0.85;
+}
 
 function shuffle(arr) {
   const a = arr.slice();
@@ -367,8 +379,8 @@ function shuffle(arr) {
   return a;
 }
 
-// masterSlot: index into the bot array that the master bot occupies (-1 = none)
-function runGame(bots, weights, masterSlot) {
+// masterSlots: Set of bot indices that will use master weights this game
+function runGame(bots, weights, masterSlots) {
   const names = bots.map(b => b.name);
   const game  = engine.createGame(names, { quickstart: true });
   const byName = {};
@@ -398,7 +410,7 @@ function runGame(bots, weights, masterSlot) {
       // ε-greedy: explore with random action
       if (Math.random() < EPS) {
         acted = takeRandomAction(game, i);
-      } else if (i === masterSlot && weights) {
+      } else if (masterSlots.has(i) && weights) {
         // Master bot: use learned value network
         acted = takeMasterAction(game, i, weights);
       } else {
@@ -462,11 +474,11 @@ async function train() {
     const batch = [];
     for (let g = 0; g < BATCH_SIZE; g++) {
       const bots = shuffle(BOTS);
-      // After 5000 warmup games, 25% of games use the master bot as one player
-      const useMaster = gamesTotal > 5000 && Math.random() < MASTER_SHARE;
-      const masterSlot = useMaster ? Math.floor(Math.random() * bots.length) : -1;
-      if (useMaster) masterGames++;
-      const result = runGame(bots, weights, masterSlot);
+      // Each slot independently gets master weights with probability that ramps over time
+      const pMaster = masterShareForGame(gamesTotal);
+      const masterSlots = new Set(bots.map((_, i) => i).filter(() => Math.random() < pMaster));
+      if (masterSlots.size > 0) masterGames++;
+      const result = runGame(bots, weights, masterSlots);
       gamesTotal++;
       if (!result) { errors++; continue; }
       // Track win rates + avg cash per bot
