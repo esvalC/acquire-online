@@ -245,7 +245,119 @@ function encodeFlat(game, playerIdx) {
   return vec;
 }
 
+/* ── Exploration: random legal action ────────────────────────── */
+// Takes a random legal action for the current player in any phase.
+// Returns true if an action was taken.
+function takeRandomAction(game, playerIdx) {
+  const phase = game.phase;
+  try {
+    if (phase === 'placeTile') {
+      const { playable } = engine.getPlayableTiles(game);
+      if (playable.length === 0) { engine.passTile(game, playerIdx); return true; }
+      engine.placeTile(game, playerIdx, playable[Math.floor(Math.random() * playable.length)]);
+      return true;
+    }
+    if (phase === 'buyStock') {
+      // Pick 0–3 random affordable stocks
+      const affordable = engine.HOTEL_CHAINS.filter(c => {
+        const ch = game.chains[c];
+        return ch.active && engine.stockPrice(c, ch.tiles.length) <= game.players[playerIdx].cash;
+      });
+      shuffle(affordable);
+      const purchases = {};
+      let buys = 0;
+      for (const c of affordable) {
+        if (buys >= 3) break;
+        const price = engine.stockPrice(c, game.chains[c].tiles.length);
+        const n = Math.min(3 - buys, Math.floor(game.players[playerIdx].cash / price),
+                           25 - game.players.reduce((s,p)=>s+(p.stocks[c]||0),0));
+        if (n <= 0) continue;
+        purchases[c] = 1 + Math.floor(Math.random() * n);
+        buys += purchases[c];
+      }
+      engine.buyStock(game, playerIdx, purchases);
+      return true;
+    }
+    if (phase === 'chooseChain') {
+      const available = engine.HOTEL_CHAINS.filter(c => !game.chains[c].active);
+      if (available.length) engine.chooseChain(game, playerIdx, available[Math.floor(Math.random() * available.length)]);
+      return true;
+    }
+    if (phase === 'chooseMergerSurvivor') {
+      // Pick a random survivor from the tied chains
+      const tied = game.pendingMerger?.tiedChains || [];
+      if (tied.length) engine.chooseMergerSurvivor(game, playerIdx, tied[Math.floor(Math.random() * tied.length)]);
+      return true;
+    }
+    if (phase === 'mergerDecision' && game.pendingMerger?.decidingPlayer === playerIdx) {
+      const defunct = game.pendingMerger.defunctChains[game.pendingMerger.currentDefunctIdx];
+      const held = game.players[playerIdx].stocks[defunct] || 0;
+      const r = Math.random();
+      engine.mergerDecision(game, playerIdx, r < 0.33
+        ? { sell: held, trade: 0 }
+        : r < 0.66
+          ? { sell: 0, trade: 0 }
+          : { sell: 0, trade: Math.min(Math.floor(held / 2) * 2, 25 * 2) });
+      return true;
+    }
+  } catch {}
+  return false;
+}
+
+/* ── Master bot action: one-step lookahead with current weights ─ */
+// Scores each legal action by encoding the resulting state and running
+// the value network. Falls back to random for non-critical phases.
+function takeMasterAction(game, playerIdx, weights) {
+  const phase = game.phase;
+  try {
+    if (phase === 'placeTile') {
+      const { playable } = engine.getPlayableTiles(game);
+      if (playable.length === 0) { engine.passTile(game, playerIdx); return true; }
+      if (playable.length === 1) { engine.placeTile(game, playerIdx, playable[0]); return true; }
+      let best = playable[0], bestScore = -1;
+      for (const tile of playable) {
+        const sim = JSON.parse(JSON.stringify(game));
+        engine.placeTile(sim, playerIdx, tile);
+        const { yHat } = forwardFull(weights, encodeFlat(sim, playerIdx));
+        if (yHat > bestScore) { bestScore = yHat; best = tile; }
+      }
+      engine.placeTile(game, playerIdx, best);
+      return true;
+    }
+    if (phase === 'buyStock') {
+      // Enumerate a subset of buy options and pick best
+      const player = game.players[playerIdx];
+      const affordable = engine.HOTEL_CHAINS.filter(c => {
+        const ch = game.chains[c];
+        return ch.active && engine.stockPrice(c, ch.tiles.length) <= player.cash
+            && game.players.reduce((s,p)=>s+(p.stocks[c]||0),0) < 25;
+      });
+      const options = [{}]; // buy nothing
+      for (const c of affordable) {
+        const price = engine.stockPrice(c, game.chains[c].tiles.length);
+        const maxN  = Math.min(3, Math.floor(player.cash / price));
+        for (let n = 1; n <= maxN; n++) options.push({ [c]: n });
+      }
+      if (options.length === 1) { engine.buyStock(game, playerIdx, {}); return true; }
+      let best = {}, bestScore = -1;
+      for (const purchases of options) {
+        const sim = JSON.parse(JSON.stringify(game));
+        engine.buyStock(sim, playerIdx, purchases);
+        const { yHat } = forwardFull(weights, encodeFlat(sim, playerIdx));
+        if (yHat > bestScore) { bestScore = yHat; best = purchases; }
+      }
+      engine.buyStock(game, playerIdx, best);
+      return true;
+    }
+  } catch {}
+  // For other phases fall back to random (they're rare/low-impact)
+  return takeRandomAction(game, playerIdx);
+}
+
 /* ── Self-play ────────────────────────────────────────────────── */
+const EPS          = 0.10;  // 10% random exploration every game
+const MASTER_SHARE = 0.25;  // 25% of games include the master bot as a player
+
 function shuffle(arr) {
   const a = arr.slice();
   for (let i = a.length - 1; i > 0; i--) {
@@ -255,7 +367,8 @@ function shuffle(arr) {
   return a;
 }
 
-function runGame(bots) {
+// masterSlot: index into the bot array that the master bot occupies (-1 = none)
+function runGame(bots, weights, masterSlot) {
   const names = bots.map(b => b.name);
   const game  = engine.createGame(names, { quickstart: true });
   const byName = {};
@@ -273,11 +386,25 @@ function runGame(bots) {
       const bot = byName[gp.name];
       if (!bot) continue;
 
+      // Only record state if this player is acting in a relevant phase
       let stateBefore = null;
-      try { stateBefore = encodeFlat(game, i); } catch {}
+      const isActive = game.phase === 'placeTile'
+        ? game.currentPlayerIdx === i
+        : game.phase === 'mergerDecision'
+          ? game.pendingMerger?.decidingPlayer === i
+          : game.currentPlayerIdx === i;
+      if (isActive) try { stateBefore = encodeFlat(game, i); } catch {}
 
-      try { acted = decideBotAction(game, i, bot.personality, bot.difficulty, bot.name); }
-      catch { return null; }
+      // ε-greedy: explore with random action
+      if (Math.random() < EPS) {
+        acted = takeRandomAction(game, i);
+      } else if (i === masterSlot && weights) {
+        // Master bot: use learned value network
+        acted = takeMasterAction(game, i, weights);
+      } else {
+        try { acted = decideBotAction(game, i, bot.personality, bot.difficulty, bot.name); }
+        catch { return null; }
+      }
 
       if (acted) {
         if (stateBefore) pending.push({ playerIdx: i, name: gp.name, state: stateBefore });
@@ -314,14 +441,15 @@ async function train() {
   const weights  = loadOrInit();
   const adam     = initAdam(weights);
 
-  let t          = 0;   // Adam step counter
-  let gamesTotal = 0;
-  let errors     = 0;
-  let totalLoss  = 0;
-  let lossCnt    = 0;
+  let t           = 0;   // Adam step counter
+  let gamesTotal  = 0;
+  let masterGames = 0;
+  let errors      = 0;
+  let totalLoss   = 0;
+  let lossCnt     = 0;
   let lossHistory = []; // rolling window for sparkline
-  const wins     = {};
-  const avgCash  = {};
+  const wins      = {};
+  const avgCash   = {};
   for (const b of BOTS) { wins[b.name] = 0; avgCash[b.name] = []; }
   const t0 = Date.now();
 
@@ -333,8 +461,12 @@ async function train() {
     // Collect one batch of games
     const batch = [];
     for (let g = 0; g < BATCH_SIZE; g++) {
-      const bots   = shuffle(BOTS);
-      const result = runGame(bots);
+      const bots = shuffle(BOTS);
+      // After 5000 warmup games, 25% of games use the master bot as one player
+      const useMaster = gamesTotal > 5000 && Math.random() < MASTER_SHARE;
+      const masterSlot = useMaster ? Math.floor(Math.random() * bots.length) : -1;
+      if (useMaster) masterGames++;
+      const result = runGame(bots, weights, masterSlot);
       gamesTotal++;
       if (!result) { errors++; continue; }
       // Track win rates + avg cash per bot
@@ -342,7 +474,7 @@ async function train() {
       for (const p of result.standings) {
         if (avgCash[p.name]) {
           avgCash[p.name].push(p.cash);
-          if (avgCash[p.name].length > 5000) avgCash[p.name].shift(); // cap memory
+          if (avgCash[p.name].length > 5000) avgCash[p.name].shift();
         }
       }
       for (const rec of result.records) batch.push(rec);
@@ -393,6 +525,7 @@ async function train() {
         step: t,
         gamesTotal,
         gamesPlayed: played,
+        masterGames,
         errors,
         avgLoss: parseFloat(avgLoss),
         lossHistory: lossHistory.slice(),

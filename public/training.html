@@ -188,9 +188,9 @@
       <div class="card-sub">lower = better</div>
     </div>
     <div class="card">
-      <div class="card-label">Errors</div>
-      <div class="card-value green" id="errors">—</div>
-      <div class="card-sub">stuck / crashed games</div>
+      <div class="card-label">Master Bot Games</div>
+      <div class="card-value green" id="masterGames">—</div>
+      <div class="card-sub" id="masterPct"></div>
     </div>
     <div class="card">
       <div class="card-label">Elapsed</div>
@@ -345,7 +345,9 @@ async function refresh() {
     document.getElementById('gamesPerSec').textContent = data.gamesPerSec ? `${data.gamesPerSec} games/sec` : '';
     document.getElementById('steps').textContent = data.step.toLocaleString();
     document.getElementById('loss').textContent = data.avgLoss?.toFixed(4) ?? '—';
-    document.getElementById('errors').textContent = data.errors.toLocaleString();
+    document.getElementById('masterGames').textContent = (data.masterGames || 0).toLocaleString();
+    const mPct = data.gamesTotal > 0 ? ((data.masterGames||0) / data.gamesTotal * 100).toFixed(1) : 0;
+    document.getElementById('masterPct').textContent = `${mPct}% of games · starts after 5k warmup`;
     document.getElementById('elapsed').textContent = fmtTime(data.elapsedSecs);
     document.getElementById('remaining').textContent = data.remainingSecs ? `~${fmtTime(data.remainingSecs)} left` : '';
     document.getElementById('updatedAt').textContent = new Date(data.updatedAt).toUTCString().slice(17, 25);
