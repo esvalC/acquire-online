@@ -304,9 +304,21 @@ function takeRandomAction(game, playerIdx) {
   return false;
 }
 
+/* ── Fast game clone for scoring (strips log — biggest source of bloat) ── */
+// The game.log array grows to hundreds of entries mid-game, making a full
+// JSON clone expensive. We only need board + chains + players for scoring.
+function cloneForScoring(game) {
+  const savedLog = game.log;
+  game.log = [];
+  const clone = JSON.parse(JSON.stringify(game));
+  game.log = savedLog;
+  clone.log = []; // fresh empty log — engine may write to it during sim
+  return clone;
+}
+
 /* ── Master bot action: one-step lookahead with current weights ─ */
-// Scores each legal action by encoding the resulting state and running
-// the value network. Falls back to random for non-critical phases.
+// Only used for placeTile (most impactful decision). All other phases
+// use random to keep the training loop fast.
 function takeMasterAction(game, playerIdx, weights) {
   const phase = game.phase;
   try {
@@ -314,9 +326,11 @@ function takeMasterAction(game, playerIdx, weights) {
       const { playable } = engine.getPlayableTiles(game);
       if (playable.length === 0) { engine.passTile(game, playerIdx); return true; }
       if (playable.length === 1) { engine.placeTile(game, playerIdx, playable[0]); return true; }
-      let best = playable[0], bestScore = -1;
-      for (const tile of playable) {
-        const sim = JSON.parse(JSON.stringify(game));
+      // Cap at 3 tiles to bound cost; shuffle so we don't always skip the same ones
+      const toEval = playable.length > 3 ? shuffle(playable).slice(0, 3) : playable;
+      let best = toEval[0], bestScore = -1;
+      for (const tile of toEval) {
+        const sim = cloneForScoring(game); // log-stripped clone — much cheaper
         engine.placeTile(sim, playerIdx, tile);
         const { yHat } = forwardFull(weights, encodeFlat(sim, playerIdx));
         if (yHat > bestScore) { bestScore = yHat; best = tile; }
@@ -324,13 +338,8 @@ function takeMasterAction(game, playerIdx, weights) {
       engine.placeTile(game, playerIdx, best);
       return true;
     }
-    if (phase === 'buyStock') {
-      // Skip lookahead for buyStock — enumerating all purchase combos is too expensive
-      // in a tight training loop. Random is fine; the network learns from outcomes anyway.
-      return takeRandomAction(game, playerIdx);
-    }
   } catch {}
-  // For other phases fall back to random (they're rare/low-impact)
+  // buyStock and all other phases: use random (cheap, good training diversity)
   return takeRandomAction(game, playerIdx);
 }
 
