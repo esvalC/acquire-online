@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Master Bot Training</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0a0a0f;
+    color: #e2e8f0;
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #a78bfa;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+  .subtitle { color: #64748b; font-size: 0.8rem; margin-bottom: 28px; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin-bottom: 24px;
+  }
+  .card {
+    background: #13131a;
+    border: 1px solid #1e1e2e;
+    border-radius: 12px;
+    padding: 20px;
+  }
+  .card-label {
+    font-size: 0.7rem;
+    color: #64748b;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 8px;
+  }
+  .card-value {
+    font-size: 1.9rem;
+    font-weight: 700;
+    color: #f1f5f9;
+    line-height: 1;
+  }
+  .card-sub {
+    font-size: 0.75rem;
+    color: #475569;
+    margin-top: 6px;
+  }
+  .card-value.green  { color: #34d399; }
+  .card-value.purple { color: #a78bfa; }
+  .card-value.amber  { color: #fbbf24; }
+
+  /* Loss chart */
+  .chart-card {
+    background: #13131a;
+    border: 1px solid #1e1e2e;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  .chart-card h2 { font-size: 0.85rem; color: #94a3b8; margin-bottom: 16px; }
+  #lossChart {
+    width: 100%;
+    height: 100px;
+    display: block;
+  }
+  .chart-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    color: #475569;
+    margin-top: 4px;
+  }
+
+  /* Bot leaderboard */
+  .bots-card {
+    background: #13131a;
+    border: 1px solid #1e1e2e;
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 24px;
+  }
+  .bots-card h2 { font-size: 0.85rem; color: #94a3b8; margin-bottom: 16px; }
+  .bot-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+  .bot-name {
+    width: 52px;
+    font-size: 0.8rem;
+    color: #cbd5e1;
+    font-weight: 600;
+  }
+  .bot-bar-wrap {
+    flex: 1;
+    background: #1e1e2e;
+    border-radius: 4px;
+    height: 18px;
+    overflow: hidden;
+  }
+  .bot-bar {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+    display: flex;
+    align-items: center;
+    padding-left: 8px;
+    font-size: 0.65rem;
+    font-weight: 700;
+    color: rgba(0,0,0,0.7);
+    min-width: 36px;
+    white-space: nowrap;
+  }
+  .bot-cash {
+    width: 72px;
+    text-align: right;
+    font-size: 0.72rem;
+    color: #64748b;
+  }
+  .bot-wins {
+    width: 44px;
+    text-align: right;
+    font-size: 0.72rem;
+    color: #475569;
+  }
+
+  /* Status bar */
+  .status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.72rem;
+    color: #475569;
+    margin-bottom: 24px;
+  }
+  .dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    background: #475569;
+  }
+  .dot.live { background: #34d399; animation: pulse 2s infinite; }
+  @keyframes pulse {
+    0%,100% { opacity: 1; }
+    50%      { opacity: 0.4; }
+  }
+
+  .offline-msg {
+    text-align: center;
+    padding: 60px 20px;
+    color: #475569;
+    font-size: 0.9rem;
+  }
+  .offline-msg span { display: block; font-size: 2rem; margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<h1>⚡ Master Bot Training</h1>
+<p class="subtitle">Live stats from EC2 self-play · refreshes every 30s</p>
+
+<div class="status">
+  <div class="dot" id="statusDot"></div>
+  <span id="statusText">Connecting…</span>
+</div>
+
+<div id="main" style="display:none">
+  <div class="grid">
+    <div class="card">
+      <div class="card-label">Games Played</div>
+      <div class="card-value purple" id="gamesPlayed">—</div>
+      <div class="card-sub" id="gamesPerSec"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Gradient Steps</div>
+      <div class="card-value" id="steps">—</div>
+      <div class="card-sub">200 games / step</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Current Loss</div>
+      <div class="card-value amber" id="loss">—</div>
+      <div class="card-sub">lower = better</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Errors</div>
+      <div class="card-value green" id="errors">—</div>
+      <div class="card-sub">stuck / crashed games</div>
+    </div>
+    <div class="card">
+      <div class="card-label">Elapsed</div>
+      <div class="card-value" id="elapsed">—</div>
+      <div class="card-sub" id="remaining"></div>
+    </div>
+    <div class="card">
+      <div class="card-label">Last Updated</div>
+      <div class="card-value" style="font-size:1rem" id="updatedAt">—</div>
+      <div class="card-sub">UTC</div>
+    </div>
+  </div>
+
+  <div class="chart-card">
+    <h2>LOSS HISTORY (last 50 checkpoints)</h2>
+    <canvas id="lossChart"></canvas>
+    <div class="chart-labels">
+      <span id="chartOldest"></span>
+      <span id="chartNewest"></span>
+    </div>
+  </div>
+
+  <div class="bots-card">
+    <h2>BOT WIN RATES</h2>
+    <div id="botRows"></div>
+  </div>
+</div>
+
+<div class="offline-msg" id="offlineMsg" style="display:none">
+  <span>💤</span>
+  Training is not currently running.<br>
+  Stats will appear here when a training job is active.
+</div>
+
+<script>
+const BOT_COLORS = {
+  Nova: '#f59e0b',
+  Rex:  '#3b82f6',
+  Aria: '#a78bfa',
+  Colt: '#34d399',
+  Vera: '#f87171',
+};
+
+const BASE = window.location.pathname.startsWith('/beta') ? '/beta' : '';
+
+function fmtTime(secs) {
+  if (!secs) return '—';
+  const h = Math.floor(secs / 3600);
+  const m = Math.floor((secs % 3600) / 60);
+  const s = secs % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function fmtCash(n) {
+  return n ? '$' + n.toLocaleString() : '—';
+}
+
+function drawChart(history) {
+  const canvas = document.getElementById('lossChart');
+  const ctx    = canvas.getContext('2d');
+  const W = canvas.offsetWidth;
+  const H = 100;
+  canvas.width  = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  if (!history || history.length < 2) return;
+  const min  = Math.min(...history) * 0.98;
+  const max  = Math.max(...history) * 1.02;
+  const step = W / (history.length - 1);
+
+  // Grid lines
+  ctx.strokeStyle = '#1e1e2e';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 4; i++) {
+    const y = (H / 4) * i;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(167,139,250,0.3)');
+  grad.addColorStop(1, 'rgba(167,139,250,0)');
+  ctx.beginPath();
+  history.forEach((v, i) => {
+    const x = i * step;
+    const y = H - ((v - min) / (max - min)) * H * 0.85 - 4;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.lineTo((history.length - 1) * step, H);
+  ctx.lineTo(0, H);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Line
+  ctx.beginPath();
+  ctx.strokeStyle = '#a78bfa';
+  ctx.lineWidth = 2;
+  history.forEach((v, i) => {
+    const x = i * step;
+    const y = H - ((v - min) / (max - min)) * H * 0.85 - 4;
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+
+  // Labels
+  document.getElementById('chartOldest').textContent = history[0].toFixed(4);
+  document.getElementById('chartNewest').textContent = history[history.length - 1].toFixed(4);
+}
+
+function renderBots(bots) {
+  if (!bots || !bots.length) return;
+  const maxWin = Math.max(...bots.map(b => b.winPct), 1);
+  const html = bots.map(b => `
+    <div class="bot-row">
+      <div class="bot-name">${b.name}</div>
+      <div class="bot-bar-wrap">
+        <div class="bot-bar" style="width:${(b.winPct/maxWin*100).toFixed(1)}%;background:${BOT_COLORS[b.name]||'#64748b'}">
+          ${b.winPct.toFixed(1)}%
+        </div>
+      </div>
+      <div class="bot-cash">${fmtCash(b.avgCash)}</div>
+      <div class="bot-wins">${b.wins.toLocaleString()}W</div>
+    </div>
+  `).join('');
+  document.getElementById('botRows').innerHTML = html;
+}
+
+async function refresh() {
+  try {
+    const res  = await fetch(`${BASE}/api/training-stats`);
+    const data = await res.json();
+
+    if (data.error) {
+      document.getElementById('statusDot').className = 'dot';
+      document.getElementById('statusText').textContent = data.error;
+      document.getElementById('main').style.display = 'none';
+      document.getElementById('offlineMsg').style.display = 'block';
+      return;
+    }
+
+    document.getElementById('statusDot').className = 'dot live';
+    const lag = Math.round((Date.now() - new Date(data.updatedAt)) / 1000);
+    document.getElementById('statusText').textContent = `Live · last update ${lag}s ago`;
+    document.getElementById('main').style.display = 'block';
+    document.getElementById('offlineMsg').style.display = 'none';
+
+    document.getElementById('gamesPlayed').textContent = (data.gamesPlayed || data.gamesTotal || 0).toLocaleString();
+    document.getElementById('gamesPerSec').textContent = data.gamesPerSec ? `${data.gamesPerSec} games/sec` : '';
+    document.getElementById('steps').textContent = data.step.toLocaleString();
+    document.getElementById('loss').textContent = data.avgLoss?.toFixed(4) ?? '—';
+    document.getElementById('errors').textContent = data.errors.toLocaleString();
+    document.getElementById('elapsed').textContent = fmtTime(data.elapsedSecs);
+    document.getElementById('remaining').textContent = data.remainingSecs ? `~${fmtTime(data.remainingSecs)} left` : '';
+    document.getElementById('updatedAt').textContent = new Date(data.updatedAt).toUTCString().slice(17, 25);
+
+    drawChart(data.lossHistory);
+    renderBots(data.bots);
+  } catch (e) {
+    document.getElementById('statusDot').className = 'dot';
+    document.getElementById('statusText').textContent = 'Could not reach server.';
+  }
+}
+
+refresh();
+setInterval(refresh, 30000);
+</script>
+</body>
+</html>

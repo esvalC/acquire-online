@@ -283,9 +283,31 @@ app.get('/api/plan/users', requireAdmin, (req, res) => {
   res.json({ users });
 });
 
+/* ── Training dashboard stats (proxies S3, cached 60s) ────────── */
+const { exec } = require('child_process');
+let _trainingStatsCache = null;
+let _trainingStatsCacheTime = 0;
+app.get('/api/training-stats', (req, res) => {
+  const now = Date.now();
+  if (_trainingStatsCache && now - _trainingStatsCacheTime < 60000) {
+    return res.json(_trainingStatsCache);
+  }
+  const bucket = process.env.S3_BUCKET || 'acquire-training-data';
+  exec(`aws s3 cp s3://${bucket}/training_stats.json /tmp/training_stats_cache.json 2>/dev/null`, (err) => {
+    if (err) return res.json({ error: 'Training not running or stats unavailable.' });
+    try {
+      const data = JSON.parse(require('fs').readFileSync('/tmp/training_stats_cache.json', 'utf8'));
+      _trainingStatsCache = data;
+      _trainingStatsCacheTime = now;
+      res.json(data);
+    } catch { res.json({ error: 'Could not parse stats.' }); }
+  });
+});
+
 // Serve index.html for all known routes (client-side routing)
 const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback', '/finance-road', '/finance-road/:tier/:level', '/quick-master', '/replay/:id'];
 app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
+app.get('/training', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'training.html')));
 for (const route of clientRoutes) {
   app.get(route, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
 }

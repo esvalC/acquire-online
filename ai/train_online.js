@@ -292,15 +292,16 @@ function runGame(bots) {
 
   // Ranking loss: normalize each player's final cash across all players.
   // Gives continuous signal (0.0–1.0) instead of binary win/lose.
-  // A player with 40% of total cash gets outcome=0.4 — much richer than 0 or 1.
   const totalCash = game.standings.reduce((s, p) => s + p.cash, 0) || 1;
   const outcomeByName = {};
   for (const p of game.standings) outcomeByName[p.name] = p.cash / totalCash;
 
-  return pending.map(r => ({
+  const records = pending.map(r => ({
     state:   r.state,
-    outcome: outcomeByName[r.name] ?? 0.2, // fallback to equal share
+    outcome: outcomeByName[r.name] ?? 0.2,
   }));
+
+  return { records, standings: game.standings };
 }
 
 /* ── Main training loop ──────────────────────────────────────── */
@@ -313,13 +314,15 @@ async function train() {
   const weights  = loadOrInit();
   const adam     = initAdam(weights);
 
-  let t         = 0;   // Adam step counter
+  let t          = 0;   // Adam step counter
   let gamesTotal = 0;
-  let errors    = 0;
-  let totalLoss = 0;
-  let lossCnt   = 0;
-  let wins      = {};
-  for (const b of BOTS) wins[b.name] = 0;
+  let errors     = 0;
+  let totalLoss  = 0;
+  let lossCnt    = 0;
+  let lossHistory = []; // rolling window for sparkline
+  const wins     = {};
+  const avgCash  = {};
+  for (const b of BOTS) { wins[b.name] = 0; avgCash[b.name] = []; }
   const t0 = Date.now();
 
   // Pre-allocate gradient buffers (reused every batch)
@@ -330,12 +333,19 @@ async function train() {
     // Collect one batch of games
     const batch = [];
     for (let g = 0; g < BATCH_SIZE; g++) {
-      const bots    = shuffle(BOTS);
-      const records = runGame(bots);
+      const bots   = shuffle(BOTS);
+      const result = runGame(bots);
       gamesTotal++;
-      if (!records) { errors++; continue; }
-      const winner = bots[0].name; // already encoded in records outcome
-      for (const rec of records) batch.push(rec);
+      if (!result) { errors++; continue; }
+      // Track win rates + avg cash per bot
+      wins[result.standings[0].name]++;
+      for (const p of result.standings) {
+        if (avgCash[p.name]) {
+          avgCash[p.name].push(p.cash);
+          if (avgCash[p.name].length > 5000) avgCash[p.name].shift(); // cap memory
+        }
+      }
+      for (const rec of result.records) batch.push(rec);
     }
 
     if (batch.length === 0) continue;
@@ -368,23 +378,49 @@ async function train() {
     totalLoss += batchLoss / batch.length;
     lossCnt++;
 
-    // Progress log every 10 batches
+    // Progress log + stats every 10 batches
     if (t % 10 === 0) {
-      const elapsedS = ((Date.now() - t0) / 1000).toFixed(0);
-      const avgLoss  = (totalLoss / lossCnt).toFixed(4);
-      log(`  step=${t} games=${gamesTotal} loss=${avgLoss} elapsed=${elapsedS}s errors=${errors}\n`);
+      const elapsedS  = ((Date.now() - t0) / 1000).toFixed(0);
+      const avgLoss   = (totalLoss / lossCnt).toFixed(4);
+      const played    = gamesTotal - errors;
+      lossHistory.push(parseFloat(avgLoss));
+      if (lossHistory.length > 50) lossHistory.shift(); // keep last 50 points
       totalLoss = 0; lossCnt = 0;
 
+      log(`  step=${t} games=${gamesTotal} loss=${avgLoss} elapsed=${elapsedS}s errors=${errors}\n`);
+
+      const stats = {
+        step: t,
+        gamesTotal,
+        gamesPlayed: played,
+        errors,
+        avgLoss: parseFloat(avgLoss),
+        lossHistory: lossHistory.slice(),
+        elapsedSecs: parseInt(elapsedS),
+        remainingSecs: Math.max(0, Math.floor((TIME_LIMIT - (Date.now() - t0)) / 1000)),
+        timeLimitSecs: TIME_LIMIT === Infinity ? null : TIME_LIMIT / 1000,
+        gamesPerSec: played > 0 ? +(played / parseInt(elapsedS)).toFixed(1) : 0,
+        updatedAt: new Date().toISOString(),
+        bots: BOTS.map(b => {
+          const cash = avgCash[b.name] || [];
+          return {
+            name: b.name,
+            wins: wins[b.name] || 0,
+            winPct: played > 0 ? +((wins[b.name] / played) * 100).toFixed(1) : 0,
+            avgCash: cash.length ? Math.round(cash.reduce((s,v)=>s+v,0)/cash.length) : 0,
+          };
+        }).sort((a, b) => b.wins - a.wins),
+      };
+
       if (STATS_FILE) {
-        try {
-          fs.writeFileSync(STATS_FILE, JSON.stringify({
-            step: t, gamesTotal, errors,
-            avgLoss: parseFloat(avgLoss),
-            elapsedSecs: parseInt(elapsedS),
-            updatedAt: new Date().toISOString(),
-          }));
-        } catch {}
+        try { fs.writeFileSync(STATS_FILE, JSON.stringify(stats)); } catch {}
       }
+      // Also push stats to S3 so the dashboard can read them
+      try {
+        const tmpStats = '/tmp/training_stats.json';
+        fs.writeFileSync(tmpStats, JSON.stringify(stats));
+        execSync(`aws s3 cp "${tmpStats}" s3://${S3_BUCKET}/training_stats.json`, { timeout: 15000, stdio: 'pipe' });
+      } catch {}
     }
 
     // Save weights periodically
