@@ -539,6 +539,30 @@ function decideBotAction(game, botIdx, personality, difficulty, botName) {
   const traits = BOT_TRAITS[botName] || { mergerSeeking: 0, riskAppetite: 0, chainLoyalty: 0 };
   const mult   = DIFF_MULT[difficulty] || 1.0;
 
+  // End-game declaration: check before acting on placeTile turns.
+  // Bots should end when they've maximised their position — not blindly ASAP.
+  // Strategy: end if winning and no small chains remain (no merger money left
+  // on the table); delay if small chains could be merged for bonuses, especially
+  // if currently losing (need that comeback).
+  if (game.phase === 'placeTile' && game.currentPlayerIdx === botIdx && engine.canDeclareGameEnd(game)) {
+    const myPlayer   = game.players[botIdx];
+    const opponents  = game.players.filter((_, i) => i !== botIdx);
+    const bestOpp    = Math.max(...opponents.map(p => p.cash));
+    const smallChains = engine.HOTEL_CHAINS.filter(c => {
+      const ch = game.chains[c];
+      return ch.active && ch.tiles.length < 11; // not safe yet — merger money still available
+    });
+    const isWinning      = myPlayer.cash >= bestOpp;
+    const noSmallChains  = smallChains.length === 0;
+    const bigLead        = myPlayer.cash > bestOpp * 1.20; // 20%+ lead — safe to end
+
+    if (noSmallChains || bigLead || (isWinning && smallChains.length <= 1)) {
+      engine.declareGameEnd(game, botIdx);
+      return true;
+    }
+    // Otherwise keep playing — small chains mean merger bonuses still up for grabs
+  }
+
   // Master mode: learned value network (sync, pure-JS, zero deps)
   if (difficulty === 'master') {
     const master = require('./ai/masterBot');

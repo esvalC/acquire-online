@@ -784,6 +784,7 @@ module.exports = {
   mergerDecision,
   buyStock,
   declareGameEnd,
+  canDeclareGameEnd,
   getClientState,
   getPlayableTiles,
   analyzeTilePlacement,

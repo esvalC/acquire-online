@@ -414,7 +414,8 @@ function runGame(bots, weights, masterSlots) {
 
       if (acted) {
         if (stateBefore) pending.push({ playerIdx: i, name: gp.name, state: stateBefore });
-        if (game.phase !== 'gameOver') engine.declareGameEnd(game, game.currentPlayerIdx);
+        // Do NOT auto-declare end here — let the game play through end-game mergers.
+        // decideBotAction now handles strategic end-game declaration.
         break;
       }
     }
@@ -431,9 +432,9 @@ function runGame(bots, weights, masterSlots) {
   const totalCash = game.standings.reduce((s, p) => s + p.cash, 0) || 1;
   const outcomeByName = {};
   for (const p of game.standings) {
-    const relative = p.cash / totalCash;
-    const absolute = Math.min(p.cash / TARGET_CASH, 1.0);
-    outcomeByName[p.name] = 0.7 * relative + 0.3 * absolute;
+    const relative = p.cash / totalCash;                    // who wins
+    const absolute = Math.min(p.cash / TARGET_CASH, 1.0);  // how much ($50k = perfect)
+    outcomeByName[p.name] = 0.5 * relative + 0.5 * absolute;
   }
 
   const records = pending.map(r => ({
