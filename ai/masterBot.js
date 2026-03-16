@@ -1,8 +1,8 @@
 /**
  * ai/masterBot.js — Master Bot inference
  *
- * Supports weight format v2 (AlphaZero-style):
- *   { version: 2, body: [...], policyHead: [...], valueHead: [...] }
+ * Supports weight format v3 (AlphaZero-style):
+ *   { version: 3, body: [...], policyHead: [...], valueHead: [...] }
  *
  * Tile placement: use policy head logits directly (fastest — no cloning).
  *   The policy head has learned which tiles are strategically strong.
@@ -17,7 +17,7 @@ const { exec } = require('child_process');
 const engine = require('../gameEngine');
 
 const WEIGHTS_PATH     = path.join(__dirname, 'models', 'master_weights.json');
-const INPUT_DIM        = 150;
+const INPUT_DIM        = 258;  // 108 board + 108 tile hand + 35 chains + 1 myCash + 4 oppCash + 1 bagCount
 const POLICY_DIM       = 108; // 9×12 board
 const VALUE_DIM        = 5;   // one per player
 const BAG_TOTAL        = 102;
@@ -36,13 +36,13 @@ function loadWeights() {
   try {
     const raw = fs.readFileSync(WEIGHTS_PATH, 'utf8');
     const w   = JSON.parse(raw);
-    if (!w.version || w.version < 2) {
-      _loadError = 'Old weight format (v1) — retrain with new AlphaZero architecture';
+    if (!w.version || w.version < 3) {
+      _loadError = 'Old weight format (pre-v3) — retrain with new AlphaZero architecture';
       console.warn('[masterBot]', _loadError);
       return null;
     }
     _weights = w;
-    console.log('[masterBot] v2 weights loaded from disk.');
+    console.log('[masterBot] v3 weights loaded from disk.');
     return _weights;
   } catch (err) {
     _loadError = 'master_weights.json not found — train first';
@@ -57,13 +57,13 @@ function tryReloadFromS3() {
     try {
       const raw       = fs.readFileSync(TMP_PATH, 'utf8');
       const candidate = JSON.parse(raw);
-      if (!candidate.version || candidate.version < 2) return;
+      if (!candidate.version || candidate.version < 3) return;
       if (!candidate.body || !candidate.policyHead || !candidate.valueHead) return;
       _weights   = candidate;
       _loadError = null;
       fs.mkdirSync(path.dirname(WEIGHTS_PATH), { recursive: true });
       fs.copyFileSync(TMP_PATH, WEIGHTS_PATH);
-      console.log(`[masterBot] Hot-reloaded v2 weights from S3 (${new Date().toISOString()})`);
+      console.log(`[masterBot] Hot-reloaded v3 weights from S3 (${new Date().toISOString()})`);
     } catch {}
   });
 }
@@ -108,19 +108,41 @@ function forward(weights, input) {
 }
 
 /* ── State encoder ────────────────────────────────────────────── */
+// Input layout (258 total):
+//   [0..107]   board state (108): board[r][c] value / 7.0
+//   [108..215] tile hand (108):   1 if player holds that tile, else 0
+//   [216..250] chain features (35): 7 chains × 5 features each
+//   [251]      myCash
+//   [252..255] oppCash (4)
+//   [256]      bagCount
 function encodeState(game, playerIdx) {
   const player    = game.players[playerIdx];
   const CHAIN_IDX = {};
   engine.HOTEL_CHAINS.forEach((c, i) => { CHAIN_IDX[c] = i + 1; });
 
+  // Build a Set of tile strings in the player's hand for fast lookup
+  const handSet = new Set(player.tiles || []);
+
   const vec = new Float32Array(INPUT_DIM);
   let vi = 0;
+
+  // 1. Board state: 108 features
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 12; c++) {
       const cell = game.board[r][c];
       vec[vi++] = (cell && CHAIN_IDX[cell] ? CHAIN_IDX[cell] : (cell ? -1 : 0)) / 7.0;
     }
   }
+
+  // 2. Player's tile hand: 108 features (1 if player holds that tile)
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 12; c++) {
+      const tileStr = `${r + 1}${String.fromCharCode(65 + c)}`;
+      vec[vi++] = handSet.has(tileStr) ? 1 : 0;
+    }
+  }
+
+  // 3. Chain features: 7 × 5 = 35
   for (const ch of engine.HOTEL_CHAINS) {
     const info = game.chains[ch];
     const size = info.tiles.length;
@@ -131,10 +153,17 @@ function encodeState(game, playerIdx) {
                   .reduce((m, p) => Math.max(m, p.stocks[ch] || 0), 0) / 25.0;
     vec[vi++] = engine.stockPrice(ch, size) / 1000.0;
   }
+
+  // 4. myCash: 1
   vec[vi++] = player.cash / 6000.0;
+
+  // 5. oppCash: 4
   const opps = game.players.filter((_, i) => i !== playerIdx);
   for (let k = 0; k < 4; k++) vec[vi++] = (opps[k] ? opps[k].cash / 6000.0 : 0);
+
+  // 6. bagCount: 1
   vec[vi++] = (game.tileBag ? game.tileBag.length : 0) / BAG_TOTAL;
+
   return vec;
 }
 

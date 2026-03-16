@@ -3,16 +3,15 @@
  * ai/train_online.js — AlphaZero-style training for the Master Bot
  *
  * Architecture: shared body + DUAL HEADS
- *   Input (150) → FC(256)→ReLU → FC(128)→ReLU → FC(64)→ReLU → h
+ *   Input (258) → FC(256)→ReLU → FC(128)→ReLU → FC(64)→ReLU → h
  *   h → policy head: FC(108) → tile logits (softmax during training)
  *   h → value  head: FC(5)   → per-player win probabilities (sigmoid)
  *
  * Why dual heads beat single-value:
  *   The policy head provides position-specific gradient signal to the body
- *   even before the value head is useful. MCTS visit counts from AlphaZero
- *   would be ideal; here we use temperature-scaled after-state values as
- *   soft policy targets — cheaper but achieves the same key effect: diverse,
- *   per-position gradients that break the "predict-the-mean" plateau.
+ *   even before the value head is useful. MCTS visit counts (AlphaZero-style)
+ *   provide the policy targets — diverse, per-position gradients that break
+ *   the "predict-the-mean" plateau.
  *
  *   The N-vector value head (one output per player) provides 5× more value
  *   gradient per game than a single-scalar head.
@@ -53,14 +52,17 @@ const S3_BUCKET    = process.env.S3_BUCKET || 'acquire-training-data';
 const S3_KEY       = 'master_weights.json';
 
 /* ── Architecture constants ───────────────────────────────────── */
-const INPUT_DIM   = 150;  // 108 board + 35 chain features + 1 myCash + 4 oppCash + 1 tileBag
+const INPUT_DIM   = 258;  // 108 board + 108 tile hand + 35 chain features + 1 myCash + 4 oppCash + 1 tileBag
 const HIDDEN      = [256, 128, 64];
 const POLICY_DIM  = 108;  // 9 rows × 12 cols (one logit per board cell)
 const VALUE_DIM   = 5;    // one sigmoid per player position
 const BAG_TOTAL   = 102;
 
-// Temperature for policy soft targets: lower = sharper (more greedy)
-// 0.5 gives a clear winner but non-zero probability to alternatives
+// MCTS constants (AlphaZero-style tile selection)
+const MCTS_SIMS = 6;   // simulations per tile decision
+const C_PUCT    = 1.5; // PUCT exploration constant
+
+// Temperature for policy soft targets (kept for reference; not used in MCTS path)
 const POLICY_TEMP = 0.5;
 
 // Exploration rate: random action with this probability (all slots)
@@ -93,7 +95,7 @@ function log(msg) {
   } catch {}
 }
 
-/* ── Weight format v2: body + policyHead + valueHead ─────────── */
+/* ── Weight format v3: body + policyHead + valueHead ─────────── */
 function initWeights() {
   function heLayer(fanIn, fanOut) {
     const scale = Math.sqrt(2.0 / fanIn);
@@ -112,7 +114,7 @@ function initWeights() {
   const bodyOut  = HIDDEN[HIDDEN.length - 1]; // 64
 
   return {
-    version:    2,
+    version:    3,
     body,
     policyHead: [heLayer(bodyOut, POLICY_DIM)],
     valueHead:  [heLayer(bodyOut, VALUE_DIM)],
@@ -123,15 +125,15 @@ function loadOrInit() {
   try {
     const raw = fs.readFileSync(WEIGHTS_PATH, 'utf8');
     const w   = JSON.parse(raw);
-    // Handle legacy v1 (single layers array → reinit with new architecture)
-    if (!w.version || w.version < 2) {
+    // Handle legacy v1/v2 — reinit with new architecture
+    if (!w.version || w.version < 3) {
       log('  Old weight format detected — reinitializing with AlphaZero architecture.\n');
       return initWeights();
     }
-    log(`  Loaded v2 weights from ${WEIGHTS_PATH}\n`);
+    log(`  Loaded v3 weights from ${WEIGHTS_PATH}\n`);
     return w;
   } catch {
-    log('  No existing weights — initializing v2 (policy + value heads).\n');
+    log('  No existing weights — initializing v3 (policy + value heads).\n');
     return initWeights();
   }
 }
@@ -329,19 +331,41 @@ function zeroGrads(grads) {
 }
 
 /* ── State encoder ────────────────────────────────────────────── */
+// Input layout (258 total):
+//   [0..107]   board state (108): board[r][c] value / 7.0
+//   [108..215] tile hand (108):   1 if player holds that tile, else 0
+//   [216..250] chain features (35): 7 chains × 5 features each
+//   [251]      myCash
+//   [252..255] oppCash (4)
+//   [256]      bagCount
 function encodeFlat(game, playerIdx) {
   const player    = game.players[playerIdx];
   const CHAIN_IDX = {};
   engine.HOTEL_CHAINS.forEach((c, i) => { CHAIN_IDX[c] = i + 1; });
 
+  // Build a Set of tile strings in the player's hand for fast lookup
+  const handSet = new Set(player.tiles || []);
+
   const vec = new Float64Array(INPUT_DIM);
   let vi = 0;
+
+  // 1. Board state: 108 features
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 12; c++) {
       const cell = game.board[r][c];
       vec[vi++] = (cell && CHAIN_IDX[cell] ? CHAIN_IDX[cell] : (cell ? -1 : 0)) / 7.0;
     }
   }
+
+  // 2. Player's tile hand: 108 features (1 if player holds that tile)
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 12; c++) {
+      const tileStr = `${r + 1}${String.fromCharCode(65 + c)}`;
+      vec[vi++] = handSet.has(tileStr) ? 1 : 0;
+    }
+  }
+
+  // 3. Chain features: 7 × 5 = 35
   for (const ch of engine.HOTEL_CHAINS) {
     const info = game.chains[ch];
     const size = info.tiles.length;
@@ -352,10 +376,17 @@ function encodeFlat(game, playerIdx) {
                   .reduce((m, p) => Math.max(m, p.stocks[ch] || 0), 0) / 25.0;
     vec[vi++] = engine.stockPrice(ch, size) / 1000.0;
   }
+
+  // 4. myCash: 1
   vec[vi++] = player.cash / 6000.0;
+
+  // 5. oppCash: 4
   const opps = game.players.filter((_, i) => i !== playerIdx);
   for (let k = 0; k < 4; k++) vec[vi++] = (opps[k] ? opps[k].cash / 6000.0 : 0);
+
+  // 6. bagCount: 1
   vec[vi++] = (game.tileBag ? game.tileBag.length : 0) / BAG_TOTAL;
+
   return vec;
 }
 
@@ -441,85 +472,134 @@ function takeRandomAction(game, playerIdx) {
   return false;
 }
 
+/* ── Advance game past sub-phases to next tile placement ──────── */
+// Resolves buyStock, chooseChain, chooseMergerSurvivor, mergerDecision
+// until the game is in 'placeTile' or 'gameOver'. Uses random actions.
+function advanceToNextTilePlacement(game, playerIdx) {
+  let iters = 0;
+  while (game.phase !== 'placeTile' && game.phase !== 'gameOver' && iters++ < 60) {
+    try {
+      const phase = game.phase;
+      const curr  = game.currentPlayerIdx;
+      if (phase === 'buyStock') {
+        takeRandomAction(game, curr);
+      } else if (phase === 'chooseChain') {
+        const avail = engine.HOTEL_CHAINS.filter(c => !game.chains[c].active);
+        if (avail.length) engine.chooseChain(game, curr, avail[0]);
+        else break;
+      } else if (phase === 'chooseMergerSurvivor') {
+        const tied = game.pendingMerger?.tiedChains || [];
+        if (tied.length) engine.chooseMergerSurvivor(game, curr, tied[0]);
+        else break;
+      } else if (phase === 'mergerDecision') {
+        const dp = game.pendingMerger?.decidingPlayer;
+        if (dp === undefined || dp === null) break;
+        const defunct = game.pendingMerger.defunctChains[game.pendingMerger.currentDefunctIdx];
+        const held = game.players[dp]?.stocks?.[defunct] || 0;
+        engine.mergerDecision(game, dp, { sell: held, trade: 0 });
+      } else { break; }
+    } catch { break; }
+  }
+}
+
+/* ── MCTS tile selection (AlphaZero-style) ───────────────────── */
+// Runs MCTS_SIMS simulations over legal tile choices.
+// Returns: { tile: most_visited_tile, policyTarget: 108-dim visit distribution }
+function mctsPickTile(game, playerIdx, weights) {
+  const { playable } = engine.getPlayableTiles(game);
+  if (!playable || playable.length === 0) return { tile: null, policyTarget: null };
+
+  if (playable.length === 1) {
+    const pt = new Float32Array(POLICY_DIM);
+    pt[tileToIdx(playable[0])] = 1.0;
+    return { tile: playable[0], policyTarget: pt };
+  }
+
+  // Priors from policy head + base value from value head
+  const state = encodeFlat(game, playerIdx);
+  const { policyLogits, value } = forward(weights, state);
+  const legalIndices = playable.map(tileToIdx);
+  const legalLogits  = legalIndices.map(i => policyLogits[i]);
+  const priors       = softmax(legalLogits);
+  const baseValue    = value[playerIdx]; // default Q for unvisited nodes
+
+  // MCTS statistics per legal tile
+  const N  = new Int32Array(playable.length);   // visit counts
+  const Wv = new Float64Array(playable.length); // total values
+
+  for (let sim = 0; sim < MCTS_SIMS; sim++) {
+    // PUCT selection
+    const Ntotal = N.reduce((s, v) => s + v, 0);
+    let bestIdx = 0, bestScore = -Infinity;
+    for (let i = 0; i < playable.length; i++) {
+      const q = N[i] > 0 ? Wv[i] / N[i] : baseValue;
+      const u = C_PUCT * priors[i] * Math.sqrt(Ntotal + 1) / (1 + N[i]);
+      const score = q + u;
+      if (score > bestScore) { bestScore = score; bestIdx = i; }
+    }
+
+    // Simulate: place tile, resolve sub-phases, evaluate
+    const sim_game = cloneForScoring(game);
+    try { engine.placeTile(sim_game, playerIdx, playable[bestIdx]); } catch { continue; }
+    advanceToNextTilePlacement(sim_game, playerIdx);
+
+    let v;
+    if (sim_game.phase === 'gameOver') {
+      const totalCash = (sim_game.standings || []).reduce((s, p) => s + p.cash, 0) || 1;
+      const me = (sim_game.standings || []).find(p => p.name === game.players[playerIdx].name);
+      const relative = me ? me.cash / totalCash : 0;
+      const absolute = me ? Math.min(me.cash / TARGET_CASH, 1) : 0;
+      v = 0.5 * relative + 0.5 * absolute;
+    } else {
+      try {
+        const { value: lv } = forward(weights, encodeFlat(sim_game, playerIdx));
+        v = lv[playerIdx];
+      } catch { v = baseValue; }
+    }
+
+    N[bestIdx]++;
+    Wv[bestIdx] += v;
+  }
+
+  // Policy target: normalized visit counts (TRUE AlphaZero targets)
+  const totalVisits = N.reduce((s, v) => s + v, 0) || 1;
+  const policyTarget = new Float32Array(POLICY_DIM);
+  for (let i = 0; i < playable.length; i++) {
+    policyTarget[legalIndices[i]] = N[i] / totalVisits;
+  }
+
+  // Best move = most visited (AlphaZero convention — robust to outliers)
+  let bestTile = playable[0], maxN = -1;
+  for (let i = 0; i < playable.length; i++) {
+    if (N[i] > maxN) { maxN = N[i]; bestTile = playable[i]; }
+  }
+
+  return { tile: bestTile, policyTarget };
+}
+
 /* ── Master bot action ────────────────────────────────────────── */
-// Tile placement: policy-head guided (softmax over legal tiles).
-// All other phases: value-head guided 1-step lookahead.
-//
-// Policy-guided tile selection:
-//   Evaluate after-state value for each legal tile using the value head.
-//   Apply temperature-scaled softmax → soft distribution over legal tiles.
-//   Sample from this distribution (temperature-controlled exploration).
-//   Record (state, policy_target, legalTileIndices) for training.
+// Tile placement: MCTS-guided (AlphaZero-style visit count policy targets).
+// All other phases: random action, no record.
 function takeMasterAction(game, playerIdx, weights) {
   const phase = game.phase;
   try {
     if (phase === 'placeTile') {
       const { playable } = engine.getPlayableTiles(game);
       if (playable.length === 0) { engine.passTile(game, playerIdx); return { acted: true, record: null }; }
-      if (playable.length === 1) {
-        const stateBefore = encodeFlat(game, playerIdx);
-        const policyTarget = new Float32Array(POLICY_DIM); // sparse: only the one legal tile
-        policyTarget[tileToIdx(playable[0])] = 1.0;
-        engine.placeTile(game, playerIdx, playable[0]);
-        return { acted: true, record: { state: stateBefore, policyTarget, legalIndices: [tileToIdx(playable[0])] } };
-      }
 
-      // Record state before acting
-      const stateBefore = encodeFlat(game, playerIdx);
-
-      // Evaluate each legal tile: apply tile, run value head, get this player's score
-      const tileValues = [];
-      for (const tile of playable) {
-        const sim = cloneForScoring(game);
-        engine.placeTile(sim, playerIdx, tile);
-        let val;
-        if (sim.phase === 'gameOver') {
-          // Game ended instantly — use actual outcome
-          const totalCash = (sim.standings || []).reduce((s, p) => s + p.cash, 0) || 1;
-          const me = (sim.standings || []).find(p => p.name === game.players[playerIdx].name);
-          val = me ? 0.5 * (me.cash / totalCash) + 0.5 * Math.min(me.cash / TARGET_CASH, 1) : 0.2;
-        } else {
-          const { value } = forward(weights, encodeFlat(sim, playerIdx));
-          val = value[playerIdx]; // this player's win probability in the post-tile state
-        }
-        tileValues.push(val);
-      }
-
-      // Soft policy target: temperature-scaled softmax over tile values
-      const scaledValues = tileValues.map(v => v / POLICY_TEMP);
-      const probs        = softmax(scaledValues);
+      const stateBefore  = encodeFlat(game, playerIdx);
       const legalIndices = playable.map(tileToIdx);
 
-      // Build sparse 108-dim policy target
-      const policyTarget = new Float32Array(POLICY_DIM);
-      for (let i = 0; i < legalIndices.length; i++) {
-        policyTarget[legalIndices[i]] = probs[i];
-      }
+      // True AlphaZero: MCTS produces visit-count policy targets
+      const { tile, policyTarget } = mctsPickTile(game, playerIdx, weights);
+      if (tile === null) { engine.passTile(game, playerIdx); return { acted: true, record: null }; }
 
-      // Sample tile proportional to probs (exploration while staying policy-guided)
-      let r = Math.random(), chosen = playable[playable.length - 1];
-      let cumulative = 0;
-      for (let i = 0; i < probs.length; i++) {
-        cumulative += probs[i];
-        if (r <= cumulative) { chosen = playable[i]; break; }
-      }
-
-      engine.placeTile(game, playerIdx, chosen);
-      return { acted: true, record: { state: stateBefore, policyTarget, legalIndices } };
+      engine.placeTile(game, playerIdx, tile);
+      const record = policyTarget ? { state: stateBefore, policyTarget, legalIndices } : null;
+      return { acted: true, record };
     }
   } catch {}
-
-  // All non-tile phases: value-guided 1-step lookahead
-  // (buyStock, mergerDecision, etc. — no policy target recorded)
-  try {
-    if (phase === 'buyStock') {
-      return { acted: takeRandomAction(game, playerIdx), record: null };
-    }
-    // Other phases with small action spaces: lookahead using value head
-    const acted = takeRandomAction(game, playerIdx);
-    return { acted, record: null };
-  } catch {}
-  return { acted: false, record: null };
+  return { acted: takeRandomAction(game, playerIdx), record: null };
 }
 
 /* ── Master bot self-play probability ramp ────────────────────── */
@@ -750,10 +830,11 @@ function trainStep(weights, adam, replay, t) {
 
 /* ── Main loop ────────────────────────────────────────────────── */
 async function train() {
-  console.log('\nAcquire Master Bot — AlphaZero-style Training (v2)');
+  console.log('\nAcquire Master Bot — AlphaZero-style Training (v3)');
   console.log(`  LR=${LR}  batch=${BATCH_SIZE}  train_every=${TRAIN_EVERY}  replay=${REPLAY_SIZE}`);
   if (TIME_LIMIT !== Infinity) console.log(`  Time limit: ${TIME_LIMIT / 3600000}h`);
-  console.log('  Architecture: shared body [150→256→128→64] + policy head [64→108] + value head [64→5]\n');
+  console.log('  Architecture: shared body [258→256→128→64] + policy head [64→108] + value head [64→5]\n');
+  console.log(`  MCTS: ${MCTS_SIMS} sims/tile, C_PUCT=${C_PUCT}\n`);
 
   const weights = loadOrInit();
   const adam    = initAdam(weights);
