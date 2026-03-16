@@ -575,7 +575,16 @@ function buyStock(state, playerIdx, purchases) {
   return { ok: true };
 }
 
-/* ── Replace tiles that can never be legally played ────────── */
+/* ── Replace tiles that can NEVER be legally played ────────── */
+// Only discard PERMANENTLY dead tiles — those that would merge two or more
+// safe chains (11+ tiles, which can never be merged). These are discarded
+// and replaced immediately at end of turn.
+//
+// Do NOT discard 'allChainsActive' tiles. Those are TEMPORARILY unplayable:
+// after a merger, the defunct chain becomes inactive, freeing a slot, and
+// the tile may become a legal "found" or "expand" placement again. The
+// player holds those tiles and must play other tiles around them. Only when
+// ALL tiles in hand are unplayable may the player pass (via passTile).
 function replaceDeadTiles(state, playerIdx) {
   const player = state.players[playerIdx];
   let replaced = true;
@@ -583,9 +592,9 @@ function replaceDeadTiles(state, playerIdx) {
     replaced = false;
     for (let i = player.tiles.length - 1; i >= 0; i--) {
       const analysis = analyzeTilePlacement(state, player.tiles[i]);
-      if (!analysis.legal) {
+      if (!analysis.legal && analysis.reason === 'mergeSafeChains') {
         const deadTile = player.tiles.splice(i, 1)[0];
-        state.log.push(`${player.name} discards unplayable tile ${deadTile}`);
+        state.log.push(`${player.name} discards permanently unplayable tile ${deadTile}`);
         if (state.tileBag.length > 0) {
           player.tiles.push(state.tileBag.pop());
           replaced = true;
