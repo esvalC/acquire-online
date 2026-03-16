@@ -759,15 +759,23 @@ async function train() {
   const adam    = initAdam(weights);
   const replay  = new ReplayBuffer(REPLAY_SIZE);
 
-  let t          = 0;  // Adam step counter
-  let gamesTotal = 0;
+  let t           = 0;  // Adam step counter
+  let gamesTotal  = 0;
   let masterGames = 0;
-  let errors     = 0;
+  let errors      = 0;
   let lossHistory = [];
   let rollingLoss = { policy: 0, value: 0, total: 0, cnt: 0 };
   const wins    = {};
   const avgCash = {};
   for (const b of BOTS) { wins[b.name] = 0; avgCash[b.name] = []; }
+
+  // "ELO" equivalent: track master bot's average ending cash over time.
+  // We record the rolling average every 1000 games so you can see the
+  // trend: a rising curve means the bot is accumulating more money per game.
+  // Master bots are all named in BOTS — we track the average across all of
+  // them (since they're the same network in different seat positions).
+  let masterCashWindow = [];  // cash values since last checkpoint
+  const masterCashHistory = []; // one avg per 1000-game checkpoint (last 50)
   const t0 = Date.now();
 
   while (Date.now() - t0 < TIME_LIMIT) {
@@ -786,6 +794,14 @@ async function train() {
         if (avgCash[p.name]) {
           avgCash[p.name].push(p.cash);
           if (avgCash[p.name].length > 5000) avgCash[p.name].shift();
+        }
+      }
+      // Track master bot cash for ELO-equivalent trending
+      for (const slotIdx of masterSlots) {
+        const playerInGame = bots[slotIdx];
+        if (playerInGame) {
+          const standing = result.standings.find(s => s.name === playerInGame.name);
+          if (standing) masterCashWindow.push(standing.cash);
         }
       }
       replay.pushAll(result.records);
@@ -814,6 +830,16 @@ async function train() {
       if (lossHistory.length > 50) lossHistory.shift();
       rollingLoss = { policy: 0, value: 0, total: 0, cnt: 0 };
 
+      // Master bot "ELO" snapshot: average cash this 1000-game window
+      const masterCashAvg = masterCashWindow.length > 0
+        ? Math.round(masterCashWindow.reduce((s, v) => s + v, 0) / masterCashWindow.length)
+        : null;
+      if (masterCashAvg !== null) {
+        masterCashHistory.push(masterCashAvg);
+        if (masterCashHistory.length > 50) masterCashHistory.shift();
+      }
+      masterCashWindow = [];
+
       log(`  step=${t} games=${gamesTotal} loss=${avgTot} (pol=${avgPol} val=${avgVal}) elapsed=${elapsedS}s buf=${replay.size} errors=${errors}\n`);
 
       const stats = {
@@ -827,6 +853,8 @@ async function train() {
         valueLoss:  parseFloat(avgVal),
         lossHistory: lossHistory.filter(v => v !== null),
         replaySize:  replay.size,
+        masterCashAvg:     masterCashAvg,
+        masterCashHistory: masterCashHistory.slice(),
         elapsedSecs: parseInt(elapsedS),
         remainingSecs: Math.max(0, Math.floor((TIME_LIMIT - (Date.now() - t0)) / 1000)),
         timeLimitSecs: TIME_LIMIT === Infinity ? null : TIME_LIMIT / 1000,
