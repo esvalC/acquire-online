@@ -484,7 +484,7 @@ body {
   <div class="chart-card">
     <div class="chart-header">
       <div>
-        <span class="chart-title">Master Bot "ELO" · Avg Ending Cash per Checkpoint</span>
+        <span class="chart-title">Master Bot "ELO" · Avg Ending Cash (last 20 checkpoints)</span>
         <div style="font-size:0.65rem;color:#374151;margin-top:4px">Target: $50,000+ · higher = stronger bot</div>
       </div>
       <div style="text-align:right">
@@ -914,7 +914,8 @@ async function refresh() {
 
     // ── Cash ELO chart ────────────────────────────────────────── */
     if (data.masterCashHistory && data.masterCashHistory.length > 0) {
-      drawCashChart(data.masterCashHistory);
+      const cashWindow = data.masterCashHistory.slice(-20);
+      drawCashChart(cashWindow);
       const latestCash = data.masterCashHistory[data.masterCashHistory.length - 1];
       document.getElementById('masterCashNow').textContent = '$' + latestCash.toLocaleString();
     } else if (data.masterCashAvg) {
