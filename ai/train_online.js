@@ -122,20 +122,33 @@ function initWeights() {
 }
 
 function loadOrInit() {
+  // 1. Try local file first
   try {
     const raw = fs.readFileSync(WEIGHTS_PATH, 'utf8');
     const w   = JSON.parse(raw);
-    // Handle legacy v1/v2 — reinit with new architecture
     if (!w.version || w.version < 3) {
-      log('  Old weight format detected — reinitializing with AlphaZero architecture.\n');
-      return initWeights();
+      log('  Old weight format detected — will try S3 before reinitializing.\n');
+    } else {
+      log(`  Loaded v3 weights from ${WEIGHTS_PATH}\n`);
+      return w;
     }
-    log(`  Loaded v3 weights from ${WEIGHTS_PATH}\n`);
-    return w;
-  } catch {
-    log('  No existing weights — initializing v3 (policy + value heads).\n');
-    return initWeights();
-  }
+  } catch { /* no local file */ }
+
+  // 2. Try S3 (fresh instance after spot termination — resume from last checkpoint)
+  try {
+    log(`  No local weights — trying S3 s3://${S3_BUCKET}/${S3_KEY} ...\n`);
+    execSync(`aws s3 cp s3://${S3_BUCKET}/${S3_KEY} "${WEIGHTS_PATH}"`, { timeout: 30000, stdio: 'pipe' });
+    const raw = fs.readFileSync(WEIGHTS_PATH, 'utf8');
+    const w   = JSON.parse(raw);
+    if (w.version >= 3) {
+      log(`  Resumed v3 weights from S3 — continuing from previous run.\n`);
+      return w;
+    }
+  } catch { /* S3 not available or no valid weights */ }
+
+  // 3. Fresh start
+  log('  Initializing fresh v3 weights (policy + value heads).\n');
+  return initWeights();
 }
 
 function saveWeights(weights) {
