@@ -230,25 +230,32 @@
   }
 
   .game-main { display: grid; grid-template-columns: 1fr 300px; gap: 8px; flex: 1; min-height: 0; overflow: hidden; }
-  .game-left { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+  .game-left { display: flex; flex-direction: column; gap: 8px; min-height: 0; height: 100%; }
 
   /* ── Board ────────────────────────────────────── */
   .board-container {
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 6px; overflow: hidden;
-    flex: none;
+    /* Grows to fill available game-left height after hand-actions */
+    flex: 1; min-height: 0;
+    container-type: size; /* enables cqh units so board can read container height */
+    display: flex; align-items: flex-start;
   }
 
-  /* Board: width drives height via cell aspect-ratio; cap by viewport height so hand always visible */
   .board {
-    display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; width: 100%;
-    max-width: calc((100vh - 180px) * 1.73);
-    transition: max-width 0.3s ease;
+    display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px;
+    /* Width = min(full container width, height × board-aspect-ratio) */
+    /* Board aspect: 12 cols × cell-width, 9 rows × cell-height, cell w/h = 1.3 */
+    /* So board_width / board_height = 12 × 1.3 / 9 ≈ 1.733 */
+    width: min(100%, calc(100cqh * 1.733));
+    transition: width 0.3s ease;
   }
-  /* buyStock: board + action panel sit side by side; board = 40%, action = 60% */
-  .game-left.buystock-mode { flex-direction: row; align-items: flex-start; }
-  .game-left.buystock-mode .board-container { flex: 0 0 40%; min-width: 0; }
-  .game-left.buystock-mode .hand-actions { flex: 1; flex-direction: column; min-width: 0; align-items: stretch; }
+
+  /* buyStock: board + action panel side by side, board = 40%, action fills rest */
+  .game-left.buystock-mode { flex-direction: row; align-items: stretch; }
+  .game-left.buystock-mode .board-container { flex: 0 0 40%; }
+  .game-left.buystock-mode .board { width: 100%; } /* fill the 40% column */
+  .game-left.buystock-mode .hand-actions { flex: 1; flex-direction: column; min-width: 0; }
   .game-left.buystock-mode .hand-actions .action-panel { flex: 1; max-width: none; max-height: none; }
 
   .board-cell {
