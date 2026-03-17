@@ -197,12 +197,12 @@ function applyAction(game, playerIdx, action) {
 /* ── Action generators ────────────────────────────────────────── */
 function legalBuyActions(game, playerIdx) {
   const player  = game.players[playerIdx];
-  const actions = [{ type: 'buyStock', purchases: {} }];
   const affordable = engine.HOTEL_CHAINS.filter(c => {
     const ch = game.chains[c];
     return ch.active && engine.stockPrice(c, ch.tiles.length) <= player.cash && (ch.stock_available > 0);
   });
-  if (affordable.length === 0) return actions;
+  // Skip is only an option when nothing is affordable — otherwise always buy something
+  const actions = affordable.length === 0 ? [{ type: 'buyStock', purchases: {} }] : [];
   for (const c of affordable) {
     const price = engine.stockPrice(c, game.chains[c].tiles.length);
     const maxN  = Math.min(3, Math.floor(player.cash / price), game.chains[c].stock_available || 0);
