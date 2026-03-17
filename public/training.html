@@ -463,7 +463,7 @@ body {
   <!-- Loss chart (dual: policy + value) -->
   <div class="chart-card">
     <div class="chart-header">
-      <span class="chart-title">Loss History · last 50 checkpoints</span>
+      <span class="chart-title">Loss History · last 200 checkpoints</span>
       <div class="chart-legend">
         <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>Policy</div>
         <div class="legend-item"><div class="legend-dot" style="background:#38bdf8"></div>Value</div>
@@ -484,7 +484,7 @@ body {
   <div class="chart-card">
     <div class="chart-header">
       <div>
-        <span class="chart-title">Master Bot "ELO" · Avg Ending Cash (last 20 checkpoints)</span>
+        <span class="chart-title">Master Bot "ELO" · Avg Ending Cash (last 50 checkpoints)</span>
         <div style="font-size:0.65rem;color:#374151;margin-top:4px">Target: $50,000+ · higher = stronger bot</div>
       </div>
       <div style="text-align:right">
@@ -726,11 +726,11 @@ function updateLocalHistory(data) {
     _lastStep = data.step;
     if (data.policyLoss != null) {
       _polHistory.push(data.policyLoss);
-      if (_polHistory.length > 50) _polHistory.shift();
+      if (_polHistory.length > 200) _polHistory.shift();
     }
     if (data.valueLoss != null) {
       _valHistory.push(data.valueLoss);
-      if (_valHistory.length > 50) _valHistory.shift();
+      if (_valHistory.length > 200) _valHistory.shift();
     }
   }
   return {
@@ -914,7 +914,7 @@ async function refresh() {
 
     // ── Cash ELO chart ────────────────────────────────────────── */
     if (data.masterCashHistory && data.masterCashHistory.length > 0) {
-      const cashWindow = data.masterCashHistory.slice(-20);
+      const cashWindow = data.masterCashHistory.slice(-50);
       drawCashChart(cashWindow);
       const latestCash = data.masterCashHistory[data.masterCashHistory.length - 1];
       document.getElementById('masterCashNow').textContent = '$' + latestCash.toLocaleString();

@@ -921,7 +921,7 @@ async function train() {
       const avgVal   = rollingLoss.cnt > 0 ? (rollingLoss.value  / rollingLoss.cnt).toFixed(4) : 'n/a';
       const avgTot   = rollingLoss.cnt > 0 ? (rollingLoss.total  / rollingLoss.cnt).toFixed(4) : 'n/a';
       lossHistory.push(rollingLoss.cnt > 0 ? parseFloat(avgTot) : null);
-      if (lossHistory.length > 50) lossHistory.shift();
+      if (lossHistory.length > 200) lossHistory.shift();
       rollingLoss = { policy: 0, value: 0, total: 0, cnt: 0 };
 
       // Master bot "ELO" snapshot: average cash this 1000-game window
@@ -930,7 +930,7 @@ async function train() {
         : null;
       if (masterCashAvg !== null) {
         masterCashHistory.push(masterCashAvg);
-        if (masterCashHistory.length > 50) masterCashHistory.shift();
+        if (masterCashHistory.length > 200) masterCashHistory.shift();
       }
       masterCashWindow = [];
 
