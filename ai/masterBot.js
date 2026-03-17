@@ -201,8 +201,9 @@ function legalBuyActions(game, playerIdx) {
     const ch = game.chains[c];
     return ch.active && engine.stockPrice(c, ch.tiles.length) <= player.cash && (ch.stock_available > 0);
   });
-  // Skip is only an option when nothing is affordable — otherwise always buy something
-  const actions = affordable.length === 0 ? [{ type: 'buyStock', purchases: {} }] : [];
+  // Skip (buy nothing) is always a valid option — treated equally to any buy combo by the value head
+  const actions = [{ type: 'buyStock', purchases: {} }];
+  if (affordable.length === 0) return actions;
   for (const c of affordable) {
     const price = engine.stockPrice(c, game.chains[c].tiles.length);
     const maxN  = Math.min(3, Math.floor(player.cash / price), game.chains[c].stock_available || 0);
