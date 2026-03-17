@@ -241,9 +241,9 @@
 
   .board { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; width: 100%; max-width: 560px; }
 
-  /* Compact mode: small tiles with tiny labels — used when not placing */
-  .board.compact { gap: 1px; max-width: 280px; transition: max-width 0.3s ease; }
-  .board.compact .board-cell { font-size: 7px; }
+  /* Compact mode: small tiles with readable labels — only during buyStock */
+  .board.compact { gap: 1px; max-width: 320px; transition: max-width 0.3s ease; }
+  .board.compact .board-cell { font-size: 8px; border-width: 2px; }
   .board { transition: max-width 0.3s ease; }
 
   .board-cell {
@@ -356,8 +356,11 @@
   }
   .smatrix-dot { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
   .smatrix-chain-info { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
-  .smatrix-chain-name { font-size: 12px; font-weight: 600; color: var(--text); transition: font-size 0.3s; }
+  .smatrix-chain-name { font-size: 12px; font-weight: 700; color: var(--text); transition: font-size 0.3s; }
   .smatrix-chain-meta { font-size: 9px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; transition: font-size 0.3s; }
+  /* Color stripe on left edge of each chain row */
+  .smatrix-row-colored { border-left: 3px solid var(--row-stripe, transparent); }
+  .smatrix-row-colored .smatrix-chain-col { padding-left: 4px; }
   .smatrix-cell {
     flex: 1; display: flex; align-items: center; justify-content: center; gap: 2px;
     font-family: 'JetBrains Mono', monospace; font-size: 14px; font-weight: 700;
@@ -377,12 +380,13 @@
   .smatrix-zero { color: var(--border-light); font-size: 11px; font-weight: 400; }
   .smatrix-header { border-bottom: 2px solid var(--border-light); }
   .smatrix-player-col {
-    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
     padding: 5px 2px; border-right: 1px solid var(--border);
   }
   .smatrix-player-col:last-child { border-right: none; }
+  .smatrix-player-col.current { background: rgba(245,158,11,0.07); border-radius: 4px; }
   .smatrix-player-col.current .smatrix-player-name { color: var(--gold); }
-  .smatrix-player-name { font-size: 11px; font-weight: 700; text-align: center; color: var(--text); line-height: 1.2; }
+  .smatrix-player-name { font-size: 11px; font-weight: 700; text-align: center; color: var(--text); line-height: 1.2; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .smatrix-player-you { font-size: 9px; color: var(--text-muted); }
   .smatrix-player-cash { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--green); margin-top: 1px; }
   .smatrix-inactive { opacity: 0.3; }
@@ -2585,11 +2589,12 @@ function renderMiniBoard() {
 function renderBoard() {
   const board = document.getElementById('board');
   const st = gameState;
-  // Compact when it's not your turn to place a tile; expand sidebar text to compensate
-  const isMyPlaceTurn = st.phase === 'placeTile' && st.currentPlayerIdx === myIdx;
-  board.classList.toggle('compact', !isMyPlaceTurn);
+  // Compact ONLY during buyStock — board stays full-size during ALL placeTile phases (including bots)
+  const shouldCompact = st.phase === 'buyStock';
+  board.classList.toggle('compact', shouldCompact);
   const matrix = document.getElementById('stockMatrix');
-  if (matrix) matrix.classList.toggle('smatrix-expanded', !isMyPlaceTurn);
+  if (matrix) matrix.classList.toggle('smatrix-expanded', shouldCompact);
+  const isMyPlaceTurn = st.phase === 'placeTile' && st.currentPlayerIdx === myIdx;
   const myTiles = st.players[myIdx]?.tiles || [];
   const playable = st.playableTiles || [];
   let html = '';
@@ -2901,7 +2906,8 @@ function renderStockMatrix() {
   for (const chain of chains) {
     const info = st.chains[chain];
     const inactive = !info.active;
-    html += `<div class="smatrix-row${inactive ? ' smatrix-inactive' : ''}">`;
+    const stripe = !inactive ? ` style="--row-stripe:${chainColors[chain]}"` : '';
+    html += `<div class="smatrix-row${inactive ? ' smatrix-inactive' : ' smatrix-row-colored'}"${stripe}>`;
     html += `<div class="smatrix-chain-col">
       <div class="smatrix-dot" style="background:${chainColors[chain]}"></div>
       <div class="smatrix-chain-info">
