@@ -229,11 +229,21 @@ function legalMergerActions(game, playerIdx) {
   if (held === 0) return [{ type: 'mergerDecision', sell: 0, trade: 0 }];
   const survivorRoom = 25 - game.players.reduce((s, p) => s + (p.stocks[pm.survivor] || 0), 0);
   const maxTrade     = Math.min(Math.floor(held / 2) * 2, survivorRoom * 2);
-  const opts = [
-    { type: 'mergerDecision', sell: held, trade: 0 },
-    { type: 'mergerDecision', sell: 0,    trade: 0 },
-  ];
-  if (maxTrade > 0) opts.push({ type: 'mergerDecision', sell: held - maxTrade, trade: maxTrade });
+
+  // Generate all valid (sell, trade) combos — sell any amount, trade any even amount,
+  // keep the rest. Treat each equally so the value head can pick the best mix.
+  const seen = new Set();
+  const opts = [];
+  for (let trade = 0; trade <= maxTrade; trade += 2) {
+    const remaining = held - trade;
+    for (let sell = 0; sell <= remaining; sell++) {
+      const key = `${sell},${trade}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        opts.push({ type: 'mergerDecision', sell, trade });
+      }
+    }
+  }
   return opts;
 }
 
