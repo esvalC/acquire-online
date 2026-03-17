@@ -563,16 +563,20 @@ function decideBotAction(game, botIdx, personality, difficulty, botName) {
     // Otherwise keep playing — small chains mean merger bonuses still up for grabs
   }
 
-  // Master mode: learned value network (sync, pure-JS, zero deps)
+  // Master mode: neural net for tile placement + merger decisions; heuristic for buyStock
+  // (model is still training — value head hasn't learned stock buying yet, always skips)
   if (difficulty === 'master') {
-    const master = require('./ai/masterBot');
-    const action = master.decideMasterAction(game, botIdx);
-    if (action) {
-      const mcts = require('./ai/mcts');
-      mcts.applyAction(game, botIdx, action);
-      return true;
+    const phase = game.phase;
+    if (phase === 'placeTile' || phase === 'mergerDecision' || phase === 'chooseChain' || phase === 'chooseMergerSurvivor') {
+      const master = require('./ai/masterBot');
+      const action = master.decideMasterAction(game, botIdx);
+      if (action) {
+        const mcts = require('./ai/mcts');
+        mcts.applyAction(game, botIdx, action);
+        return true;
+      }
     }
-    // Model not trained yet or phase not handled — fall through to hard heuristic
+    // buyStock and unhandled phases → fall through to hard heuristic
     difficulty = 'hard';
   }
 
