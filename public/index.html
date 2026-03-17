@@ -239,9 +239,20 @@
     flex: none;
   }
 
-  .board { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; width: 100%; }
-
-  .board { }
+  /* Board: capped so it never overflows the viewport vertically */
+  .board {
+    display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; width: 100%;
+    max-width: min(660px, calc((100vh - 240px) * 1.73));
+    transition: max-width 0.3s ease;
+  }
+  /* Compact: board shrinks during buyStock so the buy panel can grow */
+  .board.compact { max-width: min(400px, calc((100vh - 240px) * 1.0)); }
+  /* buystock-mode: action panel fills the space the compact board gives up */
+  .game-left.buystock-mode { flex-direction: row; flex-wrap: wrap; }
+  .game-left.buystock-mode .board-container { flex: 0 0 auto; }
+  .game-left.buystock-mode .hand-actions { flex: 1; flex-direction: column; min-width: 0; }
+  .game-left.buystock-mode .hand-actions .hand-panel { flex: 0 0 auto; }
+  .game-left.buystock-mode .hand-actions .action-panel { flex: 1; max-width: none; max-height: none; }
 
   .board-cell {
     aspect-ratio: 1.3; display: flex; align-items: center; justify-content: center;
@@ -2596,7 +2607,10 @@ function renderBoard() {
   const board = document.getElementById('board');
   const st = gameState;
   const isMyPlaceTurn = st.phase === 'placeTile' && st.currentPlayerIdx === myIdx;
-  board.classList.remove('compact');
+  const isMyBuyTurn   = st.phase === 'buyStock'   && st.currentPlayerIdx === myIdx;
+  board.classList.toggle('compact', isMyBuyTurn);
+  const gameLeft = document.querySelector('.game-left');
+  if (gameLeft) gameLeft.classList.toggle('buystock-mode', isMyBuyTurn);
   const matrix = document.getElementById('stockMatrix');
   if (matrix) matrix.classList.remove('smatrix-expanded');
   const myTiles = st.players[myIdx]?.tiles || [];
