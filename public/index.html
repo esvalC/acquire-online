@@ -239,7 +239,7 @@
     flex: none;
   }
 
-  .board { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; width: 100%; max-width: 560px; }
+  .board { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; width: 100%; }
 
   .board { }
 
@@ -309,7 +309,7 @@
   .action-panel {
     background: var(--bg-card); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 10px; flex: 0 0 auto;
-    min-width: 220px; max-width: 340px;
+    min-width: 220px; max-width: 340px; overflow-y: auto; max-height: 340px;
   }
   .tile-hand { display: flex; gap: 6px; flex-wrap: wrap; }
   .hand-tile {
@@ -597,6 +597,8 @@
   /* ── Mini board (merger panel) ──────────────────── */
   .mini-board { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1px; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
   .mini-cell { aspect-ratio: 1.3; border-radius: 1px; background: #111827; }
+  .mini-cell.mc-defunct  { outline: 2px solid #ff5555; outline-offset: -2px; z-index: 1; position: relative; }
+  .mini-cell.mc-survivor { outline: 2px solid var(--gold); outline-offset: -2px; z-index: 1; position: relative; }
   .mini-cell.mc-lone { background: #4b5563; }
   .mini-cell.mc-Tower       { background: var(--tower); }
   .mini-cell.mc-Luxor       { background: var(--luxor); }
@@ -2574,13 +2576,15 @@ function analyzeTileClient(tile) {
 }
 
 /* ── Render Board ──────────────────────────────── */
-function renderMiniBoard() {
+function renderMiniBoard(defunct, survivor) {
   const st = gameState;
   let html = '<div class="mini-board">';
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 12; c++) {
       const cell = st.board[r][c];
-      const cls = cell === 'lone' ? 'mc-lone' : cell ? `mc-${cell}` : '';
+      let cls = cell === 'lone' ? 'mc-lone' : cell ? `mc-${cell}` : '';
+      if (cell && cell === defunct)  cls += ' mc-defunct';
+      if (cell && cell === survivor) cls += ' mc-survivor';
       html += `<div class="mini-cell${cls ? ' ' + cls : ''}"></div>`;
     }
   }
@@ -2741,7 +2745,7 @@ function renderActionPanel() {
       const dcPrice = st.chains[dc]?.price || 0;
       const survivorPrice = st.chains[pm.survivor]?.price || 0;
       title.textContent = `${dc} → ${pm.survivor}`;
-      let h = renderMiniBoard();
+      let h = renderMiniBoard(dc, pm.survivor);
       h += `<div class="merger-context">
         <div class="merger-context-row"><span class="merger-ctx-label">You hold</span><span class="merger-ctx-val" style="color:${chainColors[dc]}">${held} ${dc}</span></div>
         <div class="merger-context-row"><span class="merger-ctx-label">Sell price</span><span class="merger-ctx-val">$${dcPrice} / share</span></div>
