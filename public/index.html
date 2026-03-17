@@ -9,26 +9,26 @@
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
   :root {
-    --bg-dark: #0a0f1a;
-    --bg-card: #111827;
-    --bg-card-hover: #1a2332;
-    --border: #1e293b;
-    --border-light: #334155;
-    --text: #e2e8f0;
-    --text-dim: #94a3b8;
-    --text-muted: #64748b;
-    --gold: #f59e0b;
-    --gold-dim: #92631a;
-    --green: #10b981;
-    --red: #ef4444;
-    --blue: #3b82f6;
-    --tower: #e11d48;
-    --luxor: #f97316;
-    --american: #3b82f6;
-    --worldwide: #8b5cf6;
-    --festival: #06b6d4;
-    --imperial: #10b981;
-    --continental: #eab308;
+    --bg-dark: #16100a;
+    --bg-card: #201610;
+    --bg-card-hover: #2a1e12;
+    --border: #3a2510;
+    --border-light: #5a3e1e;
+    --text: #f0e0c8;
+    --text-dim: #b89060;
+    --text-muted: #7a6040;
+    --gold: #d4971e;
+    --gold-dim: #7a520e;
+    --green: #4a9e60;
+    --red: #c44040;
+    --blue: #4477bb;
+    --tower: #c43333;
+    --luxor: #d4720a;
+    --american: #2255aa;
+    --worldwide: #7744cc;
+    --festival: #0e8ea8;
+    --imperial: #2a9650;
+    --continental: #c8a010;
     --radius: 8px;
     --transition: all 0.2s ease;
   }
@@ -47,9 +47,9 @@
     content: '';
     position: fixed; inset: 0;
     background:
-      radial-gradient(ellipse at 20% 50%, rgba(59,130,246,0.04) 0%, transparent 50%),
-      radial-gradient(ellipse at 80% 20%, rgba(245,158,11,0.04) 0%, transparent 50%),
-      radial-gradient(ellipse at 50% 80%, rgba(16,185,129,0.03) 0%, transparent 50%);
+      radial-gradient(ellipse at 20% 50%, rgba(180,100,20,0.06) 0%, transparent 50%),
+      radial-gradient(ellipse at 80% 20%, rgba(212,151,30,0.05) 0%, transparent 50%),
+      radial-gradient(ellipse at 50% 80%, rgba(74,158,96,0.03) 0%, transparent 50%);
     pointer-events: none; z-index: 0;
   }
 
@@ -241,7 +241,7 @@
 
   .board { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; width: 100%; max-width: 560px; }
 
-  /* Compact mode: small tiles with readable labels — only during buyStock */
+  /* Compact mode: small tiles — only during YOUR placeTile turn */
   .board.compact { gap: 1px; max-width: 320px; transition: max-width 0.3s ease; }
   .board.compact .board-cell { font-size: 8px; border-width: 2px; }
   .board { transition: max-width 0.3s ease; }
@@ -249,18 +249,18 @@
   .board-cell {
     aspect-ratio: 1.3; display: flex; align-items: center; justify-content: center;
     font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
-    border-radius: 4px; background: #1a2332; border: 1px solid var(--border);
-    color: var(--text-muted); transition: var(--transition);
+    border-radius: 3px; background: #1e1610; border: 1px solid #3a2510;
+    color: #5a4030; transition: var(--transition);
     cursor: default; position: relative;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 2px rgba(0,0,0,0.3);
+    box-shadow: inset 0 1px 0 rgba(255,220,160,0.03), 0 1px 2px rgba(0,0,0,0.4);
   }
-  /* Placed tiles get a physical raised-tile look */
+  /* Placed tiles: cork/ivory raised look */
   .board-cell.lone {
-    background: #4b5563;
-    border-top-color: #6b7280; border-left-color: #6b7280;
-    border-bottom-color: #374151; border-right-color: #374151;
-    color: #f9fafb;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 2px 4px rgba(0,0,0,0.4);
+    background: #c8b080;
+    border-top-color: #e0c898; border-left-color: #e0c898;
+    border-bottom-color: #8a7040; border-right-color: #8a7040;
+    color: #2a1c0a;
+    box-shadow: inset 0 1px 0 rgba(255,255,220,0.3), 0 2px 4px rgba(0,0,0,0.5);
   }
   .board-cell.chain-Tower       { background: var(--tower); border-top-color: color-mix(in srgb,var(--tower) 60%,#fff); border-left-color: color-mix(in srgb,var(--tower) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--tower) 60%,#000); border-right-color: color-mix(in srgb,var(--tower) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
   .board-cell.chain-Luxor       { background: var(--luxor); border-top-color: color-mix(in srgb,var(--luxor) 60%,#fff); border-left-color: color-mix(in srgb,var(--luxor) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--luxor) 60%,#000); border-right-color: color-mix(in srgb,var(--luxor) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
@@ -305,9 +305,14 @@
 
   /* ── Hand & Action Panel ──────────────────────── */
   .hand-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; flex-shrink: 0; overflow-y: auto; }
-  .hand-panel, .action-panel {
+  .hand-panel {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 10px; flex: 1; min-width: 220px;
+    border-radius: var(--radius); padding: 10px; flex: 1; min-width: 180px;
+  }
+  .action-panel {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px; flex: 0 0 auto;
+    min-width: 220px; max-width: 340px;
   }
   .tile-hand { display: flex; gap: 6px; flex-wrap: wrap; }
   .hand-tile {
@@ -386,7 +391,7 @@
   .smatrix-player-col:last-child { border-right: none; }
   .smatrix-player-col.current { background: rgba(245,158,11,0.07); border-radius: 4px; }
   .smatrix-player-col.current .smatrix-player-name { color: var(--gold); }
-  .smatrix-player-name { font-size: 11px; font-weight: 700; text-align: center; color: var(--text); line-height: 1.2; width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .smatrix-player-name { font-size: 11px; font-weight: 700; text-align: center; color: var(--text); line-height: 1.2; }
   .smatrix-player-you { font-size: 9px; color: var(--text-muted); }
   .smatrix-player-cash { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--green); margin-top: 1px; }
   .smatrix-inactive { opacity: 0.3; }
@@ -2589,12 +2594,11 @@ function renderMiniBoard() {
 function renderBoard() {
   const board = document.getElementById('board');
   const st = gameState;
-  // Compact ONLY during buyStock — board stays full-size during ALL placeTile phases (including bots)
-  const shouldCompact = st.phase === 'buyStock';
-  board.classList.toggle('compact', shouldCompact);
-  const matrix = document.getElementById('stockMatrix');
-  if (matrix) matrix.classList.toggle('smatrix-expanded', shouldCompact);
+  // Compact when it's YOUR turn to place a tile (focus on the hand/matrix); big otherwise
   const isMyPlaceTurn = st.phase === 'placeTile' && st.currentPlayerIdx === myIdx;
+  board.classList.toggle('compact', isMyPlaceTurn);
+  const matrix = document.getElementById('stockMatrix');
+  if (matrix) matrix.classList.toggle('smatrix-expanded', isMyPlaceTurn);
   const myTiles = st.players[myIdx]?.tiles || [];
   const playable = st.playableTiles || [];
   let html = '';
@@ -2893,10 +2897,11 @@ function renderStockMatrix() {
     const cur = i === st.currentPlayerIdx;
     const timer = (st.turnTimers[i] || 0) + (cur ? Math.floor((Date.now() - st.turnStartTime) / 1000) : 0);
     const mins = Math.floor(timer / 60), secs = String(timer % 60).padStart(2, '0');
+    const shortName = escapeHtml(p.name.split(' ')[0]);
     html += `<div class="smatrix-player-col${cur ? ' current' : ''}">
-      <div class="smatrix-player-name">${cur ? '▸ ' : ''}${escapeHtml(p.name)}</div>
-      ${i === myIdx ? '<div class="smatrix-player-you">(you)</div>' : ''}
-      <div class="smatrix-player-cash">$${p.cash.toLocaleString()}</div>
+      <div class="smatrix-player-name">${cur ? '▸ ' : ''}${shortName}</div>
+      ${i === myIdx ? '<div class="smatrix-player-you">you</div>' : ''}
+      <div class="smatrix-player-cash">$${(p.cash/1000).toFixed(1)}k</div>
       <div style="font-size:9px;color:var(--text-muted);font-family:'JetBrains Mono',monospace">${mins}:${secs}</div>
     </div>`;
   }
