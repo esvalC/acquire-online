@@ -199,7 +199,8 @@ function legalBuyActions(game, playerIdx) {
   const player  = game.players[playerIdx];
   const affordable = engine.HOTEL_CHAINS.filter(c => {
     const ch = game.chains[c];
-    return ch.active && engine.stockPrice(c, ch.tiles.length) <= player.cash && (ch.stock_available > 0);
+    const issued = game.players.reduce((s, p) => s + (p.stocks[c] || 0), 0);
+    return ch.active && engine.stockPrice(c, ch.tiles.length) <= player.cash && issued < 25;
   });
   // Skip (buy nothing) is always a valid option — treated equally to any buy combo by the value head
   const actions = [{ type: 'buyStock', purchases: {} }];
