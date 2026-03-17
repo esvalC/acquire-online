@@ -251,12 +251,12 @@
     transition: width 0.3s ease;
   }
 
-  /* buyStock: board + action panel side by side, board = 40%, action fills rest */
+  /* buyStock: board fills space, hand-actions takes only what it needs */
   .game-left.buystock-mode { flex-direction: row; align-items: stretch; }
-  .game-left.buystock-mode .board-container { flex: 0 0 40%; }
-  .game-left.buystock-mode .board { width: 100%; } /* fill the 40% column */
-  .game-left.buystock-mode .hand-actions { flex: 1; flex-direction: column; min-width: 0; }
-  .game-left.buystock-mode .hand-actions .action-panel { flex: 1; max-width: none; max-height: none; }
+  .game-left.buystock-mode .board-container { flex: 1; min-width: 0; }
+  .game-left.buystock-mode .board { width: 100%; }
+  .game-left.buystock-mode .hand-actions { flex: 0 0 auto; flex-direction: column; min-width: 260px; max-width: 360px; }
+  .game-left.buystock-mode .hand-actions .action-panel { flex: 0 0 auto; max-width: none; max-height: none; }
 
   .board-cell {
     aspect-ratio: 1.3; display: flex; align-items: center; justify-content: center;
