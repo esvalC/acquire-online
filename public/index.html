@@ -239,23 +239,31 @@
     flex: 1; min-height: 0;
   }
 
-  .board { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1px; min-width: 480px; }
+  .board { display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; min-width: 480px; }
 
   .board-cell {
     aspect-ratio: 1.3; display: flex; align-items: center; justify-content: center;
-    font-family: 'JetBrains Mono', monospace; font-size: 9px;
-    border-radius: 2px; background: #1a2332; border: 1px solid var(--border);
-    color: var(--text-muted); transition: var(--transition); min-height: 24px;
+    font-family: 'JetBrains Mono', monospace; font-size: 11px; font-weight: 600;
+    border-radius: 4px; background: #1a2332; border: 1px solid var(--border);
+    color: var(--text-muted); transition: var(--transition); min-height: 28px;
     cursor: default; position: relative;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 1px 2px rgba(0,0,0,0.3);
   }
-  .board-cell.lone { background: #374151; border-color: #4b5563; color: var(--text); }
-  .board-cell.chain-Tower       { background: var(--tower); border-color: var(--tower); color: #fff; }
-  .board-cell.chain-Luxor       { background: var(--luxor); border-color: var(--luxor); color: #fff; }
-  .board-cell.chain-American    { background: var(--american); border-color: var(--american); color: #fff; }
-  .board-cell.chain-Worldwide   { background: var(--worldwide); border-color: var(--worldwide); color: #fff; }
-  .board-cell.chain-Festival    { background: var(--festival); border-color: var(--festival); color: #fff; }
-  .board-cell.chain-Imperial    { background: var(--imperial); border-color: var(--imperial); color: #fff; }
-  .board-cell.chain-Continental { background: var(--continental); border-color: var(--continental); color: #000; }
+  /* Placed tiles get a physical raised-tile look */
+  .board-cell.lone {
+    background: #4b5563;
+    border-top-color: #6b7280; border-left-color: #6b7280;
+    border-bottom-color: #374151; border-right-color: #374151;
+    color: #f9fafb;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), 0 2px 4px rgba(0,0,0,0.4);
+  }
+  .board-cell.chain-Tower       { background: var(--tower); border-top-color: color-mix(in srgb,var(--tower) 60%,#fff); border-left-color: color-mix(in srgb,var(--tower) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--tower) 60%,#000); border-right-color: color-mix(in srgb,var(--tower) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
+  .board-cell.chain-Luxor       { background: var(--luxor); border-top-color: color-mix(in srgb,var(--luxor) 60%,#fff); border-left-color: color-mix(in srgb,var(--luxor) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--luxor) 60%,#000); border-right-color: color-mix(in srgb,var(--luxor) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
+  .board-cell.chain-American    { background: var(--american); border-top-color: color-mix(in srgb,var(--american) 60%,#fff); border-left-color: color-mix(in srgb,var(--american) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--american) 60%,#000); border-right-color: color-mix(in srgb,var(--american) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
+  .board-cell.chain-Worldwide   { background: var(--worldwide); border-top-color: color-mix(in srgb,var(--worldwide) 60%,#fff); border-left-color: color-mix(in srgb,var(--worldwide) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--worldwide) 60%,#000); border-right-color: color-mix(in srgb,var(--worldwide) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
+  .board-cell.chain-Festival    { background: var(--festival); border-top-color: color-mix(in srgb,var(--festival) 60%,#fff); border-left-color: color-mix(in srgb,var(--festival) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--festival) 60%,#000); border-right-color: color-mix(in srgb,var(--festival) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
+  .board-cell.chain-Imperial    { background: var(--imperial); border-top-color: color-mix(in srgb,var(--imperial) 60%,#fff); border-left-color: color-mix(in srgb,var(--imperial) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--imperial) 60%,#000); border-right-color: color-mix(in srgb,var(--imperial) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
+  .board-cell.chain-Continental { background: var(--continental); border-top-color: color-mix(in srgb,var(--continental) 60%,#fff); border-left-color: color-mix(in srgb,var(--continental) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--continental) 60%,#000); border-right-color: color-mix(in srgb,var(--continental) 60%,#000); color: #000; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
 
   .board-cell.playable {
     cursor: pointer; animation: pulse 1.5s ease-in-out infinite;
@@ -537,14 +545,17 @@
   #tilePreview .tp-action { color: var(--gold); font-weight: 700; font-size: 12px; }
   #tilePreview .tp-detail { color: var(--text-dim); margin-top: 2px; font-size: 10px; }
 
-  /* ── Board with axis headers ───────────────────── */
-  .board { grid-template-columns: 18px repeat(12, 1fr); }
-  .board-cell.header-cell {
-    background: transparent; border-color: transparent;
-    font-size: 8px; color: var(--text-muted); cursor: default;
-    font-family: 'JetBrains Mono', monospace; font-weight: 500;
-  }
-  .board-cell.header-cell:hover { transform: none; background: transparent; }
+  /* ── Mini board (merger panel) ──────────────────── */
+  .mini-board { display: grid; grid-template-columns: repeat(12, 1fr); gap: 1px; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+  .mini-cell { aspect-ratio: 1.3; border-radius: 1px; background: #111827; }
+  .mini-cell.mc-lone { background: #4b5563; }
+  .mini-cell.mc-Tower       { background: var(--tower); }
+  .mini-cell.mc-Luxor       { background: var(--luxor); }
+  .mini-cell.mc-American    { background: var(--american); }
+  .mini-cell.mc-Worldwide   { background: var(--worldwide); }
+  .mini-cell.mc-Festival    { background: var(--festival); }
+  .mini-cell.mc-Imperial    { background: var(--imperial); }
+  .mini-cell.mc-Continental { background: var(--continental); }
 
   /* ── Action panel highlight when it's your turn ── */
   .action-panel.your-turn {
@@ -2520,6 +2531,20 @@ function analyzeTileClient(tile) {
 }
 
 /* ── Render Board ──────────────────────────────── */
+function renderMiniBoard() {
+  const st = gameState;
+  let html = '<div class="mini-board">';
+  for (let r = 0; r < 9; r++) {
+    for (let c = 0; c < 12; c++) {
+      const cell = st.board[r][c];
+      const cls = cell === 'lone' ? 'mc-lone' : cell ? `mc-${cell}` : '';
+      html += `<div class="mini-cell${cls ? ' ' + cls : ''}"></div>`;
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
 function renderBoard() {
   const board = document.getElementById('board');
   const st = gameState;
@@ -2528,13 +2553,7 @@ function renderBoard() {
   const isMyPlaceTurn = st.phase === 'placeTile' && st.currentPlayerIdx === myIdx;
   let html = '';
 
-  // Corner + column headers (A–L)
-  html += `<div class="board-cell header-cell"></div>`;
-  for (let c = 0; c < 12; c++) html += `<div class="board-cell header-cell">${String.fromCharCode(65+c)}</div>`;
-
   for (let r = 0; r < 9; r++) {
-    // Row header
-    html += `<div class="board-cell header-cell">${r+1}</div>`;
     for (let c = 0; c < 12; c++) {
       const tile = `${r+1}${String.fromCharCode(65+c)}`;
       const cell = st.board[r][c];
@@ -2676,7 +2695,8 @@ function renderActionPanel() {
       const dcPrice = st.chains[dc]?.price || 0;
       const survivorPrice = st.chains[pm.survivor]?.price || 0;
       title.textContent = `${dc} → ${pm.survivor}`;
-      let h = `<div class="merger-context">
+      let h = renderMiniBoard();
+      h += `<div class="merger-context">
         <div class="merger-context-row"><span class="merger-ctx-label">You hold</span><span class="merger-ctx-val" style="color:${chainColors[dc]}">${held} ${dc}</span></div>
         <div class="merger-context-row"><span class="merger-ctx-label">Sell price</span><span class="merger-ctx-val">$${dcPrice} / share</span></div>
         <div class="merger-context-row"><span class="merger-ctx-label">Survivor</span><span class="merger-ctx-val" style="color:${chainColors[pm.survivor]}">${pm.survivor} · $${survivorPrice}</span></div>
