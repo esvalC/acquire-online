@@ -239,19 +239,16 @@
     flex: none;
   }
 
-  /* Board: capped so it never overflows the viewport vertically */
+  /* Board: width drives height via cell aspect-ratio; cap by viewport height so hand always visible */
   .board {
     display: grid; grid-template-columns: repeat(12, 1fr); gap: 2px; width: 100%;
-    max-width: min(660px, calc((100vh - 240px) * 1.73));
+    max-width: calc((100vh - 180px) * 1.73);
     transition: max-width 0.3s ease;
   }
-  /* Compact: board shrinks during buyStock so the buy panel can grow */
-  .board.compact { max-width: min(400px, calc((100vh - 240px) * 1.0)); }
-  /* buystock-mode: action panel fills the space the compact board gives up */
-  .game-left.buystock-mode { flex-direction: row; flex-wrap: wrap; }
-  .game-left.buystock-mode .board-container { flex: 0 0 auto; }
-  .game-left.buystock-mode .hand-actions { flex: 1; flex-direction: column; min-width: 0; }
-  .game-left.buystock-mode .hand-actions .hand-panel { flex: 0 0 auto; }
+  /* buyStock: board + action panel sit side by side; board = 40%, action = 60% */
+  .game-left.buystock-mode { flex-direction: row; align-items: flex-start; }
+  .game-left.buystock-mode .board-container { flex: 0 0 40%; min-width: 0; }
+  .game-left.buystock-mode .hand-actions { flex: 1; flex-direction: column; min-width: 0; align-items: stretch; }
   .game-left.buystock-mode .hand-actions .action-panel { flex: 1; max-width: none; max-height: none; }
 
   .board-cell {
@@ -2608,7 +2605,7 @@ function renderBoard() {
   const st = gameState;
   const isMyPlaceTurn = st.phase === 'placeTile' && st.currentPlayerIdx === myIdx;
   const isMyBuyTurn   = st.phase === 'buyStock'   && st.currentPlayerIdx === myIdx;
-  board.classList.toggle('compact', isMyBuyTurn);
+  board.classList.remove('compact');
   const gameLeft = document.querySelector('.game-left');
   if (gameLeft) gameLeft.classList.toggle('buystock-mode', isMyBuyTurn);
   const matrix = document.getElementById('stockMatrix');
