@@ -206,8 +206,9 @@ function legalBuyActions(game, playerIdx) {
   const actions = [{ type: 'buyStock', purchases: {} }];
   if (affordable.length === 0) return actions;
   for (const c of affordable) {
-    const price = engine.stockPrice(c, game.chains[c].tiles.length);
-    const maxN  = Math.min(3, Math.floor(player.cash / price), game.chains[c].stock_available || 0);
+    const price    = engine.stockPrice(c, game.chains[c].tiles.length);
+    const issued   = game.players.reduce((s, p) => s + (p.stocks[c] || 0), 0);
+    const maxN     = Math.min(3, Math.floor(player.cash / price), 25 - issued);
     for (let n = 1; n <= maxN; n++) actions.push({ type: 'buyStock', purchases: { [c]: n } });
   }
   for (let a = 0; a < affordable.length; a++) {
@@ -218,6 +219,19 @@ function legalBuyActions(game, playerIdx) {
       if (pa + pb <= player.cash)   actions.push({ type: 'buyStock', purchases: { [ca]: 1, [cb]: 1 } });
       if (pa + 2*pb <= player.cash) actions.push({ type: 'buyStock', purchases: { [ca]: 1, [cb]: 2 } });
       if (2*pa + pb <= player.cash) actions.push({ type: 'buyStock', purchases: { [ca]: 2, [cb]: 1 } });
+    }
+  }
+  // 3-chain combos: buy 1 of each (total 3, only valid combo across 3 chains)
+  for (let a = 0; a < affordable.length; a++) {
+    for (let b = a + 1; b < affordable.length; b++) {
+      for (let c = b + 1; c < affordable.length; c++) {
+        const ca = affordable[a], cb = affordable[b], cc = affordable[c];
+        const pa = engine.stockPrice(ca, game.chains[ca].tiles.length);
+        const pb = engine.stockPrice(cb, game.chains[cb].tiles.length);
+        const pc = engine.stockPrice(cc, game.chains[cc].tiles.length);
+        if (pa + pb + pc <= player.cash)
+          actions.push({ type: 'buyStock', purchases: { [ca]: 1, [cb]: 1, [cc]: 1 } });
+      }
     }
   }
   return actions;
@@ -282,18 +296,42 @@ function decideMasterAction(game, playerIdx) {
   if (!weights) return null;
 
   try {
-    // ── Tile placement: use policy head directly (no cloning!) ─── */
+    // ── Tile placement: value-guided lookahead (resolves chooseChain inline) ── */
     if (phase === 'placeTile') {
       const { playable } = engine.getPlayableTiles(game);
       if (!playable || playable.length === 0) return null; // botAI heuristic handles passTile
       if (playable.length === 1) return { type: 'placeTile', tile: playable[0] };
 
-      const { policyLogits } = forward(weights, encodeState(game, playerIdx));
-
-      let best = playable[0], bestLogit = -Infinity;
+      const myName = game.players[playerIdx].name;
+      let best = playable[0], bestScore = -Infinity;
       for (const tile of playable) {
-        const logit = policyLogits[tileToIdx(tile)];
-        if (logit > bestLogit) { bestLogit = logit; best = tile; }
+        const sim = cloneGame(game);
+        try {
+          engine.placeTile(sim, playerIdx, tile);
+          // If placing the tile triggers chooseChain, resolve it now so the
+          // value head evaluates the fully-settled board state.
+          if (sim.phase === 'chooseChain') {
+            const avail = engine.HOTEL_CHAINS.filter(c => !sim.chains[c].active);
+            if (avail.length === 1) {
+              engine.chooseChain(sim, playerIdx, avail[0]);
+            } else if (avail.length > 1) {
+              const chainBest = bestValueAction(weights, sim, playerIdx,
+                avail.map(c => ({ type: 'chooseChain', chain: c })));
+              engine.chooseChain(sim, playerIdx, chainBest.chain);
+            }
+          }
+        } catch { continue; }
+
+        let score;
+        if (sim.phase === 'gameOver') {
+          score = sim.standings?.[0]?.name === myName ? 1 : 0;
+        } else {
+          try {
+            const { value } = forward(weights, encodeState(sim, playerIdx));
+            score = value[playerIdx];
+          } catch { score = 0.5; }
+        }
+        if (score > bestScore) { bestScore = score; best = tile; }
       }
       return { type: 'placeTile', tile: best };
     }
