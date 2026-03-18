@@ -202,9 +202,11 @@ function legalBuyActions(game, playerIdx) {
     const issued = game.players.reduce((s, p) => s + (p.stocks[c] || 0), 0);
     return ch.active && engine.stockPrice(c, ch.tiles.length) <= player.cash && issued < 25;
   });
-  // Skip (buy nothing) is always a valid option — treated equally to any buy combo by the value head
-  const actions = [{ type: 'buyStock', purchases: {} }];
-  if (affordable.length === 0) return actions;
+  // Only skip buying if nothing is affordable — when chains are available,
+  // always buy something (value head picks which). Early positioning in a
+  // growing chain is almost always correct; holding cash is not worth it.
+  if (affordable.length === 0) return [{ type: 'buyStock', purchases: {} }];
+  const actions = [];
   for (const c of affordable) {
     const price    = engine.stockPrice(c, game.chains[c].tiles.length);
     const issued   = game.players.reduce((s, p) => s + (p.stocks[c] || 0), 0);
