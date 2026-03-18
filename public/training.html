@@ -3,17 +3,17 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>⚡ Master Bot Training</title>
+<title>Master Bot Training</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  background: #07070f;
+  background: #09090f;
   color: #e2e8f0;
   font-family: -apple-system, 'Segoe UI', system-ui, sans-serif;
   min-height: 100vh;
-  padding: 24px 20px 48px;
-  max-width: 900px;
+  padding: 24px 20px 60px;
+  max-width: 960px;
   margin: 0 auto;
 }
 
@@ -27,7 +27,7 @@ body {
   gap: 12px;
 }
 .header-left h1 {
-  font-size: 1.5rem;
+  font-size: 1.45rem;
   font-weight: 800;
   background: linear-gradient(135deg, #a78bfa, #38bdf8);
   -webkit-background-clip: text;
@@ -36,9 +36,9 @@ body {
   letter-spacing: -0.02em;
 }
 .header-left p {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: #475569;
-  margin-top: 2px;
+  margin-top: 3px;
 }
 .live-badge {
   display: flex;
@@ -68,8 +68,8 @@ body {
 
 /* ── Phase banner ───────────────────────────────────────────── */
 .phase-banner {
-  background: linear-gradient(135deg, rgba(99,102,241,0.12), rgba(168,85,247,0.08));
-  border: 1px solid rgba(99,102,241,0.2);
+  background: linear-gradient(135deg, rgba(99,102,241,0.1), rgba(168,85,247,0.06));
+  border: 1px solid rgba(99,102,241,0.18);
   border-radius: 12px;
   padding: 14px 20px;
   margin-bottom: 20px;
@@ -78,64 +78,61 @@ body {
   gap: 14px;
   flex-wrap: wrap;
 }
-.phase-label { font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.12em; color: #7c3aed; font-weight: 700; }
-.phase-name { font-size: 1rem; font-weight: 700; color: #c4b5fd; }
-.phase-desc { font-size: 0.75rem; color: #64748b; flex: 1; min-width: 180px; }
-.phase-steps {
-  display: flex;
-  gap: 4px;
-}
-.phase-step {
-  width: 28px; height: 4px;
-  border-radius: 2px;
-  background: #1e1e35;
-}
-.phase-step.done { background: #7c3aed; }
+.phase-label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.12em; color: #7c3aed; font-weight: 700; }
+.phase-name  { font-size: 1rem; font-weight: 700; color: #c4b5fd; }
+.phase-desc  { font-size: 0.73rem; color: #64748b; flex: 1; min-width: 180px; }
+.phase-steps { display: flex; gap: 4px; }
+.phase-step  { width: 28px; height: 4px; border-radius: 2px; background: #1e1e35; }
+.phase-step.done    { background: #7c3aed; }
 .phase-step.current { background: #a78bfa; animation: phasePulse 1.5s infinite; }
 @keyframes phasePulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
 
 /* ── Hero stat cards ────────────────────────────────────────── */
 .hero-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-  margin-bottom: 16px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 14px;
 }
-@media (max-width: 560px) { .hero-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 700px) { .hero-grid { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 400px) { .hero-grid { grid-template-columns: 1fr; } }
 
 .hero-card {
   background: #0d0d1a;
   border: 1px solid #1a1a2e;
   border-radius: 14px;
-  padding: 18px 16px;
+  padding: 16px 14px;
   position: relative;
   overflow: hidden;
-  transition: border-color 0.3s;
 }
 .hero-card::before {
   content: '';
   position: absolute;
   top: 0; left: 0; right: 0;
   height: 2px;
-  opacity: 0.6;
+  opacity: 0.7;
 }
 .hero-card.purple::before { background: linear-gradient(90deg, #7c3aed, #4f46e5); }
 .hero-card.cyan::before   { background: linear-gradient(90deg, #0891b2, #0ea5e9); }
-.hero-card.green::before  { background: linear-gradient(90deg, #059669, #34d399); }
 .hero-card.amber::before  { background: linear-gradient(90deg, #b45309, #f59e0b); }
+.hero-card.teal::before   { background: linear-gradient(90deg, #0d9488, #34d399); }
 .hero-card.rose::before   { background: linear-gradient(90deg, #be185d, #f43f5e); }
-.hero-card.indigo::before { background: linear-gradient(90deg, #4338ca, #818cf8); }
+
+/* "total" variant — slightly brighter border */
+.hero-card.total-card {
+  border-color: rgba(167,139,250,0.2);
+}
 
 .hero-label {
-  font-size: 0.65rem;
+  font-size: 0.62rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   color: #475569;
-  margin-bottom: 8px;
+  margin-bottom: 7px;
   font-weight: 600;
 }
 .hero-value {
-  font-size: 2rem;
+  font-size: 1.9rem;
   font-weight: 800;
   line-height: 1;
   color: #f1f5f9;
@@ -144,42 +141,54 @@ body {
 }
 .hero-value.purple { color: #a78bfa; }
 .hero-value.cyan   { color: #38bdf8; }
-.hero-value.green  { color: #34d399; }
 .hero-value.amber  { color: #fbbf24; }
-.hero-value.rose   { color: #fb7185; }
+.hero-value.teal   { color: #2dd4bf; }
 .hero-sub {
-  font-size: 0.68rem;
+  font-size: 0.65rem;
   color: #374151;
   margin-top: 5px;
 }
 .hero-sub .accent { color: #64748b; }
+.hero-badge {
+  display: inline-block;
+  font-size: 0.55rem;
+  background: rgba(167,139,250,0.12);
+  color: #a78bfa;
+  border: 1px solid rgba(167,139,250,0.2);
+  border-radius: 4px;
+  padding: 1px 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
 
-/* small stat grid below hero */
+/* small stat pills */
 .stat-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 10px;
-  margin-bottom: 20px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 8px;
+  margin-bottom: 18px;
 }
 .stat-pill {
   background: #0d0d1a;
   border: 1px solid #1a1a2e;
   border-radius: 10px;
-  padding: 12px 14px;
+  padding: 11px 13px;
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
-.stat-pill .label { font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.08em; color: #374151; }
-.stat-pill .val   { font-size: 0.95rem; font-weight: 700; color: #cbd5e1; }
+.stat-pill .label { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 0.08em; color: #374151; }
+.stat-pill .val   { font-size: 0.9rem; font-weight: 700; color: #cbd5e1; }
 
 /* ── Replay buffer bar ──────────────────────────────────────── */
 .replay-card {
   background: #0d0d1a;
   border: 1px solid #1a1a2e;
   border-radius: 14px;
-  padding: 16px 18px;
-  margin-bottom: 16px;
+  padding: 15px 18px;
+  margin-bottom: 14px;
 }
 .replay-header {
   display: flex;
@@ -187,10 +196,10 @@ body {
   align-items: center;
   margin-bottom: 10px;
 }
-.replay-header .title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; font-weight: 600; }
+.replay-header .title { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; font-weight: 600; }
 .replay-header .pct   { font-size: 0.8rem; font-weight: 700; color: #818cf8; }
 .replay-track {
-  height: 8px;
+  height: 7px;
   background: #1a1a2e;
   border-radius: 4px;
   overflow: hidden;
@@ -204,31 +213,30 @@ body {
 }
 .replay-fill::after {
   content: '';
-  position: absolute;
-  top: 0; right: 0; bottom: 0; left: 0;
+  position: absolute; top: 0; right: 0; bottom: 0; left: 0;
   background: linear-gradient(90deg, transparent 60%, rgba(255,255,255,0.15));
-  animation: shimmer 2s linear infinite;
+  animation: shimmer 2.5s linear infinite;
 }
-@keyframes shimmer { 0%{transform:translateX(-100%)} 100%{transform:translateX(100%)} }
-.replay-sub { font-size: 0.65rem; color: #374151; margin-top: 6px; }
+@keyframes shimmer { 0%{transform:translateX(-200%)} 100%{transform:translateX(200%)} }
+.replay-sub { font-size: 0.63rem; color: #374151; margin-top: 6px; }
 
-/* ── Loss chart ─────────────────────────────────────────────── */
+/* ── Chart cards ────────────────────────────────────────────── */
 .chart-card {
   background: #0d0d1a;
   border: 1px solid #1a1a2e;
   border-radius: 14px;
-  padding: 20px;
-  margin-bottom: 16px;
+  padding: 20px 20px 16px;
+  margin-bottom: 14px;
 }
 .chart-header {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
   flex-wrap: wrap;
   gap: 10px;
 }
-.chart-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; font-weight: 600; }
+.chart-title { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; font-weight: 600; }
 .chart-legend {
   display: flex;
   gap: 14px;
@@ -238,20 +246,41 @@ body {
   display: flex;
   align-items: center;
   gap: 5px;
-  font-size: 0.65rem;
+  font-size: 0.63rem;
   color: #64748b;
 }
-.legend-dot {
-  width: 8px; height: 8px;
-  border-radius: 50%;
+.legend-swatch {
+  width: 22px; height: 3px;
+  border-radius: 2px;
 }
-.chart-wrap { position: relative; }
-#lossChart { width: 100%; height: 130px; display: block; }
+.chart-area {
+  display: flex;
+  gap: 0;
+  position: relative;
+}
+.chart-yaxis {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 2px 8px 2px 0;
+  min-width: 42px;
+  text-align: right;
+}
+.chart-yaxis span {
+  font-size: 0.58rem;
+  color: #374151;
+  font-variant-numeric: tabular-nums;
+}
+.chart-wrap {
+  flex: 1;
+  position: relative;
+}
+canvas { width: 100%; display: block; }
 .chart-baseline {
   position: absolute;
   left: 0; right: 0;
   border-top: 1px dashed rgba(251,191,36,0.3);
-  font-size: 0.58rem;
+  font-size: 0.56rem;
   color: rgba(251,191,36,0.5);
   padding-left: 4px;
   pointer-events: none;
@@ -259,81 +288,19 @@ body {
 .chart-footer {
   display: flex;
   justify-content: space-between;
-  font-size: 0.62rem;
+  font-size: 0.6rem;
   color: #374151;
-  margin-top: 6px;
+  margin-top: 8px;
+  padding-left: 50px; /* offset for y-axis */
 }
-
-/* ── Bot leaderboard ────────────────────────────────────────── */
-.bots-card {
-  background: #0d0d1a;
-  border: 1px solid #1a1a2e;
-  border-radius: 14px;
-  padding: 20px;
-  margin-bottom: 16px;
-}
-.bots-header { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; font-weight: 600; margin-bottom: 16px; }
-.bot-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-}
-.bot-card {
-  background: #0a0a15;
-  border: 1px solid #1a1a2e;
-  border-radius: 10px;
-  padding: 14px 12px;
-  position: relative;
-  overflow: hidden;
-  transition: border-color 0.3s;
-}
-.bot-card:first-child { border-color: rgba(251,191,36,0.3); }
-.bot-crown {
-  position: absolute;
-  top: 8px; right: 10px;
-  font-size: 0.75rem;
-  opacity: 0.8;
-}
-.bot-avatar {
-  font-size: 1.6rem;
-  margin-bottom: 6px;
-  line-height: 1;
-}
-.bot-card-name {
-  font-size: 0.85rem;
-  font-weight: 700;
-  margin-bottom: 8px;
-}
-.bot-winpct {
-  font-size: 1.4rem;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-  line-height: 1;
-  margin-bottom: 2px;
-}
-.bot-card-label { font-size: 0.6rem; color: #374151; margin-bottom: 6px; }
-.bot-bar-mini {
-  height: 3px;
-  background: #1a1a2e;
-  border-radius: 2px;
-  margin-bottom: 8px;
-  overflow: hidden;
-}
-.bot-bar-mini-fill {
-  height: 100%;
-  border-radius: 2px;
-  transition: width 0.8s ease;
-}
-.bot-cash-label { font-size: 0.6rem; color: #374151; }
-.bot-cash-val { font-size: 0.78rem; font-weight: 600; color: #94a3b8; }
 
 /* ── Run timer ──────────────────────────────────────────────── */
 .timer-card {
   background: #0d0d1a;
   border: 1px solid #1a1a2e;
   border-radius: 14px;
-  padding: 16px 18px;
-  margin-bottom: 16px;
+  padding: 15px 18px;
+  margin-bottom: 14px;
 }
 .timer-header {
   display: flex;
@@ -343,11 +310,11 @@ body {
   flex-wrap: wrap;
   gap: 6px;
 }
-.timer-title { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; font-weight: 600; }
-.timer-vals { font-size: 0.78rem; color: #64748b; }
+.timer-title { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; font-weight: 600; }
+.timer-vals  { font-size: 0.75rem; color: #64748b; }
 .timer-vals span { color: #94a3b8; font-weight: 600; }
 .timer-track {
-  height: 6px;
+  height: 5px;
   background: #1a1a2e;
   border-radius: 3px;
   overflow: hidden;
@@ -359,6 +326,39 @@ body {
   transition: width 1s ease;
 }
 
+/* ── Bot leaderboard ────────────────────────────────────────── */
+.bots-card {
+  background: #0d0d1a;
+  border: 1px solid #1a1a2e;
+  border-radius: 14px;
+  padding: 20px;
+  margin-bottom: 14px;
+}
+.bots-header { font-size: 0.68rem; text-transform: uppercase; letter-spacing: 0.1em; color: #475569; font-weight: 600; margin-bottom: 16px; }
+.bot-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+.bot-card {
+  background: #0a0a14;
+  border: 1px solid #1a1a2e;
+  border-radius: 10px;
+  padding: 14px 12px;
+  position: relative;
+  overflow: hidden;
+}
+.bot-card:first-child { border-color: rgba(251,191,36,0.28); }
+.bot-crown { position: absolute; top: 8px; right: 10px; font-size: 0.75rem; opacity: 0.8; }
+.bot-avatar { font-size: 1.5rem; margin-bottom: 6px; line-height: 1; }
+.bot-card-name { font-size: 0.82rem; font-weight: 700; margin-bottom: 6px; }
+.bot-winpct { font-size: 1.35rem; font-weight: 800; letter-spacing: -0.02em; line-height: 1; margin-bottom: 2px; }
+.bot-card-label { font-size: 0.58rem; color: #374151; margin-bottom: 6px; }
+.bot-bar-mini { height: 3px; background: #1a1a2e; border-radius: 2px; margin-bottom: 8px; overflow: hidden; }
+.bot-bar-mini-fill { height: 100%; border-radius: 2px; transition: width 0.8s ease; }
+.bot-cash-label { font-size: 0.58rem; color: #374151; }
+.bot-cash-val   { font-size: 0.76rem; font-weight: 600; color: #94a3b8; }
+
 /* ── Offline ────────────────────────────────────────────────── */
 .offline-msg {
   text-align: center;
@@ -366,15 +366,15 @@ body {
   color: #374151;
 }
 .offline-msg .icon { font-size: 3rem; margin-bottom: 16px; }
-.offline-msg p { font-size: 0.9rem; }
-.offline-msg small { font-size: 0.75rem; color: #1e293b; margin-top: 8px; display: block; }
+.offline-msg p     { font-size: 0.9rem; }
+.offline-msg small { font-size: 0.73rem; color: #1e293b; margin-top: 8px; display: block; }
 </style>
 </head>
 <body>
 
 <div class="header">
   <div class="header-left">
-    <h1>⚡ Master Bot Training</h1>
+    <h1>Master Bot Training</h1>
     <p>AlphaZero-style · policy + value heads · self-play</p>
   </div>
   <div class="live-badge" id="liveBadge">
@@ -395,10 +395,15 @@ body {
     <div class="phase-steps" id="phaseSteps"></div>
   </div>
 
-  <!-- Hero numbers -->
+  <!-- Hero numbers: 4 across -->
   <div class="hero-grid">
+    <div class="hero-card teal total-card">
+      <div class="hero-label">Total Games<span class="hero-badge">all time</span></div>
+      <div class="hero-value teal" id="totalGames">—</div>
+      <div class="hero-sub" id="totalGamesSub"></div>
+    </div>
     <div class="hero-card purple">
-      <div class="hero-label">Games Played</div>
+      <div class="hero-label">This Instance</div>
       <div class="hero-value purple" id="gamesPlayed">—</div>
       <div class="hero-sub"><span class="accent" id="gamesPerSec"></span></div>
     </div>
@@ -460,19 +465,22 @@ body {
     </div>
   </div>
 
-  <!-- Loss chart (dual: policy + value) -->
+  <!-- Loss chart -->
   <div class="chart-card">
     <div class="chart-header">
       <span class="chart-title">Loss History · last 200 checkpoints</span>
       <div class="chart-legend">
-        <div class="legend-item"><div class="legend-dot" style="background:#a78bfa"></div>Policy</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#38bdf8"></div>Value</div>
-        <div class="legend-item"><div class="legend-dot" style="background:#64748b;border:1px dashed #64748b;border-radius:0;height:2px;width:14px;border-radius:0"></div>Baseline</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#a78bfa"></div>Policy</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:#38bdf8"></div>Value</div>
+        <div class="legend-item"><div class="legend-swatch" style="background:rgba(251,191,36,0.45);border:none"></div>Random baseline</div>
       </div>
     </div>
-    <div class="chart-wrap">
-      <canvas id="lossChart"></canvas>
-      <div class="chart-baseline" id="baseline" style="display:none"></div>
+    <div class="chart-area">
+      <div class="chart-yaxis" id="lossYAxis"></div>
+      <div class="chart-wrap">
+        <canvas id="lossChart"></canvas>
+        <div class="chart-baseline" id="baseline" style="display:none"></div>
+      </div>
     </div>
     <div class="chart-footer">
       <span id="chartOldest"></span>
@@ -480,21 +488,24 @@ body {
     </div>
   </div>
 
-  <!-- Master Bot ELO / Cash trend -->
+  <!-- Cash ELO chart -->
   <div class="chart-card">
     <div class="chart-header">
       <div>
-        <span class="chart-title">Master Bot "ELO" · Avg Ending Cash (last 50 checkpoints)</span>
-        <div style="font-size:0.65rem;color:#374151;margin-top:4px">Target: $50,000+ · higher = stronger bot</div>
+        <span class="chart-title">Master Bot Avg Ending Cash · last 50 checkpoints</span>
+        <div style="font-size:0.63rem;color:#374151;margin-top:4px">Target: $50,000+ · higher = stronger play</div>
       </div>
       <div style="text-align:right">
         <div style="font-size:1.4rem;font-weight:800;color:#34d399;letter-spacing:-0.02em" id="masterCashNow">—</div>
-        <div style="font-size:0.62rem;color:#374151">current avg</div>
+        <div style="font-size:0.6rem;color:#374151">current avg</div>
       </div>
     </div>
-    <div class="chart-wrap">
-      <canvas id="cashChart"></canvas>
-      <div class="chart-baseline" id="cashBaseline" style="display:none"></div>
+    <div class="chart-area">
+      <div class="chart-yaxis" id="cashYAxis"></div>
+      <div class="chart-wrap">
+        <canvas id="cashChart"></canvas>
+        <div class="chart-baseline" id="cashBaseline" style="display:none"></div>
+      </div>
     </div>
     <div class="chart-footer">
       <span id="cashChartOldest"></span>
@@ -519,9 +530,7 @@ body {
 <script>
 const BASE = window.location.pathname.startsWith('/beta') ? '/beta' : '';
 const REPLAY_MAX = 20000;
-
-// Uniform random baseline for policy loss: ln(6) ≈ 1.79 (6 avg legal tiles)
-const POLICY_BASELINE = Math.log(6);
+const POLICY_BASELINE = Math.log(6); // ~1.79
 
 const BOT_META = {
   Aria: { color: '#a78bfa', avatar: '🔮', style: 'Balanced' },
@@ -533,18 +542,36 @@ const BOT_META = {
 
 /* ── Phases ──────────────────────────────────────────────────── */
 const PHASES = [
-  { name: 'Warmup',  minGames: 0,     maxGames: 5000,  masterPct: 20,
+  { name: 'Warmup',  minGames: 0,     maxGames: 5000,     masterPct: 20,
     desc: '~1 master bot/game · filling replay buffer · random network' },
-  { name: 'Early',   minGames: 5000,  maxGames: 15000, masterPct: 40,
+  { name: 'Early',   minGames: 5000,  maxGames: 15000,    masterPct: 40,
     desc: '~2 masters/game · policy head starting to learn tile preferences' },
-  { name: 'Mid',     minGames: 15000, maxGames: 30000, masterPct: 65,
+  { name: 'Mid',     minGames: 15000, maxGames: 30000,    masterPct: 65,
     desc: 'Majority self-play · value + policy heads reinforcing each other' },
-  { name: 'Mature',  minGames: 30000, maxGames: Infinity, masterPct: 85,
+  { name: 'Mature',  minGames: 30000, maxGames: Infinity,  masterPct: 85,
     desc: 'Near-full self-play · fine-tuning strategy and money maximization' },
 ];
-
 function getPhase(games) {
   return PHASES.find(p => games >= p.minGames && games < p.maxGames) || PHASES[PHASES.length - 1];
+}
+
+/* ── Total games (persists across spot instance resets) ─────── */
+// localStorage stores accumulated total from previous instances.
+// When instance counter goes down (reset), we fold in the previous max.
+function getTotalGames(instanceGames) {
+  let stored;
+  try { stored = JSON.parse(localStorage.getItem('acq_train_v1') || 'null'); } catch {}
+  if (!stored) stored = { accumulated: 0, lastSeen: 0 };
+
+  if (instanceGames < stored.lastSeen && stored.lastSeen > 100) {
+    // Instance was replaced — fold in what we saw
+    stored.accumulated += stored.lastSeen;
+  }
+  if (instanceGames > stored.lastSeen) {
+    stored.lastSeen = instanceGames;
+  }
+  try { localStorage.setItem('acq_train_v1', JSON.stringify(stored)); } catch {}
+  return stored.accumulated + instanceGames;
 }
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -557,166 +584,35 @@ function fmtTime(secs) {
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
 }
-
 function fmtCash(n) {
   if (!n) return '—';
+  if (n >= 1000) return '$' + (n / 1000).toFixed(1) + 'k';
   return '$' + n.toLocaleString();
 }
-
 function fmtNum(n) {
   if (!n && n !== 0) return '—';
-  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M';
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(2) + 'M';
   if (n >= 10_000)    return (n / 1000).toFixed(1) + 'k';
   return n.toLocaleString();
 }
+function niceLabel(v) {
+  if (v >= 1000) return '$' + (v/1000).toFixed(0) + 'k';
+  return v.toFixed(2);
+}
 
-/* ── Dual-line loss chart ─────────────────────────────────────── */
-let prevHistory = null;
-
-function drawChart(data) {
-  const policyHistory = data.policyHistory || data.lossHistory || [];
-  const valueHistory  = data.valueHistory  || [];
-
-  const canvas = document.getElementById('lossChart');
-  const ctx    = canvas.getContext('2d');
-  const W      = canvas.offsetWidth;
-  const H      = 130;
-  canvas.width  = W * devicePixelRatio;
-  canvas.height = H * devicePixelRatio;
-  ctx.scale(devicePixelRatio, devicePixelRatio);
-
-  if (policyHistory.length < 2) return;
-
-  // Combined range across both series
-  const allVals = [...policyHistory, ...valueHistory].filter(v => v != null);
-  if (allVals.length === 0) return;
-
-  const rawMin = Math.min(...allVals);
-  const rawMax = Math.max(...allVals, POLICY_BASELINE + 0.1);
-  const pad    = (rawMax - rawMin) * 0.12;
-  const min    = rawMin - pad;
-  const max    = rawMax + pad;
-  const range  = max - min || 1;
-
-  const toY = v => H - ((v - min) / range) * H * 0.9 - H * 0.05;
-  const n   = policyHistory.length;
-  const step = W / Math.max(n - 1, 1);
-
-  // Background grid
-  ctx.strokeStyle = '#1a1a2e';
-  ctx.lineWidth = 1;
-  [0.25, 0.5, 0.75].forEach(frac => {
-    const y = H * frac;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-  });
-
-  // Baseline: random policy (ln ~6 legal tiles ≈ 1.79)
-  if (POLICY_BASELINE >= min && POLICY_BASELINE <= max) {
-    const by = toY(POLICY_BASELINE);
-    ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = 'rgba(251,191,36,0.25)';
-    ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(0, by); ctx.lineTo(W, by); ctx.stroke();
-    ctx.setLineDash([]);
-
-    const bl = document.getElementById('baseline');
-    bl.style.display = 'block';
-    bl.style.bottom  = `${H - by}px`;
-    bl.textContent   = `random baseline ${POLICY_BASELINE.toFixed(2)}`;
+/* ── Y-axis helper ───────────────────────────────────────────── */
+function setYAxis(elId, min, max, ticks = 4) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const labels = [];
+  for (let i = ticks; i >= 0; i--) {
+    const v = min + (max - min) * (i / ticks);
+    labels.push(`<span>${niceLabel(v)}</span>`);
   }
-
-  function drawLine(history, color, dashed) {
-    if (!history || history.length < 2) return;
-    // Gradient fill
-    const grad = ctx.createLinearGradient(0, 0, 0, H);
-    grad.addColorStop(0, color.replace(')', ', 0.15)').replace('rgb', 'rgba'));
-    grad.addColorStop(1, color.replace(')', ', 0)').replace('rgb', 'rgba'));
-
-    ctx.beginPath();
-    history.forEach((v, i) => {
-      if (v == null) return;
-      const x = i * step, y = toY(v);
-      i === 0 || history[i-1] == null ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    const lastIdx = history.length - 1;
-    ctx.lineTo(lastIdx * step, H);
-    ctx.lineTo(0, H);
-    ctx.closePath();
-    ctx.fillStyle = grad;
-    ctx.fill();
-
-    // Line
-    if (dashed) ctx.setLineDash([5, 4]);
-    ctx.beginPath();
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 2;
-    history.forEach((v, i) => {
-      if (v == null) return;
-      const x = i * step, y = toY(v);
-      i === 0 || history[i-1] == null ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    });
-    ctx.stroke();
-    ctx.setLineDash([]);
-
-    // End dot
-    const lastVal = history[lastIdx];
-    if (lastVal != null) {
-      ctx.beginPath();
-      ctx.arc(lastIdx * step, toY(lastVal), 3.5, 0, Math.PI * 2);
-      ctx.fillStyle = color;
-      ctx.fill();
-    }
-  }
-
-  drawLine(policyHistory, '#a78bfa', false);
-  drawLine(valueHistory,  '#38bdf8', false);
-
-  // Footer labels
-  const oldest = policyHistory[0];
-  const newest = policyHistory[policyHistory.length - 1];
-  document.getElementById('chartOldest').textContent = oldest != null ? `oldest: ${oldest.toFixed(4)}` : '';
-  document.getElementById('chartNewest').textContent = newest != null ? `latest: ${newest.toFixed(4)}` : '';
+  el.innerHTML = labels.join('');
 }
 
-/* ── Bot grid ─────────────────────────────────────────────────── */
-function renderBots(bots) {
-  if (!bots || !bots.length) return;
-  const maxWin = Math.max(...bots.map(b => b.winPct), 1);
-  document.getElementById('botGrid').innerHTML = bots.map((b, i) => {
-    const meta = BOT_META[b.name] || { color: '#64748b', avatar: '🤖', style: '' };
-    const isFirst = i === 0;
-    return `
-      <div class="bot-card">
-        ${isFirst ? '<div class="bot-crown">👑</div>' : ''}
-        <div class="bot-avatar">${meta.avatar}</div>
-        <div class="bot-card-name" style="color:${meta.color}">${b.name}</div>
-        <div class="bot-winpct" style="color:${meta.color}">${b.winPct.toFixed(1)}%</div>
-        <div class="bot-card-label">win rate · ${b.wins.toLocaleString()} wins</div>
-        <div class="bot-bar-mini">
-          <div class="bot-bar-mini-fill" style="width:${(b.winPct/maxWin*100).toFixed(1)}%;background:${meta.color}"></div>
-        </div>
-        <div class="bot-cash-label">avg cash</div>
-        <div class="bot-cash-val">${fmtCash(b.avgCash)}</div>
-      </div>
-    `;
-  }).join('');
-}
-
-/* ── Loss trend helper ────────────────────────────────────────── */
-let prevLoss = null;
-function lossTrend(current) {
-  if (prevLoss === null) { prevLoss = current; return ''; }
-  const delta = current - prevLoss;
-  prevLoss = current;
-  if (Math.abs(delta) < 0.0005) return '<span style="color:#475569">→ stable</span>';
-  if (delta < 0) return `<span style="color:#34d399">↓ ${Math.abs(delta).toFixed(4)} improving</span>`;
-  return `<span style="color:#f87171">↑ ${delta.toFixed(4)} rising</span>`;
-}
-
-/* ── Policy + value history reconstruction ────────────────────── */
-// The API returns a single lossHistory array. With v2, it reports
-// policyLoss and valueLoss separately per checkpoint. We maintain
-// rolling history client-side until the server sends separate arrays.
+/* ── Loss chart ──────────────────────────────────────────────── */
 const _polHistory = [];
 const _valHistory = [];
 let _lastStep = -1;
@@ -739,40 +635,143 @@ function updateLocalHistory(data) {
   };
 }
 
-/* ── Cash ELO chart ──────────────────────────────────────────── */
-function drawCashChart(history) {
-  const canvas = document.getElementById('cashChart');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  const W   = canvas.offsetWidth;
-  const H   = 120;
+function drawChart(data) {
+  const policyHistory = data.policyHistory || data.lossHistory || [];
+  const valueHistory  = data.valueHistory  || [];
+  if (policyHistory.length < 2) return;
+
+  const canvas = document.getElementById('lossChart');
+  const ctx    = canvas.getContext('2d');
+  const W      = canvas.offsetWidth;
+  const H      = 160;
   canvas.width  = W * devicePixelRatio;
   canvas.height = H * devicePixelRatio;
   ctx.scale(devicePixelRatio, devicePixelRatio);
 
-  if (!history || history.length < 2) return;
+  const allVals = [...policyHistory, ...valueHistory].filter(v => v != null);
+  if (!allVals.length) return;
 
-  const TARGET = 50000;
-  const min  = Math.min(...history) * 0.92;
-  const max  = Math.max(Math.max(...history) * 1.05, TARGET * 1.05);
-  const range = max - min || 1;
-  const toY  = v => H - ((v - min) / range) * H * 0.88 - H * 0.06;
-  const n    = history.length;
+  const rawMin = Math.min(...allVals);
+  const rawMax = Math.max(...allVals, POLICY_BASELINE + 0.1);
+  const pad    = (rawMax - rawMin) * 0.12;
+  const min    = rawMin - pad;
+  const max    = rawMax + pad;
+  const range  = max - min || 1;
+  const toY    = v => H - ((v - min) / range) * H * 0.9 - H * 0.05;
+
+  const n    = policyHistory.length;
   const step = W / Math.max(n - 1, 1);
 
-  // Grid
-  ctx.strokeStyle = '#1a1a2e';
+  // Update Y-axis labels
+  setYAxis('lossYAxis', min, max, 4);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(30,30,50,0.8)';
   ctx.lineWidth = 1;
-  [0.25, 0.5, 0.75].forEach(frac => {
-    const y = H * frac;
+  [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
+    const y = H * 0.05 + H * 0.9 * (1 - frac);
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
   });
 
-  // $50k target line
+  // Baseline
+  if (POLICY_BASELINE >= min && POLICY_BASELINE <= max) {
+    const by = toY(POLICY_BASELINE);
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(251,191,36,0.22)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(0, by); ctx.lineTo(W, by); ctx.stroke();
+    ctx.setLineDash([]);
+
+    const bl = document.getElementById('baseline');
+    bl.style.display = 'block';
+    bl.style.bottom  = `${H - by}px`;
+    bl.textContent   = `random baseline ${POLICY_BASELINE.toFixed(2)}`;
+  }
+
+  function drawLine(history, color) {
+    if (!history || history.length < 2) return;
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, color + '28');
+    grad.addColorStop(1, color + '00');
+
+    ctx.beginPath();
+    history.forEach((v, i) => {
+      if (v == null) return;
+      const x = i * step, y = toY(v);
+      i === 0 || history[i-1] == null ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    const li = history.length - 1;
+    ctx.lineTo(li * step, H);
+    ctx.lineTo(0, H);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    history.forEach((v, i) => {
+      if (v == null) return;
+      const x = i * step, y = toY(v);
+      i === 0 || history[i-1] == null ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
+
+    const lastVal = history[li];
+    if (lastVal != null) {
+      ctx.beginPath();
+      ctx.arc(li * step, toY(lastVal), 3.5, 0, Math.PI * 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+  }
+
+  drawLine(policyHistory, '#a78bfa');
+  drawLine(valueHistory,  '#38bdf8');
+
+  document.getElementById('chartOldest').textContent =
+    policyHistory[0] != null ? `oldest: ${policyHistory[0].toFixed(4)}` : '';
+  document.getElementById('chartNewest').textContent =
+    policyHistory[n-1] != null ? `latest: ${policyHistory[n-1].toFixed(4)}` : '';
+}
+
+/* ── Cash chart ──────────────────────────────────────────────── */
+function drawCashChart(history) {
+  const canvas = document.getElementById('cashChart');
+  if (!canvas || !history || history.length < 2) return;
+  const ctx = canvas.getContext('2d');
+  const W   = canvas.offsetWidth;
+  const H   = 150;
+  canvas.width  = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  const TARGET = 50000;
+  const rawMin = Math.min(...history);
+  const rawMax = Math.max(...history, TARGET);
+  const pad    = (rawMax - rawMin) * 0.1;
+  const min    = Math.max(0, rawMin - pad);
+  const max    = rawMax + pad;
+  const range  = max - min || 1;
+  const toY    = v => H - ((v - min) / range) * H * 0.9 - H * 0.05;
+  const n      = history.length;
+  const step   = W / Math.max(n - 1, 1);
+
+  setYAxis('cashYAxis', min, max, 4);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(30,30,50,0.8)';
+  ctx.lineWidth = 1;
+  [0, 0.25, 0.5, 0.75, 1].forEach(frac => {
+    const y = H * 0.05 + H * 0.9 * (1 - frac);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  });
+
+  // $50k target
   const ty = toY(TARGET);
   if (ty > 0 && ty < H) {
     ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = 'rgba(52,211,153,0.3)';
+    ctx.strokeStyle = 'rgba(52,211,153,0.28)';
     ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(0, ty); ctx.lineTo(W, ty); ctx.stroke();
     ctx.setLineDash([]);
@@ -782,20 +781,19 @@ function drawCashChart(history) {
     bl.style.bottom  = `${H - ty}px`;
     bl.textContent   = '$50k target';
     bl.style.color   = 'rgba(52,211,153,0.5)';
-    bl.style.borderColor = 'rgba(52,211,153,0.3)';
+    bl.style.borderColor = 'rgba(52,211,153,0.25)';
   }
 
-  // Gradient fill
+  // Fill
   const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, 'rgba(52,211,153,0.25)');
+  grad.addColorStop(0, 'rgba(52,211,153,0.22)');
   grad.addColorStop(1, 'rgba(52,211,153,0)');
   ctx.beginPath();
   history.forEach((v, i) => {
     const x = i * step, y = toY(v);
     i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   });
-  ctx.lineTo((n - 1) * step, H);
-  ctx.lineTo(0, H);
+  ctx.lineTo((n-1)*step, H); ctx.lineTo(0, H);
   ctx.closePath();
   ctx.fillStyle = grad;
   ctx.fill();
@@ -811,17 +809,47 @@ function drawCashChart(history) {
   ctx.stroke();
 
   // End dot
-  const lastY = toY(history[n - 1]);
   ctx.beginPath();
-  ctx.arc((n-1)*step, lastY, 4, 0, Math.PI*2);
-  ctx.fillStyle = '#34d399';
-  ctx.fill();
+  ctx.arc((n-1)*step, toY(history[n-1]), 4, 0, Math.PI*2);
+  ctx.fillStyle = '#34d399'; ctx.fill();
 
-  // Labels
   document.getElementById('cashChartOldest').textContent =
     'oldest: $' + history[0].toLocaleString();
   document.getElementById('cashChartNewest').textContent =
     'latest: $' + history[n-1].toLocaleString();
+}
+
+/* ── Bot grid ─────────────────────────────────────────────────── */
+function renderBots(bots) {
+  if (!bots || !bots.length) return;
+  const maxWin = Math.max(...bots.map(b => b.winPct), 1);
+  document.getElementById('botGrid').innerHTML = bots.map((b, i) => {
+    const meta = BOT_META[b.name] || { color: '#64748b', avatar: '🤖' };
+    return `
+      <div class="bot-card">
+        ${i === 0 ? '<div class="bot-crown">👑</div>' : ''}
+        <div class="bot-avatar">${meta.avatar}</div>
+        <div class="bot-card-name" style="color:${meta.color}">${b.name}</div>
+        <div class="bot-winpct" style="color:${meta.color}">${b.winPct.toFixed(1)}%</div>
+        <div class="bot-card-label">win rate · ${b.wins.toLocaleString()} wins</div>
+        <div class="bot-bar-mini">
+          <div class="bot-bar-mini-fill" style="width:${(b.winPct/maxWin*100).toFixed(1)}%;background:${meta.color}"></div>
+        </div>
+        <div class="bot-cash-label">avg cash</div>
+        <div class="bot-cash-val">${fmtCash(b.avgCash)}</div>
+      </div>`;
+  }).join('');
+}
+
+/* ── Loss trend ───────────────────────────────────────────────── */
+let prevLoss = null;
+function lossTrend(current) {
+  if (prevLoss === null) { prevLoss = current; return ''; }
+  const delta = current - prevLoss;
+  prevLoss = current;
+  if (Math.abs(delta) < 0.0005) return '<span style="color:#475569">→ stable</span>';
+  if (delta < 0) return `<span style="color:#34d399">↓ ${Math.abs(delta).toFixed(4)} improving</span>`;
+  return `<span style="color:#f87171">↑ ${delta.toFixed(4)} rising</span>`;
 }
 
 /* ── Main refresh ─────────────────────────────────────────────── */
@@ -839,7 +867,7 @@ async function refresh() {
       return;
     }
 
-    // ── Live indicator ────────────────────────────────────────── */
+    // Live indicator
     const lag = Math.round((Date.now() - new Date(data.updatedAt)) / 1000);
     document.getElementById('statusDot').className = 'dot live';
     document.getElementById('liveBadge').className = 'live-badge live';
@@ -848,10 +876,11 @@ async function refresh() {
     document.getElementById('main').style.display = 'block';
     document.getElementById('offlineMsg').style.display = 'none';
 
-    const games = data.gamesPlayed || data.gamesTotal || 0;
+    const instanceGames = data.gamesPlayed || data.gamesTotal || 0;
+    const totalGames    = getTotalGames(instanceGames);
 
-    // ── Phase ─────────────────────────────────────────────────── */
-    const phase = getPhase(games);
+    // Phase
+    const phase    = getPhase(totalGames);
     const phaseIdx = PHASES.indexOf(phase);
     document.getElementById('phaseName').textContent = phase.name;
     document.getElementById('phaseDesc').textContent = phase.desc;
@@ -860,8 +889,15 @@ async function refresh() {
       return `<div class="phase-step ${cls}"></div>`;
     }).join('');
 
-    // ── Hero stats ────────────────────────────────────────────── */
-    document.getElementById('gamesPlayed').textContent = fmtNum(games);
+    // Hero stats
+    document.getElementById('totalGames').textContent = fmtNum(totalGames);
+    const storedRaw = JSON.parse(localStorage.getItem('acq_train_v1') || '{}');
+    document.getElementById('totalGamesSub').innerHTML =
+      storedRaw.accumulated > 0
+        ? `<span class="accent">${fmtNum(storedRaw.accumulated)} from prior instances</span>`
+        : '<span class="accent">accumulated across restarts</span>';
+
+    document.getElementById('gamesPlayed').textContent = fmtNum(instanceGames);
     document.getElementById('gamesPerSec').textContent = data.gamesPerSec
       ? `${data.gamesPerSec} games/sec` : '';
 
@@ -874,55 +910,45 @@ async function refresh() {
     document.getElementById('loss').textContent = loss != null ? loss.toFixed(4) : '—';
     document.getElementById('lossTrend').innerHTML = loss != null ? lossTrend(loss) : '';
 
-    // ── Sub stats ─────────────────────────────────────────────── */
-    document.getElementById('policyLoss').textContent = data.policyLoss != null
-      ? data.policyLoss.toFixed(4) : '—';
-    document.getElementById('valueLoss').textContent = data.valueLoss != null
-      ? data.valueLoss.toFixed(4) : '—';
+    // Sub stats
+    document.getElementById('policyLoss').textContent  = data.policyLoss  != null ? data.policyLoss.toFixed(4)  : '—';
+    document.getElementById('valueLoss').textContent   = data.valueLoss   != null ? data.valueLoss.toFixed(4)   : '—';
+    document.getElementById('masterGames').textContent = instanceGames > 0
+      ? `${((data.masterGames||0)/instanceGames*100).toFixed(1)}% of games` : '—';
+    document.getElementById('errors').textContent    = (data.errors||0).toLocaleString();
+    document.getElementById('updatedAt').textContent = new Date(data.updatedAt).toLocaleTimeString();
 
-    const mPct = games > 0
-      ? ((data.masterGames || 0) / games * 100).toFixed(1) : '0';
-    document.getElementById('masterGames').textContent = `${mPct}% of games`;
-    document.getElementById('errors').textContent = (data.errors || 0).toLocaleString();
-    document.getElementById('updatedAt').textContent =
-      new Date(data.updatedAt).toLocaleTimeString();
-
-    // ── Replay buffer ─────────────────────────────────────────── */
+    // Replay buffer
     const replaySize = data.replaySize || 0;
     const replayPct  = Math.min((replaySize / REPLAY_MAX) * 100, 100);
-    document.getElementById('replayPct').textContent = `${replaySize.toLocaleString()} / ${REPLAY_MAX.toLocaleString()}`;
+    document.getElementById('replayPct').textContent  = `${replaySize.toLocaleString()} / ${REPLAY_MAX.toLocaleString()}`;
     document.getElementById('replayFill').style.width = replayPct.toFixed(1) + '%';
-    document.getElementById('replaySub').textContent = replaySize >= REPLAY_MAX
+    document.getElementById('replaySub').textContent  = replaySize >= REPLAY_MAX
       ? '✓ Buffer full — rotating oldest experiences'
       : `${replayPct.toFixed(0)}% full · sampling begins at 256 records`;
 
-    // ── Run timer ─────────────────────────────────────────────── */
+    // Run timer
     if (data.timeLimitSecs) {
       document.getElementById('timerCard').style.display = 'block';
-      const elapsed   = data.elapsedSecs || 0;
-      const remaining = data.remainingSecs || 0;
-      const total     = data.timeLimitSecs;
+      const elapsed = data.elapsedSecs || 0;
+      const total   = data.timeLimitSecs;
       document.getElementById('elapsed').textContent   = fmtTime(elapsed);
-      document.getElementById('remaining').textContent = fmtTime(remaining);
-      document.getElementById('timerFill').style.width =
-        ((elapsed / total) * 100).toFixed(1) + '%';
+      document.getElementById('remaining').textContent = fmtTime(data.remainingSecs || 0);
+      document.getElementById('timerFill').style.width = ((elapsed/total)*100).toFixed(1) + '%';
     }
 
-    // ── Loss chart ────────────────────────────────────────────── */
+    // Charts
     const histories = updateLocalHistory(data);
     drawChart(histories);
 
-    // ── Cash ELO chart ────────────────────────────────────────── */
     if (data.masterCashHistory && data.masterCashHistory.length > 0) {
-      const cashWindow = data.masterCashHistory.slice(-50);
-      drawCashChart(cashWindow);
-      const latestCash = data.masterCashHistory[data.masterCashHistory.length - 1];
-      document.getElementById('masterCashNow').textContent = '$' + latestCash.toLocaleString();
+      drawCashChart(data.masterCashHistory.slice(-50));
+      const latest = data.masterCashHistory[data.masterCashHistory.length - 1];
+      document.getElementById('masterCashNow').textContent = '$' + latest.toLocaleString();
     } else if (data.masterCashAvg) {
       document.getElementById('masterCashNow').textContent = '$' + data.masterCashAvg.toLocaleString();
     }
 
-    // ── Bots ──────────────────────────────────────────────────── */
     renderBots(data.bots);
 
   } catch (e) {
