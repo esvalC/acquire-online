@@ -564,10 +564,11 @@ function getTotalGames(instanceGames) {
   if (!stored) stored = { accumulated: 0, lastSeen: 0 };
 
   if (instanceGames < stored.lastSeen && stored.lastSeen > 100) {
-    // Instance was replaced — fold in what we saw
+    // Instance was replaced — fold in what we saw, then reset so we
+    // don't keep re-adding on every 30s refresh
     stored.accumulated += stored.lastSeen;
-  }
-  if (instanceGames > stored.lastSeen) {
+    stored.lastSeen = instanceGames;
+  } else if (instanceGames > stored.lastSeen) {
     stored.lastSeen = instanceGames;
   }
   try { localStorage.setItem('acq_train_v1', JSON.stringify(stored)); } catch {}
