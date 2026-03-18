@@ -90,7 +90,7 @@ body {
 /* ── Hero stat cards ────────────────────────────────────────── */
 .hero-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -115,13 +115,7 @@ body {
 .hero-card.purple::before { background: linear-gradient(90deg, #7c3aed, #4f46e5); }
 .hero-card.cyan::before   { background: linear-gradient(90deg, #0891b2, #0ea5e9); }
 .hero-card.amber::before  { background: linear-gradient(90deg, #b45309, #f59e0b); }
-.hero-card.teal::before   { background: linear-gradient(90deg, #0d9488, #34d399); }
 .hero-card.rose::before   { background: linear-gradient(90deg, #be185d, #f43f5e); }
-
-/* "total" variant — slightly brighter border */
-.hero-card.total-card {
-  border-color: rgba(167,139,250,0.2);
-}
 
 .hero-label {
   font-size: 0.62rem;
@@ -142,7 +136,6 @@ body {
 .hero-value.purple { color: #a78bfa; }
 .hero-value.cyan   { color: #38bdf8; }
 .hero-value.amber  { color: #fbbf24; }
-.hero-value.teal   { color: #2dd4bf; }
 .hero-sub {
   font-size: 0.65rem;
   color: #374151;
@@ -397,11 +390,6 @@ canvas { width: 100%; display: block; }
 
   <!-- Hero numbers: 4 across -->
   <div class="hero-grid">
-    <div class="hero-card teal total-card">
-      <div class="hero-label">Total Games<span class="hero-badge">all time</span></div>
-      <div class="hero-value teal" id="totalGames">—</div>
-      <div class="hero-sub" id="totalGamesSub"></div>
-    </div>
     <div class="hero-card purple">
       <div class="hero-label">This Instance</div>
       <div class="hero-value purple" id="gamesPlayed">—</div>
@@ -553,26 +541,6 @@ const PHASES = [
 ];
 function getPhase(games) {
   return PHASES.find(p => games >= p.minGames && games < p.maxGames) || PHASES[PHASES.length - 1];
-}
-
-/* ── Total games (persists across spot instance resets) ─────── */
-// localStorage stores accumulated total from previous instances.
-// When instance counter goes down (reset), we fold in the previous max.
-function getTotalGames(instanceGames) {
-  let stored;
-  try { stored = JSON.parse(localStorage.getItem('acq_train_v1') || 'null'); } catch {}
-  if (!stored) stored = { accumulated: 0, lastSeen: 0 };
-
-  if (instanceGames < stored.lastSeen && stored.lastSeen > 100) {
-    // Instance was replaced — fold in what we saw, then reset so we
-    // don't keep re-adding on every 30s refresh
-    stored.accumulated += stored.lastSeen;
-    stored.lastSeen = instanceGames;
-  } else if (instanceGames > stored.lastSeen) {
-    stored.lastSeen = instanceGames;
-  }
-  try { localStorage.setItem('acq_train_v1', JSON.stringify(stored)); } catch {}
-  return stored.accumulated + instanceGames;
 }
 
 /* ── Helpers ─────────────────────────────────────────────────── */
@@ -878,10 +846,9 @@ async function refresh() {
     document.getElementById('offlineMsg').style.display = 'none';
 
     const instanceGames = data.gamesPlayed || data.gamesTotal || 0;
-    const totalGames    = getTotalGames(instanceGames);
 
     // Phase
-    const phase    = getPhase(totalGames);
+    const phase    = getPhase(instanceGames);
     const phaseIdx = PHASES.indexOf(phase);
     document.getElementById('phaseName').textContent = phase.name;
     document.getElementById('phaseDesc').textContent = phase.desc;
@@ -891,13 +858,6 @@ async function refresh() {
     }).join('');
 
     // Hero stats
-    document.getElementById('totalGames').textContent = fmtNum(totalGames);
-    const storedRaw = JSON.parse(localStorage.getItem('acq_train_v1') || '{}');
-    document.getElementById('totalGamesSub').innerHTML =
-      storedRaw.accumulated > 0
-        ? `<span class="accent">${fmtNum(storedRaw.accumulated)} from prior instances</span>`
-        : '<span class="accent">accumulated across restarts</span>';
-
     document.getElementById('gamesPlayed').textContent = fmtNum(instanceGames);
     document.getElementById('gamesPerSec').textContent = data.gamesPerSec
       ? `${data.gamesPerSec} games/sec` : '';
