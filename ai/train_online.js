@@ -611,6 +611,19 @@ function takeMasterAction(game, playerIdx, weights) {
       const record = policyTarget ? { state: stateBefore, policyTarget, legalIndices } : null;
       return { acted: true, record };
     }
+
+    // ── Financial decision phases: record state for value head training ──
+    // No policy target — only the value head trains on these records.
+    // The body trains too (via value gradient), learning to extract
+    // financially-relevant features from the board state.
+    if (phase === 'buyStock' ||
+        (phase === 'mergerDecision' && game.pendingMerger?.decidingPlayer === playerIdx) ||
+        phase === 'chooseChain' ||
+        phase === 'chooseMergerSurvivor') {
+      const stateBefore = encodeFlat(game, playerIdx);
+      const acted = takeRandomAction(game, playerIdx);
+      return { acted, record: acted ? { state: stateBefore, policyTarget: null, legalIndices: [] } : null };
+    }
   } catch {}
   return { acted: takeRandomAction(game, playerIdx), record: null };
 }
@@ -754,23 +767,23 @@ function trainStep(weights, adam, replay, t) {
     const { h, policyLogits, value } = fwd;
 
     // ── Policy loss: cross-entropy over legal tiles only ──────── */
-    // legal logits + softmax
-    const legalLogits = legalIndices.map(i => policyLogits[i]);
-    const legalProbs  = softmax(legalLogits);
-    const legalTarget = legalIndices.map(i => policyTarget[i]);
-
-    // CE loss = -Σ target_i * log(prob_i)
-    let pLoss = 0;
-    for (let i = 0; i < legalProbs.length; i++) {
-      pLoss -= legalTarget[i] * Math.log(legalProbs[i] + 1e-9);
-    }
-    totalPolicyLoss += pLoss;
-
-    // Gradient of softmax+CE w.r.t. logits: ∂L/∂z_i = prob_i - target_i
-    // (only for legal tile indices; zero for all other tiles)
+    // Skipped for financial-decision records (policyTarget is null) —
+    // those records only train the value head and body.
     const policyDelta = new Float64Array(POLICY_DIM);
-    for (let i = 0; i < legalIndices.length; i++) {
-      policyDelta[legalIndices[i]] = legalProbs[i] - legalTarget[i];
+    if (policyTarget && legalIndices.length > 0) {
+      const legalLogits = legalIndices.map(i => policyLogits[i]);
+      const legalProbs  = softmax(legalLogits);
+      const legalTarget = legalIndices.map(i => policyTarget[i]);
+
+      let pLoss = 0;
+      for (let i = 0; i < legalProbs.length; i++) {
+        pLoss -= legalTarget[i] * Math.log(legalProbs[i] + 1e-9);
+      }
+      totalPolicyLoss += pLoss;
+
+      for (let i = 0; i < legalIndices.length; i++) {
+        policyDelta[legalIndices[i]] = legalProbs[i] - legalTarget[i];
+      }
     }
 
     // ── Value loss: MSE per player ────────────────────────────── */
