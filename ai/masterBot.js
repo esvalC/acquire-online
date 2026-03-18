@@ -187,10 +187,10 @@ function cloneGame(game) {
 /* ── Apply action (for value-guided lookahead) ────────────────── */
 function applyAction(game, playerIdx, action) {
   try {
-    if      (action.type === 'buyStock')              engine.buyStock(game, playerIdx, action.purchases || {});
-    else if (action.type === 'mergerDecision')         engine.mergerDecision(game, playerIdx, { sell: action.sell, trade: action.trade });
-    else if (action.type === 'chooseChain')            engine.chooseChain(game, playerIdx, action.chain);
-    else if (action.type === 'chooseMergerSurvivor')   engine.chooseMergerSurvivor(game, playerIdx, action.chain);
+    if      (action.type === 'buyStock')             engine.buyStock(game, playerIdx, action.purchases || {});
+    else if (action.type === 'mergerDecision')        engine.mergerDecision(game, playerIdx, { sell: action.sell, trade: action.trade });
+    else if (action.type === 'chooseChain')           engine.chooseChain(game, playerIdx, action.chain);
+    else if (action.type === 'chooseMergerSurvivor')  engine.chooseMergerSurvivor(game, playerIdx, action.chain);
   } catch {}
 }
 
@@ -296,6 +296,24 @@ function decideMasterAction(game, playerIdx) {
         if (logit > bestLogit) { bestLogit = logit; best = tile; }
       }
       return { type: 'placeTile', tile: best };
+    }
+
+    // ── Choose new chain: value-guided lookahead ─────────────── */
+    if (phase === 'chooseChain') {
+      const available = engine.HOTEL_CHAINS.filter(c => !game.chains[c].active);
+      if (available.length === 0) return null;
+      if (available.length === 1) return { type: 'chooseChain', chain: available[0] };
+      const actions = available.map(c => ({ type: 'chooseChain', chain: c }));
+      return bestValueAction(weights, game, playerIdx, actions);
+    }
+
+    // ── Choose merger survivor: value-guided lookahead ────────── */
+    if (phase === 'chooseMergerSurvivor') {
+      const tied = game.pendingMerger?.tiedChains || [];
+      if (tied.length === 0) return null;
+      if (tied.length === 1) return { type: 'chooseMergerSurvivor', chain: tied[0] };
+      const actions = tied.map(c => ({ type: 'chooseMergerSurvivor', chain: c }));
+      return bestValueAction(weights, game, playerIdx, actions);
     }
 
     // ── Buy stock: value-guided lookahead ────────────────────── */
