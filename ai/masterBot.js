@@ -202,20 +202,33 @@ function legalBuyActions(game, playerIdx) {
     const issued = game.players.reduce((s, p) => s + (p.stocks[c] || 0), 0);
     return ch.active && engine.stockPrice(c, ch.tiles.length) <= player.cash && issued < 25;
   });
-  // Only skip buying if nothing is affordable — when chains are available,
-  // always buy something (value head picks which). Early positioning in a
-  // growing chain is almost always correct; holding cash is not worth it.
   if (affordable.length === 0) return [{ type: 'buyStock', purchases: {} }];
+
+  // Filter to chains where buying 1 share puts us in 1st or 2nd place.
+  // No point fighting for a chain where 2+ opponents are already well ahead —
+  // merger bonuses only go to top 2 shareholders.
+  function positionAfterBuying(chain) {
+    const myNew = (player.stocks[chain] || 0) + 1;
+    const aheadCount = game.players.filter((p, i) => i !== playerIdx && (p.stocks[chain] || 0) > myNew).length;
+    return aheadCount; // 0 = 1st, 1 = 2nd, 2+ = not in top 2
+  }
+  const contestable = affordable.filter(c => positionAfterBuying(c) < 2);
+  // If everything is too contested, still buy — just into the least contested chain
+  // so the bot never sits on cash when it could be building position.
+  const targets = contestable.length > 0
+    ? contestable
+    : affordable.slice().sort((a, b) => positionAfterBuying(a) - positionAfterBuying(b)).slice(0, 1);
+
   const actions = [];
-  for (const c of affordable) {
+  for (const c of targets) {
     const price    = engine.stockPrice(c, game.chains[c].tiles.length);
     const issued   = game.players.reduce((s, p) => s + (p.stocks[c] || 0), 0);
     const maxN     = Math.min(3, Math.floor(player.cash / price), 25 - issued);
     for (let n = 1; n <= maxN; n++) actions.push({ type: 'buyStock', purchases: { [c]: n } });
   }
-  for (let a = 0; a < affordable.length; a++) {
-    for (let b = a + 1; b < affordable.length; b++) {
-      const ca = affordable[a], cb = affordable[b];
+  for (let a = 0; a < targets.length; a++) {
+    for (let b = a + 1; b < targets.length; b++) {
+      const ca = targets[a], cb = targets[b];
       const pa = engine.stockPrice(ca, game.chains[ca].tiles.length);
       const pb = engine.stockPrice(cb, game.chains[cb].tiles.length);
       if (pa + pb <= player.cash)   actions.push({ type: 'buyStock', purchases: { [ca]: 1, [cb]: 1 } });
@@ -224,10 +237,10 @@ function legalBuyActions(game, playerIdx) {
     }
   }
   // 3-chain combos: buy 1 of each (total 3, only valid combo across 3 chains)
-  for (let a = 0; a < affordable.length; a++) {
-    for (let b = a + 1; b < affordable.length; b++) {
-      for (let c = b + 1; c < affordable.length; c++) {
-        const ca = affordable[a], cb = affordable[b], cc = affordable[c];
+  for (let a = 0; a < targets.length; a++) {
+    for (let b = a + 1; b < targets.length; b++) {
+      for (let c = b + 1; c < targets.length; c++) {
+        const ca = targets[a], cb = targets[b], cc = targets[c];
         const pa = engine.stockPrice(ca, game.chains[ca].tiles.length);
         const pb = engine.stockPrice(cb, game.chains[cb].tiles.length);
         const pc = engine.stockPrice(cc, game.chains[cc].tiles.length);
