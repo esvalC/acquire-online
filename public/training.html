@@ -90,7 +90,7 @@ body {
 /* ── Hero stat cards ────────────────────────────────────────── */
 .hero-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 10px;
   margin-bottom: 14px;
 }
@@ -116,6 +116,7 @@ body {
 .hero-card.cyan::before   { background: linear-gradient(90deg, #0891b2, #0ea5e9); }
 .hero-card.amber::before  { background: linear-gradient(90deg, #b45309, #f59e0b); }
 .hero-card.rose::before   { background: linear-gradient(90deg, #be185d, #f43f5e); }
+.hero-card.gold::before   { background: linear-gradient(90deg, #92400e, #fbbf24); }
 
 .hero-label {
   font-size: 0.62rem;
@@ -136,6 +137,7 @@ body {
 .hero-value.purple { color: #a78bfa; }
 .hero-value.cyan   { color: #38bdf8; }
 .hero-value.amber  { color: #fbbf24; }
+.hero-value.gold   { color: #fbbf24; }
 .hero-sub {
   font-size: 0.65rem;
   color: #374151;
@@ -405,6 +407,11 @@ canvas { width: 100%; display: block; }
       <div class="hero-value amber" id="loss">—</div>
       <div class="hero-sub" id="lossTrend"></div>
     </div>
+    <div class="hero-card gold">
+      <div class="hero-label">Best Cash 🏆</div>
+      <div class="hero-value gold" id="bestCash">—</div>
+      <div class="hero-sub"><span class="accent" id="bestCashSub"></span></div>
+    </div>
   </div>
 
   <div class="stat-grid">
@@ -498,6 +505,30 @@ canvas { width: 100%; display: block; }
     <div class="chart-footer">
       <span id="cashChartOldest"></span>
       <span id="cashChartNewest"></span>
+    </div>
+  </div>
+
+  <!-- Best cash record chart -->
+  <div class="chart-card" id="bestCashCard" style="display:none">
+    <div class="chart-header">
+      <div>
+        <span class="chart-title">All-Time Best Cash · New Records Over Time</span>
+        <div style="font-size:0.63rem;color:#374151;margin-top:4px">Each step = a new high score — staircase always goes up</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:1.4rem;font-weight:800;color:#fbbf24;letter-spacing:-0.02em" id="bestCashChartVal">—</div>
+        <div style="font-size:0.6rem;color:#374151">all-time best</div>
+      </div>
+    </div>
+    <div class="chart-area">
+      <div class="chart-yaxis" id="bestCashYAxis"></div>
+      <div class="chart-wrap">
+        <canvas id="bestCashChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-footer">
+      <span id="bestCashChartFirst"></span>
+      <span id="bestCashChartLast"></span>
     </div>
   </div>
 
@@ -788,6 +819,90 @@ function drawCashChart(history) {
     'latest: $' + history[n-1].toLocaleString();
 }
 
+/* ── Best cash staircase chart ────────────────────────────────── */
+function drawBestCashChart(history, currentStep) {
+  const card   = document.getElementById('bestCashCard');
+  const canvas = document.getElementById('bestCashChart');
+  if (!history || history.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = 'block';
+  if (!canvas) return;
+
+  const ctx = canvas.getContext('2d');
+  const W   = canvas.offsetWidth;
+  const H   = 140;
+  canvas.width  = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  const maxCash = Math.max(...history.map(h => h.cash)) * 1.12;
+  const minCash = 0;
+  const range   = maxCash - minCash || 1;
+
+  const firstStep = history[0].step;
+  const lastStep  = Math.max(currentStep || 0, history[history.length - 1].step + 5);
+  const spanStep  = lastStep - firstStep || 1;
+
+  const toX = s => ((s - firstStep) / spanStep) * W;
+  const toY = v => H - ((v - minCash) / range) * H * 0.88 - H * 0.06;
+
+  setYAxis('bestCashYAxis', minCash, maxCash, 3);
+
+  // Grid lines
+  ctx.strokeStyle = 'rgba(30,30,50,0.8)';
+  ctx.lineWidth = 1;
+  [0, 0.33, 0.67, 1].forEach(frac => {
+    const y = H * 0.06 + H * 0.88 * (1 - frac);
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  });
+
+  // Build staircase path
+  const stairs = [];
+  for (let i = 0; i < history.length; i++) {
+    const endStep = i < history.length - 1 ? history[i + 1].step : lastStep;
+    stairs.push({ x0: toX(history[i].step), x1: toX(endStep), y: toY(history[i].cash) });
+  }
+
+  // Fill
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, 'rgba(251,191,36,0.2)');
+  grad.addColorStop(1, 'rgba(251,191,36,0)');
+  ctx.beginPath();
+  ctx.moveTo(stairs[0].x0, H);
+  stairs.forEach(s => { ctx.lineTo(s.x0, s.y); ctx.lineTo(s.x1, s.y); });
+  ctx.lineTo(stairs[stairs.length - 1].x1, H);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Staircase line
+  ctx.beginPath();
+  ctx.strokeStyle = '#fbbf24';
+  ctx.lineWidth = 2.5;
+  stairs.forEach((s, i) => {
+    if (i === 0) ctx.moveTo(s.x0, s.y);
+    else ctx.lineTo(s.x0, s.y); // vertical jump
+    ctx.lineTo(s.x1, s.y);       // horizontal step
+  });
+  ctx.stroke();
+
+  // Dot at each new record
+  history.forEach(h => {
+    ctx.beginPath();
+    ctx.arc(toX(h.step), toY(h.cash), 3.5, 0, Math.PI * 2);
+    ctx.fillStyle = '#fbbf24';
+    ctx.fill();
+  });
+
+  document.getElementById('bestCashChartFirst').textContent =
+    `first record: ${fmtCash(history[0].cash)} at step ${history[0].step}`;
+  document.getElementById('bestCashChartLast').textContent =
+    history.length > 1
+      ? `latest: ${fmtCash(history[history.length-1].cash)} at step ${history[history.length-1].step}`
+      : '';
+  document.getElementById('bestCashChartVal').textContent =
+    fmtCash(history[history.length - 1].cash);
+}
+
 /* ── Bot grid ─────────────────────────────────────────────────── */
 function renderBots(bots) {
   if (!bots || !bots.length) return;
@@ -909,6 +1024,16 @@ async function refresh() {
     } else if (data.masterCashAvg) {
       document.getElementById('masterCashNow').textContent = '$' + data.masterCashAvg.toLocaleString();
     }
+
+    // Best cash record
+    if (data.bestMasterCash) {
+      document.getElementById('bestCash').textContent = fmtCash(data.bestMasterCash);
+      const lastRecord = data.bestCashHistory?.[data.bestCashHistory.length - 1];
+      document.getElementById('bestCashSub').textContent = lastRecord
+        ? `set at step ${lastRecord.step}, game ${fmtNum(lastRecord.game)}`
+        : '';
+    }
+    drawBestCashChart(data.bestCashHistory, data.step);
 
     renderBots(data.bots);
 

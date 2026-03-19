@@ -883,6 +883,8 @@ async function train() {
   // them (since they're the same network in different seat positions).
   let masterCashWindow = [];  // cash values since last checkpoint
   const masterCashHistory = []; // one avg per 1000-game checkpoint (last 50)
+  let bestMasterCash = 0;
+  const bestCashHistory = []; // { cash, step, game } — one entry per new record
   const t0 = Date.now();
 
   while (Date.now() - t0 < TIME_LIMIT) {
@@ -908,7 +910,14 @@ async function train() {
         const playerInGame = bots[slotIdx];
         if (playerInGame) {
           const standing = result.standings.find(s => s.name === playerInGame.name);
-          if (standing) masterCashWindow.push(standing.cash);
+          if (standing) {
+            masterCashWindow.push(standing.cash);
+            if (standing.cash > bestMasterCash) {
+              bestMasterCash = standing.cash;
+              bestCashHistory.push({ cash: standing.cash, step: t, game: gamesTotal });
+              if (bestCashHistory.length > 500) bestCashHistory.shift();
+            }
+          }
         }
       }
       replay.pushAll(result.records);
@@ -962,6 +971,8 @@ async function train() {
         replaySize:  replay.size,
         masterCashAvg:     masterCashAvg,
         masterCashHistory: masterCashHistory.slice(),
+        bestMasterCash,
+        bestCashHistory:   bestCashHistory.slice(),
         elapsedSecs: parseInt(elapsedS),
         remainingSecs: Math.max(0, Math.floor((TIME_LIMIT - (Date.now() - t0)) / 1000)),
         timeLimitSecs: TIME_LIMIT === Infinity ? null : TIME_LIMIT / 1000,
