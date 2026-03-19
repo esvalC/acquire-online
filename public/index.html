@@ -700,39 +700,41 @@
   #newLanding {
     flex-direction: column; align-items: center; justify-content: center;
     min-height: 100vh; gap: 32px; padding: 40px 24px;
+    background: linear-gradient(160deg, #f4f8f5 0%, #eef3fa 100%);
   }
-  .home-title {
+  #newLanding .home-title {
     font-family: 'Playfair Display', serif; font-size: 64px; font-weight: 900;
     letter-spacing: -3px;
-    background: linear-gradient(135deg, var(--gold), #fbbf24, var(--gold));
+    background: linear-gradient(135deg, #1b3a5c 0%, #1a5235 50%, #1b3a5c 100%);
     -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     animation: fadeInUp 0.5s ease-out;
   }
-  .home-subtitle {
+  #newLanding .home-subtitle {
     font-size: 14px; text-transform: uppercase; letter-spacing: 4px;
-    color: var(--text-muted); margin-top: -18px;
+    color: #4a6572; margin-top: -18px;
     animation: fadeInUp 0.5s ease-out 0.1s both;
   }
-  .mode-cards {
+  #newLanding .mode-cards {
     display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
     animation: fadeInUp 0.5s ease-out 0.2s both;
   }
-  .mode-card {
-    background: var(--bg-card); border: 1px solid var(--border);
+  #newLanding .mode-card {
+    background: #ffffff; border: 1px solid #d6e4dd;
     border-radius: 16px; padding: 32px 28px; width: 220px; cursor: pointer;
     transition: all 0.25s ease; text-align: center; display: flex;
     flex-direction: column; align-items: center; gap: 12px;
+    box-shadow: 0 2px 8px rgba(26,58,82,0.07);
   }
-  .mode-card:hover {
-    border-color: var(--gold); transform: translateY(-4px);
-    box-shadow: 0 12px 40px rgba(245,158,11,0.15);
+  #newLanding .mode-card:hover {
+    border-color: #1a5235; transform: translateY(-4px);
+    box-shadow: 0 12px 40px rgba(26,82,53,0.15);
   }
-  .mode-card-icon { font-size: 36px; }
-  .mode-card-title {
+  #newLanding .mode-card-icon { font-size: 36px; }
+  #newLanding .mode-card-title {
     font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700;
-    color: var(--gold);
+    color: #1b3a5c;
   }
-  .mode-card-desc { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
+  #newLanding .mode-card-desc { font-size: 12px; color: #4a6572; line-height: 1.5; }
 
   /* ── Solo Setup ──────────────────────────────── */
   #soloSetup {
@@ -778,19 +780,21 @@
   .bot-diff-btn:hover:not(.active) { background: var(--bg-card-hover); }
 
   /* ── Mode card variants ───────────────────────── */
-  .mode-card-featured {
-    border-color: rgba(245,158,11,0.4);
-    background: linear-gradient(135deg, var(--bg-card) 0%, rgba(245,158,11,0.04) 100%);
+  #newLanding .mode-card-featured {
+    border-color: #b2d4bf;
+    background: linear-gradient(135deg, #ffffff 0%, #edf6f0 100%);
+    border-top: 3px solid #1a5235;
   }
-  .mode-card-master {
-    border-color: rgba(139,92,246,0.4);
-    background: linear-gradient(135deg, var(--bg-card) 0%, rgba(139,92,246,0.04) 100%);
+  #newLanding .mode-card-master {
+    border-color: #b2c5d4;
+    background: linear-gradient(135deg, #ffffff 0%, #edf0f6 100%);
+    border-top: 3px solid #1b3a5c;
   }
-  .mode-card-master:hover {
-    border-color: #8b5cf6;
-    box-shadow: 0 12px 40px rgba(139,92,246,0.18);
+  #newLanding .mode-card-master:hover {
+    border-color: #1b3a5c;
+    box-shadow: 0 12px 40px rgba(27,58,92,0.18);
   }
-  .mode-card-master .mode-card-title { color: #a78bfa; }
+  #newLanding .mode-card-master .mode-card-title { color: #1b3a5c; }
 
   /* ── Quick Master name modal ─────────────────── */
   #quickMasterModal {
