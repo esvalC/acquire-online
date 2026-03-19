@@ -260,21 +260,32 @@ function legalMergerActions(game, playerIdx) {
   const survivorRoom = 25 - game.players.reduce((s, p) => s + (p.stocks[pm.survivor] || 0), 0);
   const maxTrade     = Math.min(Math.floor(held / 2) * 2, survivorRoom * 2);
 
-  // Generate all valid (sell, trade) combos — sell any amount, trade any even amount,
-  // keep the rest. Treat each equally so the value head can pick the best mix.
-  const seen = new Set();
-  const opts = [];
-  for (let trade = 0; trade <= maxTrade; trade += 2) {
-    const remaining = held - trade;
-    for (let sell = 0; sell <= remaining; sell++) {
-      const key = `${sell},${trade}`;
-      if (!seen.has(key)) {
-        seen.add(key);
-        opts.push({ type: 'mergerDecision', sell, trade });
-      }
+  // Sparse representative set — exhaustive combos can be 50–100+ with many shares,
+  // which blocks the event loop. ~8 anchor points cover all strategic axes.
+  const seen = new Map();
+  const add = (sell, trade) => {
+    trade = Math.min(trade, maxTrade);
+    sell  = Math.max(0, Math.min(sell, held - trade));
+    if (sell + trade > held) return;
+    const key = `${sell},${trade}`;
+    if (!seen.has(key)) seen.set(key, { type: 'mergerDecision', sell, trade });
+  };
+
+  add(held, 0);                                       // sell all
+  add(0, 0);                                          // hold all
+  if (maxTrade > 0) {
+    const qTrade = Math.floor(maxTrade / 4) * 2;
+    add(held - maxTrade, maxTrade);                   // trade max, sell remainder
+    add(0,               maxTrade);                   // trade max, keep remainder
+    if (qTrade > 0) {
+      add(held - qTrade, qTrade);                     // trade quarter, sell remainder
+      add(0,             qTrade);                     // trade quarter, keep remainder
     }
   }
-  return opts;
+  add(Math.floor(held / 2), 0);                       // sell half, keep half
+  add(Math.ceil(held / 2),  0);                       // sell most, keep little
+
+  return [...seen.values()];
 }
 
 /* ── Value-guided action selection (for non-tile phases) ──────── */
