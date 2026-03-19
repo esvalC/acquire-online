@@ -912,10 +912,12 @@ async function train() {
           const standing = result.standings.find(s => s.name === playerInGame.name);
           if (standing) {
             masterCashWindow.push(standing.cash);
-            if (standing.cash > bestMasterCash) {
-              bestMasterCash = standing.cash;
-              bestCashHistory.push({ cash: standing.cash, step: t, game: gamesTotal });
-              if (bestCashHistory.length > 500) bestCashHistory.shift();
+            // Top-15 leaderboard: qualify if list isn't full or this beats the lowest entry
+            if (bestCashHistory.length < 15 || standing.cash > bestCashHistory[bestCashHistory.length - 1].cash) {
+              bestCashHistory.push({ cash: standing.cash, step: t, game: gamesTotal, at: new Date().toISOString() });
+              bestCashHistory.sort((a, b) => b.cash - a.cash);
+              if (bestCashHistory.length > 15) bestCashHistory.length = 15;
+              bestMasterCash = bestCashHistory[0].cash;
               weights.bestMasterCash = bestMasterCash;
               weights.bestCashHistory = bestCashHistory;
             }
