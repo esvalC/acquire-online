@@ -407,6 +407,7 @@
   .smatrix-player-you { font-size: 9px; color: var(--text-muted); }
   .smatrix-player-cash { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--green); margin-top: 1px; }
   .smatrix-inactive { opacity: 0.3; }
+  .smatrix-inactive-held { opacity: 0.55; }
   .smatrix-safe-badge { font-size: 8px; background: rgba(16,185,129,0.15); color: var(--green); padding: 1px 3px; border-radius: 2px; }
 
   /* Keep chain/score styles for replay + buy-stock panel */
@@ -2929,18 +2930,21 @@ function renderStockMatrix() {
   for (const chain of chains) {
     const info = st.chains[chain];
     const inactive = !info.active;
+    const anyHeld = inactive && players.some(p => (p.stocks[chain] || 0) > 0);
     const stripe = !inactive ? ` style="--row-stripe:${chainColors[chain]}"` : '';
-    html += `<div class="smatrix-row${inactive ? ' smatrix-inactive' : ' smatrix-row-colored'}"${stripe}>`;
+    let rowClass = inactive ? (anyHeld ? ' smatrix-inactive-held' : ' smatrix-inactive') : ' smatrix-row-colored';
+    html += `<div class="smatrix-row${rowClass}"${stripe}>`;
     html += `<div class="smatrix-chain-col">
-      <div class="smatrix-dot" style="background:${chainColors[chain]}"></div>
+      <div class="smatrix-dot" style="background:${inactive ? chainColors[chain]+'80' : chainColors[chain]}"></div>
       <div class="smatrix-chain-info">
         <span class="smatrix-chain-name">${chain}</span>
-        ${info.active ? (() => { const issued = st.players.reduce((s,p)=>s+(p.stocks[chain]||0),0); const rem = 25 - issued; return `<span class="smatrix-chain-meta">${info.size}t · $${info.price} · <span style="color:${rem<=3?'var(--red)':rem<=8?'var(--gold)':'inherit'}">${rem} left</span>${info.safe ? ' <span class="smatrix-safe-badge">SAFE</span>' : ''}</span>`; })() : '<span class="smatrix-chain-meta">inactive</span>'}
+        ${info.active ? (() => { const issued = st.players.reduce((s,p)=>s+(p.stocks[chain]||0),0); const rem = 25 - issued; return `<span class="smatrix-chain-meta">${info.size}t · $${info.price} · <span style="color:${rem<=3?'var(--red)':rem<=8?'var(--gold)':'inherit'}">${rem} left</span>${info.safe ? ' <span class="smatrix-safe-badge">SAFE</span>' : ''}</span>`; })() : '<span class="smatrix-chain-meta" style="font-style:italic">not on board</span>'}
       </div>
     </div>`;
     for (let i = 0; i < players.length; i++) {
       if (inactive) {
-        html += `<div class="smatrix-cell"><span class="smatrix-zero">—</span></div>`;
+        const count = players[i].stocks[chain] || 0;
+        html += `<div class="smatrix-cell">${count > 0 ? `<span style="color:${chainColors[chain]}">${count}</span>` : '<span class="smatrix-zero">—</span>'}</div>`;
         continue;
       }
       const count = players[i].stocks[chain] || 0;
@@ -2949,7 +2953,9 @@ function renderStockMatrix() {
       if (rank === 'both') badge = '<span class="stock-rank gold">1</span><span class="stock-rank silver">2</span>';
       else if (rank === 1)  badge = '<span class="stock-rank gold">1</span>';
       else if (rank === 2)  badge = '<span class="stock-rank silver">2</span>';
-      html += `<div class="smatrix-cell" style="${count > 0 ? `color:${chainColors[chain]}` : ''}">
+      const bgAlpha = rank === 1 ? '30' : rank === 2 ? '1e' : count > 0 ? '0f' : '';
+      const cellStyle = count > 0 ? `color:${chainColors[chain]};background:${chainColors[chain]}${bgAlpha};` : '';
+      html += `<div class="smatrix-cell" style="${cellStyle}">
         ${count > 0 ? `<span>${count}</span>${badge}` : '<span class="smatrix-zero">·</span>'}
       </div>`;
     }
