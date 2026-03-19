@@ -883,8 +883,8 @@ async function train() {
   // them (since they're the same network in different seat positions).
   let masterCashWindow = [];  // cash values since last checkpoint
   const masterCashHistory = []; // one avg per 1000-game checkpoint (last 50)
-  let bestMasterCash = 0;
-  const bestCashHistory = []; // { cash, step, game } — one entry per new record
+  let bestMasterCash = weights.bestMasterCash || 0;
+  const bestCashHistory = weights.bestCashHistory ? [...weights.bestCashHistory] : [];
   const t0 = Date.now();
 
   while (Date.now() - t0 < TIME_LIMIT) {
@@ -916,6 +916,8 @@ async function train() {
               bestMasterCash = standing.cash;
               bestCashHistory.push({ cash: standing.cash, step: t, game: gamesTotal });
               if (bestCashHistory.length > 500) bestCashHistory.shift();
+              weights.bestMasterCash = bestMasterCash;
+              weights.bestCashHistory = bestCashHistory;
             }
           }
         }
