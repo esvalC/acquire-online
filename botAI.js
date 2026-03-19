@@ -36,7 +36,7 @@ const BOT_TRAITS = {
 };
 
 // Trait amplification by difficulty
-const DIFF_MULT = { easy: 0.3, medium: 1.0, hard: 2.0 };
+const DIFF_MULT = { easy: 0.3, medium: 1.0, hard: 2.0, expert: 3.0 };
 
 /* ── Helper: total issued shares for a chain ─────────────────── */
 function issuedShares(game, chain) {
@@ -65,22 +65,25 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
   if (!analysis.legal) return -Infinity;
 
   const player  = game.players[botIdx];
-  const endgame = difficulty === 'hard' && safeChainCount(game) >= 2;
+  const hardOrBetter = difficulty === 'hard' || difficulty === 'expert';
+  const endgame = hardOrBetter && safeChainCount(game) >= 2;
 
   switch (analysis.type) {
     case 'expand': {
       const myShares = player.stocks[analysis.chain] || 0;
       const oppShares = maxOpponentShares(game, analysis.chain, botIdx);
       if (myShares === 0) {
-        if (difficulty === 'hard') {
+        if (hardOrBetter) {
           // Penalize expanding chains where an opponent is well-established
-          return oppShares > 3 ? 0.3 : 1.5;
+          // Expert: stronger penalty — never help an opponent you can't catch
+          const threshold = difficulty === 'expert' ? 2 : 3;
+          return oppShares > threshold ? 0.3 : 1.5;
         }
         return 1.5;
       }
       // Expanding own chain is always top-2 priority
       let score = 15 + myShares * 0.2;
-      if (difficulty === 'hard') {
+      if (hardOrBetter) {
         const chainSize = game.chains[analysis.chain].tiles.length;
         // Push chain toward safe size (lock in majority bonus)
         if (chainSize >= 8 && chainSize < 11) score += 2.5;
@@ -95,7 +98,7 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
       if (endgame) return 8;
       // Center preference: a chain founded in the middle of the board has more
       // room to grow in all 4 directions. Tiles on the outer rows/cols are
-      // already constrained. Hard bots add up to +2 for a dead-center tile.
+      // already constrained. Hard+ bots add up to +2 for a dead-center tile.
       if (difficulty !== 'easy') {
         const num = parseInt(tile);
         const letter = tile.replace(/[0-9]/g, '');
@@ -119,20 +122,40 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
       let score = 2 + survivorMyShares * 0.1 + defunctMyShares * 0.3;
       // mergerSeeking trait: positive = bonus for merge tiles, negative = penalty
       score += traits.mergerSeeking * mult * 2.5;
-      // Hard endgame: trigger mergers only if we win the defunct chain payout
+      // Hard+ endgame: trigger mergers only if we win the defunct chain payout
       if (endgame) {
         const defunctChain = sorted[1];
         const defunctOpp   = maxOpponentShares(game, defunctChain.chain, botIdx);
         if (defunctChain.myShares > defunctOpp) score += 4; // we get the payout
         else if (defunctChain.myShares === 0)   score -= 2; // waste of a turn
+        // Expert: avoid triggering mergers where opponent wins the payout
+        if (difficulty === 'expert' && defunctChain.myShares < defunctOpp) score -= 3;
       }
       return score;
     }
     case 'lone':
       // Tile-timing insight: play isolated lone tiles now to preserve tiles that
       // could expand/found/merge chains for a more strategic moment later.
-      // Hard bots actively prefer burning lone tiles over keeping them in hand.
-      return difficulty === 'hard' ? 2.0 : 0.5;
+      // Hard+ bots actively prefer burning lone tiles over keeping them in hand.
+      // Expert: prefer lone tiles that are furthest from any active chain
+      // (tiles near chains could become expanders or founders — keep those).
+      if (difficulty === 'expert') {
+        const tileNum = parseInt(tile);
+        const tileCol = tile.replace(/\d/g, '').charCodeAt(0) - 65;
+        const tileRow = tileNum - 1;
+        let minDist = Infinity;
+        for (const ch of engine.HOTEL_CHAINS) {
+          if (!game.chains[ch].active) continue;
+          for (const ct of game.chains[ch].tiles) {
+            const ctRow = parseInt(ct) - 1;
+            const ctCol = ct.replace(/\d/g, '').charCodeAt(0) - 65;
+            minDist = Math.min(minDist, Math.abs(tileRow - ctRow) + Math.abs(tileCol - ctCol));
+          }
+        }
+        // Farther = safer to burn (score 1.0–3.0 based on distance)
+        return 1.0 + Math.min(minDist / 4, 2.0);
+      }
+      return hardOrBetter ? 2.0 : 0.5;
     default:
       return 0;
   }
@@ -265,7 +288,7 @@ function decideBotMerger(game, botIdx, difficulty) {
   //   d) hard difficulty (this is a nuanced mid-game play)
   let hold = 0;
   const endgame = safeChainCount(game) >= 2;
-  if (difficulty === 'hard' && !endgame && (game.tileBag?.length ?? 0) > 40) {
+  if ((difficulty === 'hard' || difficulty === 'expert') && !endgame && (game.tileBag?.length ?? 0) > 40) {
     const maxOppDefunct = maxOpponentShares(game, defunctChain, botIdx);
     const remainingAfterTrade = defunctShares - trade;
     if (remainingAfterTrade >= 2 && (defunctShares > maxOppDefunct)) {
@@ -331,15 +354,15 @@ function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
 
   // "I like ties" (Mike Topczewski, 2025 WSBG): small bonus for buying into
   // a tie — a co-investor hunts the merge tile with you instead of against you.
-  if (wouldTie && difficulty === 'hard') score += 1.0;
+  if (wouldTie && hardOrBetter) score += 1.0;
 
-  // "Policing" (hard only): incentive to buy into a chain where an opponent
+  // "Policing" (hard+): incentive to buy into a chain where an opponent
   // is building an uncontested majority. Scales with dominance — the more
   // shares they have with nobody contesting, the more urgent the response.
   //   opponent 2–3 shares: minor interest
   //   opponent 4–5 shares: moderate urgency (~matches "could lead" value)
   //   opponent 6+ shares: high urgency — they're dominating, must respond
-  if (c.myShares === 0 && maxOpp >= 2 && difficulty === 'hard') {
+  if (c.myShares === 0 && maxOpp >= 2 && hardOrBetter) {
     score += Math.min(0.5 + maxOpp * 0.5, 5.0);
   }
 
@@ -361,17 +384,29 @@ function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
 
   // Safe-size push: urgency ramps up the closer a chain is to locking in bonuses.
   // Size 10 = one tile from safe (critical to hold majority before it locks).
-  // Size 8-9 = approaching fast. Hard bots feel this most.
-  if (c.size === 10) score += difficulty === 'hard' ? 3.5 : 2.0;
-  else if (c.size === 9) score += difficulty === 'hard' ? 2.5 : 1.5;
-  else if (c.size === 8) score += difficulty === 'hard' ? 1.5 : 1.0;
+  // Size 8-9 = approaching fast. Hard+ bots feel this most.
+  if (c.size === 10) score += difficulty === 'expert' ? 4.5 : hardOrBetter ? 3.5 : 2.0;
+  else if (c.size === 9) score += difficulty === 'expert' ? 3.5 : hardOrBetter ? 2.5 : 1.5;
+  else if (c.size === 8) score += difficulty === 'expert' ? 2.5 : hardOrBetter ? 1.5 : 1.0;
+
+  // Top-2 filter (expert only): Acquire bonuses only go to top-2 shareholders.
+  // Heavy penalty for buying into a chain where 2+ opponents are already well
+  // ahead — you will never see a payout from that position.
+  if (difficulty === 'expert') {
+    const allOppShares = game.players
+      .filter((_, i) => i !== botIdx)
+      .map(p => p.stocks[c.chain] || 0)
+      .sort((a, b) => b - a);
+    const aheadAfterBuy = allOppShares.filter(s => s > (c.myShares + 1)).length;
+    if (aheadAfterBuy >= 2) score -= 8; // buying into 3rd+ place: strong deterrent
+  }
 
   // Edge-position penalty: chains hugging the board edge grow slowly and rarely
   // become merger targets. Scale the penalty by how edgy the chain is.
-  // Hard bots fully avoid edge-trapped chains; medium bots are less deterred.
+  // Hard+ bots fully avoid edge-trapped chains; medium bots are less deterred.
   const edgeFrac = edgePenalty(c.chain, game);
   if (edgeFrac > 0) {
-    const penaltyStrength = difficulty === 'hard' ? 2.5 : difficulty === 'medium' ? 1.5 : 0.5;
+    const penaltyStrength = difficulty === 'expert' ? 4.0 : hardOrBetter ? 2.5 : difficulty === 'medium' ? 1.5 : 0.5;
     score -= edgeFrac * penaltyStrength;
   }
 
@@ -381,7 +416,8 @@ function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
 /* ── Stock buying ────────────────────────────────────────────── */
 function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) {
   const player = game.players[botIdx];
-  const endgame = difficulty === 'hard' && safeChainCount(game) >= 2;
+  const hardOrBetter = difficulty === 'hard' || difficulty === 'expert';
+  const endgame = hardOrBetter && safeChainCount(game) >= 2;
 
   let candidates = engine.HOTEL_CHAINS
     .filter(c => game.chains[c].active)
@@ -396,13 +432,17 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
 
   if (candidates.length === 0) return {};
 
-  // End-game filter (hard bots only): skip chains where we can't realistically lead.
+  // End-game filter (hard+): skip chains where we can't realistically lead.
   // In the final stretch, buying into a losing chain is burning cash for no equity.
   if (endgame) {
     const viable = candidates.filter(c => {
       const myShares  = c.myShares;
       const oppShares = maxOpponentShares(game, c.chain, botIdx);
-      // Keep if we're already leading, could lead with a few buys, or no opponent holds any
+      if (difficulty === 'expert') {
+        // Expert: only chains where we already lead or are tied — no chasing
+        return myShares >= oppShares;
+      }
+      // Hard: keep if we're leading, could lead with a few buys, or nobody holds any
       return myShares >= oppShares || oppShares === 0 || (myShares + 3) >= oppShares;
     });
     if (viable.length > 0) candidates = viable;
@@ -445,10 +485,10 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
     chainDesirability(a, botIdx, game, traits, mult, difficulty)
   );
 
-  // Hard bots: force-contest any chain where an opponent has 4+ shares
+  // Hard+ bots: force-contest any chain where an opponent has 4+ shares
   // and nobody else (including us) has entered yet. Without this, focused
   // bots never break from their main chain even when an opponent is running away.
-  if (difficulty === 'hard' && bought < MAX_BUY) {
+  if (hardOrBetter && bought < MAX_BUY) {
     for (const c of candidates) {
       if (bought >= MAX_BUY) break;
       if (c.myShares > 0) continue; // already in this chain
@@ -457,8 +497,8 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
     }
   }
 
-  // Hard endgame: double down on chains we lead — don't spread thin
-  if (endgame && personality !== 'diversified') {
+  // Hard+ endgame: double down on chains we lead — don't spread thin
+  if (endgame && (personality !== 'diversified' || difficulty === 'expert')) {
     const leading = candidates.filter(c => c.myShares >= maxOpponentShares(game, c.chain, botIdx));
     if (leading.length > 0) {
       const target = leading[0];

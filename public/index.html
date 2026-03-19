@@ -867,9 +867,9 @@
   .fr-bot-chip .chip-diff {
     font-size: 9px; letter-spacing: 0.5px; opacity: 0.6; text-transform: uppercase;
   }
-  .fr-bot-chip.diff-easy   { border-color: rgba(16,185,129,0.25); }
-  .fr-bot-chip.diff-medium { border-color: rgba(59,130,246,0.25); }
-  .fr-bot-chip.diff-hard   { border-color: rgba(239,68,68,0.3); }
+  .fr-bot-chip.diff-hard   { border-color: rgba(16,185,129,0.25); }
+  .fr-bot-chip.diff-expert { border-color: rgba(59,130,246,0.25); }
+  .fr-bot-chip.diff-mcts   { border-color: rgba(239,68,68,0.3); }
   .fr-bot-chip.diff-mcts   { border-color: rgba(139,92,246,0.5); color: #a78bfa; }
   .fr-level-arrow { font-size: 13px; color: var(--text-muted); flex-shrink: 0; }
   .fr-name-row { display: flex; gap: 12px; align-items: center; }
@@ -1794,44 +1794,44 @@ const FINANCE_ROAD_TIERS = [
     name: 'Street Level',
     desc: 'Learn the market',
     levels: [
-      { name: 'Warm-Up',     elo: 600,  bots: [{ botName:'Aria', personality:'balanced',    difficulty:'easy'   }, { botName:'Rex',  personality:'focused',     difficulty:'easy'   }, { botName:'Nova', personality:'diversified', difficulty:'easy'   }] },
-      { name: 'Stepping Up', elo: 750,  bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'easy'   }, { botName:'Colt', personality:'focused',     difficulty:'easy'   }] },
-      { name: 'Earning It',  elo: 900,  bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'easy'   }] },
+      { name: 'Warm-Up',     elo: 600,  bots: [{ botName:'Aria', personality:'balanced',    difficulty:'hard'   }, { botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Nova', personality:'diversified', difficulty:'hard'   }] },
+      { name: 'Stepping Up', elo: 750,  bots: [{ botName:'Aria', personality:'balanced',    difficulty:'expert' }, { botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Colt', personality:'focused',     difficulty:'hard'   }] },
+      { name: 'Earning It',  elo: 900,  bots: [{ botName:'Aria', personality:'balanced',    difficulty:'expert' }, { botName:'Rex',  personality:'focused',     difficulty:'expert' }, { botName:'Nova', personality:'diversified', difficulty:'hard'   }] },
     ],
   },
   {
     name: 'The Circuit',
     desc: 'Confident traders',
     levels: [
-      { name: 'Foundations', elo: 1050, bots: [{ botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
-      { name: 'Competition', elo: 1200, bots: [{ botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
-      { name: 'The Floor',   elo: 1350, bots: [{ botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Rex',  personality:'focused',     difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
+      { name: 'Foundations', elo: 1050, bots: [{ botName:'Aria', personality:'balanced',    difficulty:'expert' }, { botName:'Rex',  personality:'focused',     difficulty:'expert' }, { botName:'Colt', personality:'focused',     difficulty:'expert' }] },
+      { name: 'Competition', elo: 1200, bots: [{ botName:'Vera', personality:'balanced',    difficulty:'expert' }, { botName:'Rex',  personality:'focused',     difficulty:'expert' }, { botName:'Nova', personality:'diversified', difficulty:'expert' }] },
+      { name: 'The Floor',   elo: 1350, bots: [{ botName:'Vera', personality:'balanced',    difficulty:'expert' }, { botName:'Rex',  personality:'focused',     difficulty:'expert' }, { botName:'Colt', personality:'focused',     difficulty:'expert' }] },
     ],
   },
   {
     name: 'The Exchange',
     desc: 'No room for sloppy play',
     levels: [
-      { name: 'First Edge',  elo: 1500, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'medium' }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
-      { name: 'The Press',   elo: 1650, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'medium' }, { botName:'Colt', personality:'focused',     difficulty:'medium' }] },
-      { name: 'High Water',  elo: 1800, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'medium' }] },
+      { name: 'First Edge',  elo: 1500, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'mcts'   }, { botName:'Aria', personality:'balanced',    difficulty:'expert' }, { botName:'Nova', personality:'diversified', difficulty:'expert' }] },
+      { name: 'The Press',   elo: 1650, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'mcts'   }, { botName:'Vera', personality:'balanced',    difficulty:'expert' }, { botName:'Colt', personality:'focused',     difficulty:'expert' }] },
+      { name: 'High Water',  elo: 1800, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'mcts'   }, { botName:'Vera', personality:'balanced',    difficulty:'mcts'   }, { botName:'Aria', personality:'balanced',    difficulty:'expert' }] },
     ],
   },
   {
     name: 'The Summit',
     desc: 'Pushing every edge',
     levels: [
-      { name: 'The Climb',   elo: 1950, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Nova', personality:'diversified', difficulty:'medium' }] },
-      { name: 'Thin Air',    elo: 2100, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Aria', personality:'balanced',    difficulty:'hard'   }] },
-      { name: 'The Peak',    elo: 2250, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'hard'   }, { botName:'Vera', personality:'balanced',    difficulty:'hard'   }, { botName:'Colt', personality:'focused',     difficulty:'hard'   }] },
+      { name: 'The Climb',   elo: 1950, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'mcts'   }, { botName:'Vera', personality:'balanced',    difficulty:'mcts'   }, { botName:'Nova', personality:'diversified', difficulty:'expert' }] },
+      { name: 'Thin Air',    elo: 2100, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'mcts'   }, { botName:'Vera', personality:'balanced',    difficulty:'mcts'   }, { botName:'Aria', personality:'balanced',    difficulty:'mcts'   }] },
+      { name: 'The Peak',    elo: 2250, bots: [{ botName:'Rex',  personality:'focused',     difficulty:'mcts'   }, { botName:'Vera', personality:'balanced',    difficulty:'mcts'   }, { botName:'Colt', personality:'focused',     difficulty:'mcts'   }] },
     ],
   },
   {
     name: 'The Trust',
     desc: 'AI-powered opponents',
     levels: [
-      { name: 'Initiation',       elo: 2450, bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'hard'   }, { botName:'Colt', personality:'focused', difficulty:'hard'   }] },
-      { name: 'The Inner Circle', elo: 2650, bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'mcts'   }, { botName:'Colt', personality:'focused', difficulty:'hard'   }] },
+      { name: 'Initiation',       elo: 2450, bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'mcts'   }, { botName:'Colt', personality:'focused', difficulty:'expert' }] },
+      { name: 'The Inner Circle', elo: 2650, bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'mcts'   }, { botName:'Colt', personality:'focused', difficulty:'mcts'   }] },
       { name: 'Godmode',          elo: 2900, bots: [{ botName:'Rex',  personality:'focused', difficulty:'mcts' }, { botName:'Vera', personality:'balanced', difficulty:'mcts'   }, { botName:'Colt', personality:'focused', difficulty:'mcts'   }] },
     ],
   },
@@ -1868,7 +1868,7 @@ function goFinanceRoad() {
 function renderFinanceRoad() {
   const progress  = getFRProgress();
   const container = document.getElementById('frTierList');
-  const DIFF_LABEL = { easy: 'Easy', medium: 'Mid', hard: 'Hard', mcts: 'MCTS' };
+  const DIFF_LABEL = { hard: 'Easy', expert: 'Mid', mcts: 'Hard', master: '⚡' };
 
   container.innerHTML = FINANCE_ROAD_TIERS.map((tier, ti) => {
     const tp        = progress.tiers[ti] || { beaten: [], unlocked: 0 };
@@ -2152,7 +2152,7 @@ function adjustBotCount(delta) {
 
 function ensureBotSettings() {
   while (botSettings.length < 5) {
-    botSettings.push({ difficulty: 'medium', useCustomDiv: false, divVal: 5 });
+    botSettings.push({ difficulty: 'hard', useCustomDiv: false, divVal: 5 });
   }
 }
 
@@ -2181,9 +2181,10 @@ function renderBotRoster() {
   el.innerHTML = roster.map((b, i) => {
     const s = botSettings[i];
     const divLabel = s.divVal <= 3 ? 'Concentrated' : s.divVal <= 7 ? 'Balanced' : 'Diversified';
+    const DIFF_MAP = { Easy: 'hard', Medium: 'expert', Hard: 'mcts' };
     const diffBtns = ['Easy','Medium','Hard'].map(d =>
-      `<button class="bot-diff-btn${s.difficulty === d.toLowerCase() ? ' active' : ''}"
-        onclick="setBotDifficulty(${i},'${d.toLowerCase()}')">${d}</button>`
+      `<button class="bot-diff-btn${s.difficulty === DIFF_MAP[d] ? ' active' : ''}"
+        onclick="setBotDifficulty(${i},'${DIFF_MAP[d]}')">${d}</button>`
     ).join('') + `<button class="bot-diff-btn${s.difficulty === 'master' ? ' active' : ''}" onclick="setBotDifficulty(${i},'master')" title="Neural net bot — trained via self-play" style="font-size:10px;${s.difficulty !== 'master' ? 'background:linear-gradient(135deg,#4c1d95,#78350f);border-color:#7c3aed;' : ''}">⚡ Master</button>`;
     const divSlider = s.useCustomDiv ? `
       <div style="margin-top:6px;">
