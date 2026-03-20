@@ -337,6 +337,7 @@ function edgePenalty(chain, game) {
 //   2. "Policing" (WBC 2023 strategy): buying 1 share into an opponent's
 //      chain to deny them uncontested cheap majority has real defensive value.
 function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
+  const hardOrBetter = difficulty === 'hard' || difficulty === 'expert';
   const maxOpp = game.players.filter((_, i) => i !== botIdx)
     .reduce((m, p) => Math.max(m, p.stocks[c.chain] || 0), 0);
   const isLeading  = c.myShares > maxOpp;

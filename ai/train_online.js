@@ -80,6 +80,22 @@ const BOTS = [
   { name: 'Vera', personality: 'balanced',    difficulty: 'hard' },
 ];
 
+/* ── ELO tracking (matches selfplay.js / dashboard expectations) ── */
+const ELO_K = 32;
+function eloExpected(ra, rb) { return 1 / (1 + Math.pow(10, (rb - ra) / 400)); }
+function updateElo(ratings, standings) {
+  for (let i = 0; i < standings.length; i++) {
+    for (let j = i + 1; j < standings.length; j++) {
+      const w = standings[i].name, l = standings[j].name;
+      if (!ratings[w] || !ratings[l]) continue;
+      const rw = ratings[w], rl = ratings[l];
+      const exp = eloExpected(rw, rl);
+      ratings[w] = Math.round(rw + ELO_K * (1 - exp));
+      ratings[l] = Math.round(rl + ELO_K * (0 - (1 - exp)));
+    }
+  }
+}
+
 /* ── Logging ──────────────────────────────────────────────────── */
 function log(msg) {
   process.stdout.write(msg);
@@ -710,7 +726,7 @@ function runGame(bots, weights, masterSlots) {
     playerIdx:    r.playerIdx,
   }));
 
-  return { records, standings: game.standings };
+  return { records, standings: game.standings, turns };
 }
 
 /* ── Replay buffer (ring buffer) ──────────────────────────────── */
@@ -873,8 +889,11 @@ async function train() {
   let lossHistory = [];
   let rollingLoss = { policy: 0, value: 0, total: 0, cnt: 0 };
   const wins    = {};
+  const podiums = {};
   const avgCash = {};
-  for (const b of BOTS) { wins[b.name] = 0; avgCash[b.name] = []; }
+  const elo     = {};
+  let   totalTurns = 0;
+  for (const b of BOTS) { wins[b.name] = 0; podiums[b.name] = 0; avgCash[b.name] = []; elo[b.name] = 1500; }
 
   // "ELO" equivalent: track master bot's average ending cash over time.
   // We record the rolling average every 1000 games so you can see the
@@ -899,10 +918,14 @@ async function train() {
     if (!result) { errors++; }
     else {
       wins[result.standings[0].name] = (wins[result.standings[0].name] || 0) + 1;
-      for (const p of result.standings) {
-        if (avgCash[p.name]) {
-          avgCash[p.name].push(p.cash);
-          if (avgCash[p.name].length > 5000) avgCash[p.name].shift();
+      totalTurns += result.turns;
+      updateElo(elo, result.standings);
+      for (let i = 0; i < result.standings.length; i++) {
+        const { name, cash } = result.standings[i];
+        if (i < 3 && podiums[name] !== undefined) podiums[name]++;
+        if (avgCash[name]) {
+          avgCash[name].push(cash);
+          if (avgCash[name].length > 5000) avgCash[name].shift();
         }
       }
       // Track master bot cash for ELO-equivalent trending
@@ -982,15 +1005,21 @@ async function train() {
         timeLimitSecs: TIME_LIMIT === Infinity ? null : TIME_LIMIT / 1000,
         gamesPerSec: played > 0 ? +(played / parseInt(elapsedS)).toFixed(1) : 0,
         updatedAt: new Date().toISOString(),
+        avgTurns:        played > 0 ? +(totalTurns / played).toFixed(1) : 0,
+        exportedRecords: replay.size,
         bots: BOTS.map(b => {
           const cash = avgCash[b.name] || [];
+          const w    = wins[b.name] || 0;
           return {
-            name: b.name,
-            wins: wins[b.name] || 0,
-            winPct: played > 0 ? +((wins[b.name] / played) * 100).toFixed(1) : 0,
-            avgCash: cash.length ? Math.round(cash.reduce((s, v) => s + v, 0) / cash.length) : 0,
+            name:       b.name,
+            difficulty: b.difficulty,
+            wins:       w,
+            winPct:     played > 0 ? +((w / played) * 100).toFixed(1) : 0,
+            top3Pct:    played > 0 ? +((podiums[b.name] / played) * 100).toFixed(1) : 0,
+            avgCash:    cash.length ? Math.round(cash.reduce((s, v) => s + v, 0) / cash.length) : 0,
+            elo:        elo[b.name],
           };
-        }).sort((a, b) => b.wins - a.wins),
+        }).sort((a, b) => b.elo - a.elo),
       };
 
       if (STATS_FILE) {
