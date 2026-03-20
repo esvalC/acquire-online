@@ -59,7 +59,7 @@ const VALUE_DIM   = 5;    // one sigmoid per player position
 const BAG_TOTAL   = 102;
 
 // MCTS constants (AlphaZero-style tile selection)
-const MCTS_SIMS = 6;   // simulations per tile decision
+const MCTS_SIMS = 20;  // simulations per tile decision
 const C_PUCT    = 1.5; // PUCT exploration constant
 
 // Temperature for policy soft targets (kept for reference; not used in MCTS path)
@@ -645,13 +645,12 @@ function takeMasterAction(game, playerIdx, weights) {
 }
 
 /* ── Master bot self-play probability ramp ────────────────────── */
-// Always start with some master bots (random network at first = diverse exploration).
-// Replay buffer needs data from game 1 or training never starts.
+// Master share ramp based on cumulative games trained (persisted in weights.totalGames).
+// This way restarting a mature model doesn't reset to low self-play ratios.
 function masterShareForGame(gamesTotal) {
-  if (gamesTotal < 5000)  return 0.20;  // ~1 master/game — fills replay buffer
-  if (gamesTotal < 15000) return 0.40;  // ~2 masters/game
-  if (gamesTotal < 30000) return 0.65;  // majority master self-play
-  return 0.85;                           // near-full self-play
+  if (gamesTotal < 2000)  return 0.40;  // short warmup to seed replay buffer
+  if (gamesTotal < 8000)  return 0.70;  // majority self-play
+  return 0.95;                           // near-pure self-play
 }
 
 /* ── Run one self-play game ───────────────────────────────────── */
@@ -883,7 +882,7 @@ async function train() {
   const replay  = new ReplayBuffer(REPLAY_SIZE);
 
   let t           = 0;  // Adam step counter
-  let gamesTotal  = 0;
+  let gamesTotal  = weights.totalGames || 0;  // cumulative across runs
   let masterGames = 0;
   let errors      = 0;
   let lossHistory = [];
@@ -911,12 +910,12 @@ async function train() {
     const bots = shuffle(BOTS);
     const pMaster = masterShareForGame(gamesTotal);
     const masterSlots = new Set(bots.map((_, i) => i).filter(() => Math.random() < pMaster));
-    if (masterSlots.size > 0) masterGames++;
 
     const result = runGame(bots, weights, masterSlots);
     gamesTotal++;
     if (!result) { errors++; }
     else {
+      if (masterSlots.size > 0) masterGames++;
       wins[result.standings[0].name] = (wins[result.standings[0].name] || 0) + 1;
       totalTurns += result.turns;
       updateElo(elo, result.standings);
@@ -941,8 +940,9 @@ async function train() {
               bestCashHistory.sort((a, b) => b.cash - a.cash);
               if (bestCashHistory.length > 15) bestCashHistory.length = 15;
               bestMasterCash = bestCashHistory[0].cash;
-              weights.bestMasterCash = bestMasterCash;
+              weights.bestMasterCash  = bestMasterCash;
               weights.bestCashHistory = bestCashHistory;
+              weights.totalGames      = gamesTotal;
             }
           }
         }
@@ -1034,6 +1034,7 @@ async function train() {
 
     // ── Save weights periodically ─────────────────────────────── */
     if (gamesTotal % SAVE_EVERY === 0) {
+      weights.totalGames = gamesTotal;
       saveWeights(weights);
       log(`  [saved] step=${t} games=${gamesTotal}\n`);
     }
