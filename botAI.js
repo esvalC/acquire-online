@@ -330,12 +330,9 @@ function edgePenalty(chain, game) {
 }
 
 /* ── Chain desirability score for stock buying ───────────────── */
-// Incorporates two world-champion insights:
-//   1. "I like ties" (Mike Topczewski, 2025 WSBG): deliberately buying to
-//      TIE the leader is often better than racing for sole majority.
-//      A co-investor wants the merger too — cooperation beats competition.
-//   2. "Policing" (WBC 2023 strategy): buying 1 share into an opponent's
-//      chain to deny them uncontested cheap majority has real defensive value.
+// Incorporates one world-champion insight:
+//   "Policing" (WBC 2023 strategy): buying 1 share into an opponent's
+//   chain to deny them uncontested cheap majority has real defensive value.
 function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
   const hardOrBetter = difficulty === 'hard' || difficulty === 'expert';
   const maxOpp = game.players.filter((_, i) => i !== botIdx)
@@ -343,7 +340,6 @@ function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
   const isLeading  = c.myShares > maxOpp;
   const isTied     = c.myShares === maxOpp && maxOpp > 0;
   const couldLead  = c.myShares > 0 && (c.myShares + 3) > maxOpp;
-  const wouldTie   = (c.myShares + 1) === maxOpp && maxOpp > 0;
 
   let score = 0;
 
@@ -352,10 +348,6 @@ function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
   else if (isTied)     score += 8;  // tie is almost as good as leading
   else if (couldLead)  score += 5;
   else if (c.myShares > 0) score += 2;
-
-  // "I like ties" (Mike Topczewski, 2025 WSBG): small bonus for buying into
-  // a tie — a co-investor hunts the merge tile with you instead of against you.
-  if (wouldTie && hardOrBetter) score += 1.0;
 
   // "Policing" (hard+): incentive to buy into a chain where an opponent
   // is building an uncontested majority. Scales with dominance — the more
