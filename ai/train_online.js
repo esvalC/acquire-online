@@ -682,6 +682,24 @@ function runGame(bots, weights, masterSlots) {
           : game.currentPlayerIdx === i;
       if (!isActive) continue;
 
+      // End-game declaration: master bots (takeMasterAction) never call
+      // declareGameEnd themselves, so without this check games run to MAX_TURNS
+      // and return null — bots never see the final stock payout which is where
+      // most of the money is. Mirror the heuristic bot's end-game logic here.
+      if (game.phase === 'placeTile' && engine.canDeclareGameEnd(game)) {
+        const myPlayer    = game.players[i];
+        const opponents   = game.players.filter((_, j) => j !== i);
+        const bestOpp     = opponents.length ? Math.max(...opponents.map(p => p.cash)) : 0;
+        const smallChains = engine.HOTEL_CHAINS.filter(c =>
+          game.chains[c].active && game.chains[c].tiles.length < 11);
+        if (smallChains.length === 0 || myPlayer.cash > bestOpp * 1.20 ||
+            (myPlayer.cash >= bestOpp && smallChains.length <= 1)) {
+          engine.declareGameEnd(game, i);
+          acted = true;
+          break;
+        }
+      }
+
       if (Math.random() < EPS) {
         // Pure random exploration — no record (would be noise)
         acted = takeRandomAction(game, i);
