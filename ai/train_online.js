@@ -901,6 +901,7 @@ async function train() {
 
   let t           = 0;  // Adam step counter
   let gamesTotal  = weights.totalGames || 0;  // cumulative across runs
+  const startGamesTotal = gamesTotal;          // baseline for this run
   let masterGames = 0;
   let errors      = 0;
   let lossHistory = [];
@@ -1003,9 +1004,11 @@ async function train() {
 
       log(`  step=${t} games=${gamesTotal} loss=${avgTot} (pol=${avgPol} val=${avgVal}) elapsed=${elapsedS}s buf=${replay.size} errors=${errors}\n`);
 
+      const gamesThisRun = gamesTotal - startGamesTotal;
       const stats = {
         step: t,
         gamesTotal,
+        gamesThisRun,
         gamesPlayed: played,
         masterGames,
         errors,
@@ -1021,9 +1024,9 @@ async function train() {
         elapsedSecs: parseInt(elapsedS),
         remainingSecs: Math.max(0, Math.floor((TIME_LIMIT - (Date.now() - t0)) / 1000)),
         timeLimitSecs: TIME_LIMIT === Infinity ? null : TIME_LIMIT / 1000,
-        gamesPerSec: played > 0 ? +(played / parseInt(elapsedS)).toFixed(1) : 0,
+        gamesPerSec: gamesThisRun > 0 ? +(gamesThisRun / parseInt(elapsedS)).toFixed(2) : 0,
         updatedAt: new Date().toISOString(),
-        avgTurns:        played > 0 ? +(totalTurns / played).toFixed(1) : 0,
+        avgTurns:        gamesThisRun > 0 ? +(totalTurns / gamesThisRun).toFixed(1) : 0,
         exportedRecords: replay.size,
         bots: BOTS.map(b => {
           const cash = avgCash[b.name] || [];

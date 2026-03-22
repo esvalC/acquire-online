@@ -923,6 +923,8 @@ async function refresh() {
     document.getElementById('offlineMsg').style.display = 'none';
 
     const instanceGames = data.gamesPlayed || data.gamesTotal || 0;
+    // gamesThisRun is per-instance (resets each restart); use it for rate-based metrics
+    const runGames = data.gamesThisRun || instanceGames;
 
     // Phase
     const phase    = getPhase(instanceGames);
@@ -951,8 +953,8 @@ async function refresh() {
     // Sub stats
     document.getElementById('policyLoss').textContent  = data.policyLoss  != null ? data.policyLoss.toFixed(4)  : '—';
     document.getElementById('valueLoss').textContent   = data.valueLoss   != null ? data.valueLoss.toFixed(4)   : '—';
-    document.getElementById('masterGames').textContent = instanceGames > 0
-      ? `${((data.masterGames||0)/instanceGames*100).toFixed(1)}% of games` : '—';
+    document.getElementById('masterGames').textContent = runGames > 0
+      ? `${((data.masterGames||0)/runGames*100).toFixed(1)}% of games` : '—';
     document.getElementById('errors').textContent    = (data.errors||0).toLocaleString();
     document.getElementById('updatedAt').textContent = new Date(data.updatedAt).toLocaleTimeString();
 
