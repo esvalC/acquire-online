@@ -899,7 +899,7 @@ async function train() {
   const adam    = initAdam(weights);
   const replay  = new ReplayBuffer(REPLAY_SIZE);
 
-  let t           = 0;  // Adam step counter
+  let t           = weights.totalSteps || 0;  // cumulative gradient steps across runs
   let gamesTotal  = weights.totalGames || 0;  // cumulative across runs
   const startGamesTotal = gamesTotal;          // baseline for this run
   let masterGames = 0;
@@ -962,6 +962,7 @@ async function train() {
               weights.bestMasterCash  = bestMasterCash;
               weights.bestCashHistory = bestCashHistory;
               weights.totalGames      = gamesTotal;
+              weights.totalSteps      = t;
             }
           }
         }
@@ -1056,6 +1057,7 @@ async function train() {
     // ── Save weights periodically ─────────────────────────────── */
     if (gamesTotal % SAVE_EVERY === 0) {
       weights.totalGames = gamesTotal;
+      weights.totalSteps = t;
       saveWeights(weights);
       log(`  [saved] step=${t} games=${gamesTotal}\n`);
     }
