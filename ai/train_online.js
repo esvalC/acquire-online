@@ -959,9 +959,9 @@ async function train() {
   let masterCashWindow = [];  // cash values since last checkpoint
   const masterCashHistory = []; // one avg per 1000-game checkpoint (last 50)
   let gameCashWindow    = [];  // total cash across all players per game
-  const gameCashHistory = []; // avg total game cash per 1000-game checkpoint (last 500)
+  const gameCashHistory = weights.gameCashHistory ? [...weights.gameCashHistory] : []; // persisted across runs
   let winnerCashWindow  = [];  // winner's cash per game
-  const winnerCashHistory = []; // avg winner cash per 1000-game checkpoint (last 500)
+  const winnerCashHistory = weights.winnerCashHistory ? [...weights.winnerCashHistory] : []; // persisted across runs
   let bestMasterCash = weights.bestMasterCash || 0;
   const bestCashHistory = weights.bestCashHistory ? [...weights.bestCashHistory] : [];
   const t0 = Date.now();
@@ -1003,10 +1003,12 @@ async function train() {
               bestCashHistory.sort((a, b) => b.cash - a.cash);
               if (bestCashHistory.length > 15) bestCashHistory.length = 15;
               bestMasterCash = bestCashHistory[0].cash;
-              weights.bestMasterCash  = bestMasterCash;
-              weights.bestCashHistory = bestCashHistory;
-              weights.totalGames      = gamesTotal;
-              weights.totalSteps      = t;
+              weights.bestMasterCash    = bestMasterCash;
+              weights.bestCashHistory   = bestCashHistory;
+              weights.totalGames        = gamesTotal;
+              weights.totalSteps        = t;
+              weights.gameCashHistory   = gameCashHistory.slice();
+              weights.winnerCashHistory = winnerCashHistory.slice();
             }
           }
         }
@@ -1123,8 +1125,10 @@ async function train() {
 
     // ── Save weights periodically ─────────────────────────────── */
     if (gamesTotal % SAVE_EVERY === 0) {
-      weights.totalGames = gamesTotal;
-      weights.totalSteps = t;
+      weights.totalGames      = gamesTotal;
+      weights.totalSteps      = t;
+      weights.gameCashHistory  = gameCashHistory.slice();
+      weights.winnerCashHistory = winnerCashHistory.slice();
       saveWeights(weights);
       log(`  [saved] step=${t} games=${gamesTotal}\n`);
     }
