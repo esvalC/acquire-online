@@ -69,7 +69,14 @@ const POLICY_TEMP = 0.5;
 const EPS = 0.10;
 
 // Target cash for absolute reward component
-const TARGET_CASH = 50000;
+// Rank-based value targets: win-focused, steep drop-off.
+// Bot learns to WIN, not just accumulate cash.
+const RANK_SCORES = [1.0, 0.5, 0.25, 0.1, 0.0]; // 1st → 5th place
+function rankScore(standings, myName) {
+  const sorted = [...standings].sort((a, b) => b.cash - a.cash);
+  const rank   = sorted.findIndex(p => p.name === myName);
+  return RANK_SCORES[rank] ?? 0.0;
+}
 
 /* ── Bot roster ───────────────────────────────────────────────── */
 const BOTS = [
@@ -574,11 +581,7 @@ function mctsPickTile(game, playerIdx, weights) {
 
     let v;
     if (sim_game.phase === 'gameOver') {
-      const totalCash = (sim_game.standings || []).reduce((s, p) => s + p.cash, 0) || 1;
-      const me = (sim_game.standings || []).find(p => p.name === game.players[playerIdx].name);
-      const relative = me ? me.cash / totalCash : 0;
-      const absolute = me ? Math.min(me.cash / TARGET_CASH, 1) : 0;
-      v = 0.5 * relative + 0.5 * absolute;
+      v = rankScore(sim_game.standings || [], game.players[playerIdx].name);
     } else {
       try {
         const { value: lv } = forward(weights, encodeFlat(sim_game, playerIdx));
@@ -721,13 +724,11 @@ function runGame(bots, weights, masterSlots) {
 
   if (!game.standings) return null;
 
-  // Compute per-player blended outcome [0, 1]
-  const totalCash = game.standings.reduce((s, p) => s + p.cash, 0) || 1;
+  // Rank-based value targets: win-focused, not cash-maximizing.
+  // 1st → 1.0, 2nd → 0.5, 3rd → 0.25, 4th → 0.1, 5th → 0.0
   const outcomeByName = {};
   for (const p of game.standings) {
-    const relative = p.cash / totalCash;
-    const absolute = Math.min(p.cash / TARGET_CASH, 1.0);
-    outcomeByName[p.name] = 0.5 * relative + 0.5 * absolute;
+    outcomeByName[p.name] = rankScore(game.standings, p.name);
   }
 
   // Value targets: per-player outcomes in player-index order
