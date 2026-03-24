@@ -946,8 +946,10 @@ async function train() {
   // them (since they're the same network in different seat positions).
   let masterCashWindow = [];  // cash values since last checkpoint
   const masterCashHistory = []; // one avg per 1000-game checkpoint (last 50)
-  let gameCashWindow   = [];  // total cash across all players per game
-  const gameCashHistory = []; // avg total game cash per 1000-game checkpoint
+  let gameCashWindow    = [];  // total cash across all players per game
+  const gameCashHistory = []; // avg total game cash per 1000-game checkpoint (last 500)
+  let winnerCashWindow  = [];  // winner's cash per game
+  const winnerCashHistory = []; // avg winner cash per 1000-game checkpoint (last 500)
   let bestMasterCash = weights.bestMasterCash || 0;
   const bestCashHistory = weights.bestCashHistory ? [...weights.bestCashHistory] : [];
   const t0 = Date.now();
@@ -966,6 +968,7 @@ async function train() {
       wins[result.standings[0].name] = (wins[result.standings[0].name] || 0) + 1;
       totalTurns += result.turns;
       gameCashWindow.push(result.standings.reduce((s, p) => s + p.cash, 0));
+      winnerCashWindow.push(result.standings[0].cash);
       updateElo(elo, result.standings);
       for (let i = 0; i < result.standings.length; i++) {
         const { name, cash } = result.standings[i];
@@ -1037,9 +1040,18 @@ async function train() {
         : null;
       if (gameCashAvg !== null) {
         gameCashHistory.push(gameCashAvg);
-        if (gameCashHistory.length > 200) gameCashHistory.shift();
+        if (gameCashHistory.length > 500) gameCashHistory.shift();
       }
       gameCashWindow = [];
+
+      const winnerCashAvg = winnerCashWindow.length > 0
+        ? Math.round(winnerCashWindow.reduce((s, v) => s + v, 0) / winnerCashWindow.length)
+        : null;
+      if (winnerCashAvg !== null) {
+        winnerCashHistory.push(winnerCashAvg);
+        if (winnerCashHistory.length > 500) winnerCashHistory.shift();
+      }
+      winnerCashWindow = [];
 
       log(`  step=${t} games=${gamesTotal} loss=${avgTot} (pol=${avgPol} val=${avgVal}) elapsed=${elapsedS}s buf=${replay.size} errors=${errors}\n`);
 
@@ -1061,7 +1073,9 @@ async function train() {
         bestMasterCash,
         bestCashHistory:   bestCashHistory.slice(),
         gameCashAvg,
-        gameCashHistory:   gameCashHistory.slice(),
+        gameCashHistory:    gameCashHistory.slice(),
+        winnerCashAvg,
+        winnerCashHistory:  winnerCashHistory.slice(),
         instanceLog:       instanceLog.slice(0, 30),
         elapsedSecs: parseInt(elapsedS),
         remainingSecs: Math.max(0, Math.floor((TIME_LIMIT - (Date.now() - t0)) / 1000)),

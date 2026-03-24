@@ -243,6 +243,28 @@
     letter-spacing: -0.02em;
   }
 
+  .chart-legend {
+    display: flex;
+    gap: 16px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-muted);
+  }
+
+  .legend-swatch {
+    width: 20px; height: 3px;
+    border-radius: 2px;
+    flex-shrink: 0;
+  }
+
   .chart-sub {
     font-size: 11px;
     color: var(--text-muted);
@@ -356,15 +378,28 @@
         </div>
       </div>
       <div class="card-body">
-        <div class="chart-current" id="gameCashNow">—</div>
-        <div class="chart-sub">sum of all players' final cash · higher = more chains merged</div>
+        <div style="display:flex;gap:24px;padding-top:16px;flex-wrap:wrap">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:500;color:#818cf8;letter-spacing:-0.02em" id="gameCashNow">—</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:3px">total game cash</div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:500;color:var(--gold);letter-spacing:-0.02em" id="winnerCashNow">—</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:3px">winner's cash</div>
+          </div>
+        </div>
         <div class="chart-wrap">
           <canvas id="gameCashChart"></canvas>
         </div>
-        <div class="chart-meta">
+        <div class="chart-legend">
+          <div class="legend-item"><div class="legend-swatch" style="background:#818cf8"></div>Total game cash</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:var(--gold)"></div>Winner's cash</div>
+        </div>
+        <div class="chart-meta" style="margin-top:6px">
           <span id="gameCashOldest"></span>
           <span id="gameCashNewest"></span>
         </div>
+        <div class="chart-sub" style="margin-top:6px">each point = 1,000 games · up to 500k game history</div>
       </div>
     </div>
 
@@ -467,57 +502,90 @@ function fmtDateTime(iso) {
   });
 }
 
-/* ── Game Cash Chart ─────────────────────────────────────────── */
-function drawGameCashChart(history) {
+/* ── Game Cash Chart (two lines: total + winner) ─────────────── */
+function drawGameCashChart(totalHistory, winnerHistory) {
   const canvas = document.getElementById('gameCashChart');
-  if (!canvas || !history || history.length < 2) return;
+  if (!canvas) return;
+  // Need at least one series with 2+ points
+  const hasTotal  = totalHistory  && totalHistory.length  >= 2;
+  const hasWinner = winnerHistory && winnerHistory.length >= 2;
+  if (!hasTotal && !hasWinner) return;
+
   const ctx = canvas.getContext('2d');
-  const W   = canvas.offsetWidth || 400;
-  const H   = 140;
+  const W   = canvas.offsetWidth || 500;
+  const H   = 160;
   canvas.width  = W * devicePixelRatio;
   canvas.height = H * devicePixelRatio;
   ctx.scale(devicePixelRatio, devicePixelRatio);
 
-  const rawMin = Math.min(...history);
-  const rawMax = Math.max(...history);
-  const pad  = (rawMax - rawMin) * 0.12 || rawMax * 0.1 || 1000;
-  const min  = Math.max(0, rawMin - pad);
-  const max  = rawMax + pad;
-  const rng  = max - min || 1;
-  const toY  = v => H - ((v - min) / rng) * H * 0.88 - H * 0.06;
-  const n    = history.length;
+  // Shared Y axis: min/max across both series
+  const allVals = [...(totalHistory || []), ...(winnerHistory || [])];
+  const rawMin  = Math.min(...allVals);
+  const rawMax  = Math.max(...allVals);
+  const pad     = (rawMax - rawMin) * 0.12 || rawMax * 0.08 || 2000;
+  const min     = Math.max(0, rawMin - pad);
+  const max     = rawMax + pad;
+  const rng     = max - min || 1;
+  const toY     = v => H - ((v - min) / rng) * H * 0.88 - H * 0.06;
+
+  // Use the longer series length for X axis
+  const n    = Math.max((totalHistory || []).length, (winnerHistory || []).length);
   const step = W / Math.max(n - 1, 1);
 
   // Grid
-  ctx.strokeStyle = 'rgba(42,96,64,0.6)';
+  ctx.strokeStyle = 'rgba(42,96,64,0.5)';
   ctx.lineWidth = 1;
-  [0, 0.33, 0.66, 1].forEach(f => {
+  [0, 0.25, 0.5, 0.75, 1].forEach(f => {
     const y = H * 0.06 + H * 0.88 * (1 - f);
     ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
   });
 
-  // Fill
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, 'rgba(129,140,248,0.20)');
-  grad.addColorStop(1, 'rgba(129,140,248,0.00)');
-  ctx.beginPath();
-  history.forEach((v, i) => { i === 0 ? ctx.moveTo(i*step, toY(v)) : ctx.lineTo(i*step, toY(v)); });
-  ctx.lineTo((n-1)*step, H); ctx.lineTo(0, H);
-  ctx.closePath(); ctx.fillStyle = grad; ctx.fill();
+  function drawSeries(history, color, fillColor) {
+    if (!history || history.length < 2) return;
+    const sn   = history.length;
+    // X offset so both series right-align (shorter series starts later)
+    const xOff = (n - sn) * step;
 
-  // Line
-  ctx.beginPath();
-  ctx.strokeStyle = '#818cf8'; ctx.lineWidth = 2;
-  history.forEach((v, i) => { i === 0 ? ctx.moveTo(i*step, toY(v)) : ctx.lineTo(i*step, toY(v)); });
-  ctx.stroke();
+    // Fill under line
+    const grad = ctx.createLinearGradient(0, 0, 0, H);
+    grad.addColorStop(0, fillColor);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.beginPath();
+    history.forEach((v, i) => {
+      const x = xOff + i * step, y = toY(v);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.lineTo(xOff + (sn-1)*step, H);
+    ctx.lineTo(xOff, H);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
 
-  // Endpoint dot
-  ctx.beginPath();
-  ctx.arc((n-1)*step, toY(history[n-1]), 4, 0, Math.PI*2);
-  ctx.fillStyle = '#818cf8'; ctx.fill();
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.8;
+    history.forEach((v, i) => {
+      const x = xOff + i * step, y = toY(v);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.stroke();
 
-  document.getElementById('gameCashOldest').textContent = 'oldest: ' + fmtCash(history[0]);
-  document.getElementById('gameCashNewest').textContent = 'latest: '  + fmtCash(history[n-1]);
+    // End dot
+    ctx.beginPath();
+    ctx.arc(xOff + (sn-1)*step, toY(history[sn-1]), 3.5, 0, Math.PI*2);
+    ctx.fillStyle = color; ctx.fill();
+  }
+
+  // Draw total first (behind), winner on top
+  drawSeries(totalHistory,  '#818cf8', 'rgba(129,140,248,0.15)');
+  drawSeries(winnerHistory, '#d4971e', 'rgba(212,151,30,0.12)');
+
+  // Footer labels: use the longer series for oldest/newest
+  const ref = (totalHistory && totalHistory.length >= (winnerHistory || []).length)
+    ? totalHistory : winnerHistory;
+  document.getElementById('gameCashOldest').textContent = 'oldest: ' + fmtCash(ref[0]);
+  document.getElementById('gameCashNewest').textContent = 'latest: '  + fmtCash(ref[ref.length-1]);
 }
 
 /* ── Instance log ────────────────────────────────────────────── */
@@ -579,13 +647,17 @@ async function refresh() {
     document.getElementById('gamesTotal').textContent   = fmtNum(total);
     document.getElementById('gamesPreview').textContent = fmtNum(total);
 
-    // Game cash chart
-    if (data.gameCashHistory && data.gameCashHistory.length > 0) {
-      const history = data.gameCashHistory.slice(-50);
-      const latest  = history[history.length - 1];
-      document.getElementById('gameCashNow').textContent     = fmtCash(latest);
-      document.getElementById('gameCashPreview').textContent = fmtCash(latest);
-      drawGameCashChart(history);
+    // Game cash chart (total + winner, up to 500 points each)
+    const totalHist  = data.gameCashHistory  || [];
+    const winnerHist = data.winnerCashHistory || [];
+    if (totalHist.length > 0 || winnerHist.length > 0) {
+      const latestTotal  = totalHist.length  ? totalHist[totalHist.length - 1]   : null;
+      const latestWinner = winnerHist.length ? winnerHist[winnerHist.length - 1] : null;
+      if (latestTotal)  document.getElementById('gameCashNow').textContent    = fmtCash(latestTotal);
+      if (latestWinner) document.getElementById('winnerCashNow').textContent  = fmtCash(latestWinner);
+      const previewVal = latestWinner || latestTotal;
+      if (previewVal)   document.getElementById('gameCashPreview').textContent = fmtCash(previewVal);
+      drawGameCashChart(totalHist, winnerHist);
     } else if (data.gameCashAvg) {
       document.getElementById('gameCashNow').textContent     = fmtCash(data.gameCashAvg);
       document.getElementById('gameCashPreview').textContent = fmtCash(data.gameCashAvg);
