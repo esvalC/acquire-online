@@ -389,12 +389,13 @@
           </div>
         </div>
         <div class="chart-wrap" style="margin-top:12px">
-          <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px;letter-spacing:.06em;text-transform:uppercase">Total game cash</div>
-          <canvas id="gameCashTotalChart"></canvas>
-          <div style="font-size:10px;color:var(--text-muted);margin-top:14px;margin-bottom:4px;letter-spacing:.06em;text-transform:uppercase">Winner's cash</div>
-          <canvas id="gameCashWinnerChart"></canvas>
+          <canvas id="gameCashChart"></canvas>
         </div>
-        <div class="chart-meta" style="margin-top:8px">
+        <div class="chart-legend" style="margin-top:8px">
+          <div class="legend-item"><div class="legend-swatch" style="background:#818cf8"></div>Total game cash (left)</div>
+          <div class="legend-item"><div class="legend-swatch" style="background:var(--gold)"></div>Winner's cash (right)</div>
+        </div>
+        <div class="chart-meta" style="margin-top:6px">
           <span id="gameCashOldest"></span>
           <span id="gameCashNewest"></span>
         </div>
@@ -502,98 +503,132 @@ function fmtDateTime(iso) {
 }
 
 /* ── Stock-style chart for a single cash series ──────────────── */
-function drawStockChart(canvasId, history) {
-  const canvas = document.getElementById(canvasId);
-  if (!canvas || !history || history.length === 0) return;
+/* ── Game Cash Chart — dual Y-axis, green/red segments ───────── */
+function drawGameCashChart(totalHistory, winnerHistory) {
+  const canvas = document.getElementById('gameCashChart');
+  if (!canvas) return;
+  const hasTotal  = totalHistory  && totalHistory.length  >= 1;
+  const hasWinner = winnerHistory && winnerHistory.length >= 1;
+  if (!hasTotal && !hasWinner) return;
 
   const ctx = canvas.getContext('2d');
   const W   = canvas.offsetWidth || 500;
-  const H   = 100;
+  const H   = 170;
   canvas.width  = W * devicePixelRatio;
   canvas.height = H * devicePixelRatio;
   ctx.scale(devicePixelRatio, devicePixelRatio);
 
-  const n = history.length;
+  const ML = 48, MR = 48, MT = 10, MB = 10;
+  const CW = W - ML - MR, CH = H - MT - MB;
 
-  // Y scale: tight to data range so small moves are visible
-  const rawMin = Math.min(...history);
-  const rawMax = Math.max(...history);
-  const pad  = (rawMax - rawMin) * 0.3 || rawMax * 0.04 || 500;
-  const yMin = rawMin - pad;
-  const yMax = rawMax + pad;
-  const yRng = yMax - yMin || 1;
-  const MT = 8, MB = 8, CH = H - MT - MB;
-  const toY = v => MT + CH - ((v - yMin) / yRng) * CH;
+  // Independent Y scale per series — tight to its own data range
+  function makeScale(history) {
+    if (!history || history.length === 0) return null;
+    const lo = Math.min(...history), hi = Math.max(...history);
+    const pad = (hi - lo) * 0.3 || hi * 0.04 || 500;
+    const mn = lo - pad, mx = hi + pad, rng = mx - mn || 1;
+    return { mn, mx, rng, toY: v => MT + CH - ((v - mn) / rng) * CH };
+  }
+  const scT = makeScale(totalHistory);
+  const scW = makeScale(winnerHistory);
 
-  // X scale: all points spread across full width
-  const toX = i => n > 1 ? (i / (n - 1)) * W : W / 2;
+  // X scale shared — longer series defines spacing
+  const n    = Math.max((totalHistory || []).length, (winnerHistory || []).length);
+  const toX  = i => ML + (n > 1 ? (i / (n - 1)) * CW : CW / 2);
+  const dotR = n <= 5 ? 5 : n <= 15 ? 3.5 : n <= 40 ? 2.5 : n <= 100 ? 1.5 : 0;
 
-  // Dot radius shrinks as history grows
-  const dotR = n <= 5 ? 5.5 : n <= 15 ? 4 : n <= 40 ? 2.5 : n <= 100 ? 1.5 : 0;
+  // Y-axis label helper
+  function axisLabels(sc, side, color) {
+    if (!sc) return;
+    ctx.font = '9px "DM Sans", sans-serif';
+    ctx.fillStyle = color;
+    ctx.textAlign = side === 'left' ? 'right' : 'left';
+    const ticks = 4;
+    for (let i = 0; i <= ticks; i++) {
+      const frac = i / ticks;
+      const val  = sc.mn + frac * sc.rng;
+      const y    = MT + CH * (1 - frac);
+      const label = val >= 1000 ? '$' + Math.round(val / 1000) + 'k' : '$' + Math.round(val);
+      const x = side === 'left' ? ML - 4 : W - MR + 4;
+      ctx.fillText(label, x, y + 3);
+    }
+  }
 
-  // Grid
+  // Grid lines (shared horizontal grid, 5 lines)
   ctx.strokeStyle = 'rgba(42,96,64,0.4)';
   ctx.lineWidth = 1;
-  [0.25, 0.5, 0.75].forEach(f => {
+  [0, 0.25, 0.5, 0.75, 1].forEach(f => {
     const y = MT + CH * f;
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
   });
 
-  if (n === 1) {
-    ctx.beginPath();
-    ctx.arc(W / 2, toY(history[0]), 5.5, 0, Math.PI * 2);
-    ctx.fillStyle = '#22c55e';
-    ctx.fill();
-    return;
-  }
+  // Axis borders
+  ctx.strokeStyle = 'rgba(42,96,64,0.6)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(ML, MT); ctx.lineTo(ML, MT + CH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ML + CW, MT); ctx.lineTo(ML + CW, MT + CH); ctx.stroke();
 
-  // Draw segment-by-segment: green if up, red if down
-  for (let i = 0; i < n - 1; i++) {
-    const x1 = toX(i),     y1 = toY(history[i]);
-    const x2 = toX(i + 1), y2 = toY(history[i + 1]);
-    const up = history[i + 1] >= history[i];
-    const lineColor = up ? 'rgba(34,197,94,0.9)' : 'rgba(239,68,68,0.9)';
-    const fillColor = up ? 'rgba(34,197,94,0.07)' : 'rgba(239,68,68,0.07)';
+  // Draw one series: segments colored green/red per direction
+  function drawSeries(history, sc, seriesColor, xOff) {
+    if (!history || history.length === 0 || !sc) return;
+    const sn = history.length;
 
-    // Fill under segment
-    ctx.beginPath();
-    ctx.fillStyle = fillColor;
-    ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
-    ctx.lineTo(x2, MT + CH); ctx.lineTo(x1, MT + CH);
-    ctx.closePath(); ctx.fill();
-
-    // Line segment
-    ctx.beginPath();
-    ctx.strokeStyle = lineColor;
-    ctx.lineWidth = 2;
-    ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
-    ctx.stroke();
-  }
-
-  // Dots at each point (always draw last point)
-  history.forEach((v, i) => {
-    const up = i === 0 || v >= history[i - 1];
-    const color = up ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)';
-    const r = i === n - 1 ? Math.max(dotR, 2.5) : dotR;
-    if (r > 0) {
+    if (sn === 1) {
       ctx.beginPath();
-      ctx.arc(toX(i), toY(v), r, 0, Math.PI * 2);
-      ctx.fillStyle = color;
+      ctx.arc(toX(xOff), sc.toY(history[0]), Math.max(dotR, 4), 0, Math.PI * 2);
+      ctx.fillStyle = seriesColor;
       ctx.fill();
+      return;
     }
-  });
-}
 
-/* ── Game Cash Chart (two stacked stock charts) ──────────────── */
-function drawGameCashChart(totalHistory, winnerHistory) {
-  drawStockChart('gameCashTotalChart',  totalHistory);
-  drawStockChart('gameCashWinnerChart', winnerHistory);
+    for (let i = 0; i < sn - 1; i++) {
+      const x1 = toX(xOff + i),     y1 = sc.toY(history[i]);
+      const x2 = toX(xOff + i + 1), y2 = sc.toY(history[i + 1]);
+      const up = history[i + 1] >= history[i];
+      const segColor = up ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)';
 
-  const ref = totalHistory && totalHistory.length > 0 ? totalHistory : winnerHistory;
-  if (ref && ref.length > 0) {
-    document.getElementById('gameCashOldest').textContent = 'oldest: ' + fmtCash(ref[0]);
-    document.getElementById('gameCashNewest').textContent = 'latest: '  + fmtCash(ref[ref.length - 1]);
+      // Subtle fill under segment
+      ctx.beginPath();
+      ctx.fillStyle = up ? 'rgba(34,197,94,0.05)' : 'rgba(239,68,68,0.05)';
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.lineTo(x2, MT + CH); ctx.lineTo(x1, MT + CH);
+      ctx.closePath(); ctx.fill();
+
+      ctx.beginPath();
+      ctx.strokeStyle = segColor;
+      ctx.lineWidth = 2;
+      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    // Dots
+    history.forEach((v, i) => {
+      const up = i === 0 || v >= history[i - 1];
+      const r  = i === sn - 1 ? Math.max(dotR, 3) : dotR;
+      if (r > 0) {
+        ctx.beginPath();
+        ctx.arc(toX(xOff + i), sc.toY(v), r, 0, Math.PI * 2);
+        ctx.fillStyle = up ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)';
+        ctx.fill();
+      }
+    });
   }
+
+  // X offsets: shorter series right-aligns with longer
+  const offT = n - (totalHistory  || []).length;
+  const offW = n - (winnerHistory || []).length;
+
+  drawSeries(totalHistory,  scT, '#818cf8', offT);
+  drawSeries(winnerHistory, scW, '#d4971e', offW);
+
+  // Y-axis labels
+  axisLabels(scT, 'left',  '#818cf8');
+  axisLabels(scW, 'right', '#d4971e');
+
+  // Footer
+  const ref = hasTotal ? totalHistory : winnerHistory;
+  document.getElementById('gameCashOldest').textContent = 'oldest: ' + fmtCash(ref[0]);
+  document.getElementById('gameCashNewest').textContent = 'latest: '  + fmtCash(ref[ref.length - 1]);
 }
 
 /* ── Instance log ────────────────────────────────────────────── */
