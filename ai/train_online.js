@@ -926,14 +926,54 @@ async function train() {
     execSync(`aws s3 cp /tmp/instance_log.json s3://${S3_BUCKET}/${INST_LOG_KEY}`, { timeout: 15000, stdio: 'pipe' });
   } catch {}
 
-  // On spot termination (SIGTERM), log the drop before dying
+  // On spot termination (SIGTERM), flush everything to S3 before dying.
+  // Spot instances get a ~2 minute warning via SIGTERM before being forcibly killed.
   process.on('SIGTERM', () => {
-    instanceLog.unshift({ type: 'drop', at: new Date().toISOString() });
-    if (instanceLog.length > 100) instanceLog.length = 100;
     try {
+      // 1. Save weights with all current in-memory history
+      weights.totalGames        = gamesTotal;
+      weights.totalSteps        = t;
+      weights.gameCashHistory   = gameCashHistory.slice();
+      weights.winnerCashHistory = winnerCashHistory.slice();
+      weights.bestMasterCash    = bestMasterCash;
+      weights.bestCashHistory   = bestCashHistory;
+      saveWeights(weights);
+    } catch {}
+
+    try {
+      // 2. Upload latest stats snapshot so dashboard stays current
+      const elapsedS  = ((Date.now() - t0) / 1000).toFixed(0);
+      const gamesThisRun = gamesTotal - startGamesTotal;
+      const tmpStats  = '/tmp/training_stats.json';
+      const snapshot  = {
+        step: t, gamesTotal, gamesThisRun,
+        gamesPlayed: gamesTotal - errors,
+        masterGames, errors,
+        avgLoss:  lossHistory[lossHistory.length - 1] || null,
+        lossHistory: lossHistory.slice(),
+        replaySize: replay.size,
+        gameCashAvg:      gameCashHistory[gameCashHistory.length - 1] || null,
+        gameCashHistory:  gameCashHistory.slice(),
+        winnerCashAvg:    winnerCashHistory[winnerCashHistory.length - 1] || null,
+        winnerCashHistory: winnerCashHistory.slice(),
+        bestMasterCash, bestCashHistory: bestCashHistory.slice(),
+        instanceLog: instanceLog.slice(0, 30),
+        elapsedSecs: parseInt(elapsedS),
+        gamesPerSec:  gamesThisRun > 0 ? +(gamesThisRun / parseInt(elapsedS)).toFixed(2) : 0,
+        updatedAt: new Date().toISOString(),
+      };
+      fs.writeFileSync(tmpStats, JSON.stringify(snapshot));
+      execSync(`aws s3 cp "${tmpStats}" s3://${S3_BUCKET}/training_stats.json`, { timeout: 15000, stdio: 'pipe' });
+    } catch {}
+
+    try {
+      // 3. Log the drop event
+      instanceLog.unshift({ type: 'drop', at: new Date().toISOString() });
+      if (instanceLog.length > 100) instanceLog.length = 100;
       fs.writeFileSync('/tmp/instance_log.json', JSON.stringify(instanceLog));
       execSync(`aws s3 cp /tmp/instance_log.json s3://${S3_BUCKET}/${INST_LOG_KEY}`, { timeout: 10000, stdio: 'pipe' });
     } catch {}
+
     process.exit(0);
   });
 
