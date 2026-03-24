@@ -900,6 +900,31 @@ async function train() {
   const adam    = initAdam(weights);
   const replay  = new ReplayBuffer(REPLAY_SIZE);
 
+  // ── Spot instance log ─────────────────────────────────────────
+  const INST_LOG_KEY = 'instance_log.json';
+  let instanceLog = [];
+  try {
+    execSync(`aws s3 cp s3://${S3_BUCKET}/${INST_LOG_KEY} /tmp/instance_log.json`, { timeout: 15000, stdio: 'pipe' });
+    instanceLog = JSON.parse(fs.readFileSync('/tmp/instance_log.json', 'utf8'));
+  } catch {}
+  instanceLog.unshift({ type: 'boot', at: new Date().toISOString() });
+  if (instanceLog.length > 100) instanceLog.length = 100;
+  try {
+    fs.writeFileSync('/tmp/instance_log.json', JSON.stringify(instanceLog));
+    execSync(`aws s3 cp /tmp/instance_log.json s3://${S3_BUCKET}/${INST_LOG_KEY}`, { timeout: 15000, stdio: 'pipe' });
+  } catch {}
+
+  // On spot termination (SIGTERM), log the drop before dying
+  process.on('SIGTERM', () => {
+    instanceLog.unshift({ type: 'drop', at: new Date().toISOString() });
+    if (instanceLog.length > 100) instanceLog.length = 100;
+    try {
+      fs.writeFileSync('/tmp/instance_log.json', JSON.stringify(instanceLog));
+      execSync(`aws s3 cp /tmp/instance_log.json s3://${S3_BUCKET}/${INST_LOG_KEY}`, { timeout: 10000, stdio: 'pipe' });
+    } catch {}
+    process.exit(0);
+  });
+
   let t           = weights.totalSteps || 0;  // cumulative gradient steps across runs
   let gamesTotal  = weights.totalGames || 0;  // cumulative across runs
   const startGamesTotal = gamesTotal;          // baseline for this run
@@ -1037,6 +1062,7 @@ async function train() {
         bestCashHistory:   bestCashHistory.slice(),
         gameCashAvg,
         gameCashHistory:   gameCashHistory.slice(),
+        instanceLog:       instanceLog.slice(0, 30),
         elapsedSecs: parseInt(elapsedS),
         remainingSecs: Math.max(0, Math.floor((TIME_LIMIT - (Date.now() - t0)) / 1000)),
         timeLimitSecs: TIME_LIMIT === Infinity ? null : TIME_LIMIT / 1000,
