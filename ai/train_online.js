@@ -921,6 +921,8 @@ async function train() {
   // them (since they're the same network in different seat positions).
   let masterCashWindow = [];  // cash values since last checkpoint
   const masterCashHistory = []; // one avg per 1000-game checkpoint (last 50)
+  let gameCashWindow   = [];  // total cash across all players per game
+  const gameCashHistory = []; // avg total game cash per 1000-game checkpoint
   let bestMasterCash = weights.bestMasterCash || 0;
   const bestCashHistory = weights.bestCashHistory ? [...weights.bestCashHistory] : [];
   const t0 = Date.now();
@@ -938,6 +940,7 @@ async function train() {
       if (masterSlots.size > 0) masterGames++;
       wins[result.standings[0].name] = (wins[result.standings[0].name] || 0) + 1;
       totalTurns += result.turns;
+      gameCashWindow.push(result.standings.reduce((s, p) => s + p.cash, 0));
       updateElo(elo, result.standings);
       for (let i = 0; i < result.standings.length; i++) {
         const { name, cash } = result.standings[i];
@@ -1004,6 +1007,15 @@ async function train() {
       }
       masterCashWindow = [];
 
+      const gameCashAvg = gameCashWindow.length > 0
+        ? Math.round(gameCashWindow.reduce((s, v) => s + v, 0) / gameCashWindow.length)
+        : null;
+      if (gameCashAvg !== null) {
+        gameCashHistory.push(gameCashAvg);
+        if (gameCashHistory.length > 200) gameCashHistory.shift();
+      }
+      gameCashWindow = [];
+
       log(`  step=${t} games=${gamesTotal} loss=${avgTot} (pol=${avgPol} val=${avgVal}) elapsed=${elapsedS}s buf=${replay.size} errors=${errors}\n`);
 
       const gamesThisRun = gamesTotal - startGamesTotal;
@@ -1023,6 +1035,8 @@ async function train() {
         masterCashHistory: masterCashHistory.slice(),
         bestMasterCash,
         bestCashHistory:   bestCashHistory.slice(),
+        gameCashAvg,
+        gameCashHistory:   gameCashHistory.slice(),
         elapsedSecs: parseInt(elapsedS),
         remainingSecs: Math.max(0, Math.floor((TIME_LIMIT - (Date.now() - t0)) / 1000)),
         timeLimitSecs: TIME_LIMIT === Infinity ? null : TIME_LIMIT / 1000,
