@@ -2093,7 +2093,7 @@ window.addEventListener('popstate', () => {
   if (path === '/quick-master') { showScreen('newLanding'); loadRecentGames(); return; }
   if (path.startsWith('/finance-road')) { renderFinanceRoad(); showScreen('financeRoad'); return; }
   const _rm = path.match(/\/replay\/(\d+)$/);
-  if (_rm) { document.getElementById('replayOverlay').style.display = 'none'; showScreen('newLanding'); loadRecentGames(); return; }
+  if (_rm) { showScreen('newLanding'); loadRecentGames(); openReplay(Number(_rm[1])); return; }
   // Default: home
   document.getElementById('gameOverOverlay').style.display = 'none';
   showScreen('newLanding');
@@ -3735,16 +3735,19 @@ async function openReplay(sessionId, event) {
   document.getElementById('replayLog').innerHTML = '';
   document.getElementById('replayPhaseLabel').textContent = '';
 
-  // Update URL to shareable /replay/:id (replaceState so back button isn't broken)
+  // Push replay URL so back button returns to home page
   const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
-  history.replaceState({}, '', `${base}/replay/${sessionId}`);
+  const alreadyOnReplay = window.location.pathname.includes(`/replay/${sessionId}`);
+  if (!alreadyOnReplay) history.pushState({}, '', `${base}/replay/${sessionId}`);
 
   try {
     const apiBase = base ? base + '/api' : '/api';
     const res = await fetch(`${apiBase}/sessions/${sessionId}/replay`);
     const data = await res.json();
     replaySnapshots = data.snapshots || [];
-    replayIdx = 0;
+    // Restore step from URL hash if present (e.g. /replay/45#23)
+    const hashStep = parseInt(location.hash.replace('#', ''), 10);
+    replayIdx = (hashStep >= 1 && hashStep <= replaySnapshots.length) ? hashStep - 1 : 0;
     if (!replaySnapshots.length) {
       document.getElementById('replayStepLabel').textContent = 'No replay data for this game.';
       return;
@@ -3761,14 +3764,21 @@ function closeReplay() {
   replaySnapshots = [];
   replayIdx = 0;
   currentReplaySessionId = null;
-  const base = window.location.pathname.startsWith('/beta') ? '/beta' : '/';
-  history.pushState({}, '', base);
-  showScreen('newLanding');
-  loadRecentGames();
+  // Go back naturally — home is in history since we used pushState to open the replay.
+  // If there's no history to go back to (e.g. direct link), fall back to home manually.
+  if (history.length > 1) {
+    history.back();
+  } else {
+    const base = window.location.pathname.startsWith('/beta') ? '/beta' : '/';
+    history.replaceState({}, '', base);
+    showScreen('newLanding');
+    loadRecentGames();
+  }
 }
 
 function shareReplay() {
-  const url = `${location.origin}${location.pathname.startsWith('/beta') ? '/beta' : ''}/replay/${currentReplaySessionId}`;
+  const base = location.pathname.startsWith('/beta') ? '/beta' : '';
+  const url = `${location.origin}${base}/replay/${currentReplaySessionId}#${replayIdx + 1}`;
   if (navigator.clipboard) {
     navigator.clipboard.writeText(url).then(() => showError('Replay link copied!'));
   } else {
@@ -3801,6 +3811,12 @@ function renderReplayFrame() {
   renderReplayScore(snap);
   renderReplayStock(snap);
   renderReplayLog(snap);
+
+  // Keep URL hash in sync with current step so refresh restores position
+  if (currentReplaySessionId) {
+    const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
+    history.replaceState({}, '', `${base}/replay/${currentReplaySessionId}#${replayIdx + 1}`);
+  }
 }
 
 function renderReplayBoard(snap) {
