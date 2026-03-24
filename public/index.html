@@ -1169,7 +1169,7 @@
     font-size: 10px; font-weight: 600; text-transform: uppercase;
     letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px;
   }
-  #replayBoard { grid-template-columns: 18px repeat(12, 1fr); }
+  #replayBoard { grid-template-columns: 18px repeat(12, 1fr); width: 100%; }
   #replayLog {
     font-size: 11px; color: var(--text-dim); display: flex; flex-direction: column; gap: 3px;
   }
@@ -1259,7 +1259,7 @@
   <div class="replay-body">
     <div class="replay-board-col">
       <div class="replay-phase-label" id="replayPhaseLabel"></div>
-      <div class="board-container" style="flex:none;width:100%">
+      <div class="board-container" style="width:100%;height:auto;container-type:inline-size">
         <div class="board" id="replayBoard"></div>
       </div>
     </div>
