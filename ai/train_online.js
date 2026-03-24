@@ -890,6 +890,18 @@ function trainStep(weights, adam, replay, t) {
 
 /* ── Main loop ────────────────────────────────────────────────── */
 async function train() {
+  // ── Pidfile guard: kill any existing instance before starting ──
+  const PIDFILE = '/tmp/train_online.pid';
+  try {
+    const oldPid = parseInt(fs.readFileSync(PIDFILE, 'utf8').trim(), 10);
+    if (oldPid && oldPid !== process.pid) {
+      try { process.kill(oldPid, 'SIGKILL'); } catch {}
+      await new Promise(r => setTimeout(r, 500));
+    }
+  } catch {}
+  fs.writeFileSync(PIDFILE, String(process.pid));
+  process.on('exit', () => { try { fs.unlinkSync(PIDFILE); } catch {} });
+
   console.log('\nAcquire Master Bot — AlphaZero-style Training (v3)');
   console.log(`  LR=${LR}  batch=${BATCH_SIZE}  train_every=${TRAIN_EVERY}  replay=${REPLAY_SIZE}`);
   if (TIME_LIMIT !== Infinity) console.log(`  Time limit: ${TIME_LIMIT / 3600000}h`);
