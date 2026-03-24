@@ -2087,6 +2087,11 @@ function goRules() {
 /* ── Browser back/forward button support ──────── */
 window.addEventListener('popstate', () => {
   const path = window.location.pathname.replace(/^\/beta/, '');
+  // Close replay overlay whenever navigating away from a replay URL
+  if (!path.match(/\/replay\/(\d+)$/)) {
+    document.getElementById('replayOverlay').style.display = 'none';
+    replaySnapshots = []; replayIdx = 0; currentReplaySessionId = null;
+  }
   if (path === '/rules')       { showScreen('rulesPage'); return; }
   if (path === '/solo')        { showScreen('soloSetup'); return; }
   if (path === '/multiplayer') { showScreen('landing');   return; }
