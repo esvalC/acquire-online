@@ -399,7 +399,7 @@
           <span id="gameCashOldest"></span>
           <span id="gameCashNewest"></span>
         </div>
-        <div class="chart-sub" style="margin-top:6px">% change from first point · each point = 1,000 games</div>
+        <div class="chart-sub" style="margin-top:6px">each point = 1,000 games · up to 500k game history</div>
       </div>
     </div>
 
@@ -502,20 +502,13 @@ function fmtDateTime(iso) {
   });
 }
 
-/* ── Game Cash Chart — % change from first point ────────────── */
+/* ── Game Cash Chart — ribbon between lines, shared tight axis ── */
 function drawGameCashChart(totalHistory, winnerHistory) {
   const canvas = document.getElementById('gameCashChart');
   if (!canvas) return;
   const hasTotal  = totalHistory  && totalHistory.length  >= 1;
   const hasWinner = winnerHistory && winnerHistory.length >= 1;
   if (!hasTotal && !hasWinner) return;
-
-  // Convert to % change from first point
-  const toPct = h => h && h.length > 0
-    ? h.map(v => ((v - h[0]) / h[0]) * 100)
-    : [];
-  const totalPct  = toPct(totalHistory);
-  const winnerPct = toPct(winnerHistory);
 
   const ctx = canvas.getContext('2d');
   const W   = canvas.offsetWidth || 500;
@@ -524,71 +517,85 @@ function drawGameCashChart(totalHistory, winnerHistory) {
   canvas.height = H * devicePixelRatio;
   ctx.scale(devicePixelRatio, devicePixelRatio);
 
-  const ML = 40, MR = 8, MT = 10, MB = 10;
+  const ML = 46, MR = 8, MT = 10, MB = 10;
   const CW = W - ML - MR, CH = H - MT - MB;
 
-  // Shared Y scale across both pct series
-  const allPct = [...totalPct, ...winnerPct];
-  const lo  = Math.min(...allPct);
-  const hi  = Math.max(...allPct);
-  const pad = (hi - lo) * 0.25 || 0.5;
+  // Y scale: tight to actual data range across both series
+  const allVals = [...(totalHistory || []), ...(winnerHistory || [])];
+  const lo  = Math.min(...allVals);
+  const hi  = Math.max(...allVals);
+  const pad = (hi - lo) * 0.06;
   const yMin = lo - pad, yMax = hi + pad, yRng = yMax - yMin || 1;
   const toY  = v => MT + CH - ((v - yMin) / yRng) * CH;
 
-  // X scale
-  const n    = Math.max(totalPct.length, winnerPct.length);
+  // X scale — align both series to right edge
+  const n    = Math.max((totalHistory || []).length, (winnerHistory || []).length);
   const toX  = i => ML + (n > 1 ? (i / (n - 1)) * CW : CW / 2);
+  const offT = n - (totalHistory  || []).length;
+  const offW = n - (winnerHistory || []).length;
   const dotR = n <= 5 ? 5 : n <= 15 ? 3.5 : n <= 40 ? 2.5 : n <= 100 ? 1.5 : 0;
 
-  // Zero line + grid + Y labels
+  // Grid + Y labels
   ctx.font = '9px "DM Sans", sans-serif';
   ctx.textAlign = 'right';
-  const TICKS = 6;
+  const TICKS = 5;
   for (let i = 0; i <= TICKS; i++) {
     const f   = i / TICKS;
     const y   = MT + CH * f;
     const val = yMax - f * yRng;
-    const lbl = (val >= 0 ? '+' : '') + val.toFixed(1) + '%';
-    ctx.strokeStyle = Math.abs(val) < 0.01
-      ? 'rgba(180,210,190,0.5)'   // zero line slightly brighter
-      : 'rgba(42,96,64,0.35)';
-    ctx.lineWidth = Math.abs(val) < 0.01 ? 1.5 : 1;
+    const lbl = val >= 1000 ? '$' + Math.round(val / 1000) + 'k' : '$' + Math.round(val);
+    ctx.strokeStyle = 'rgba(42,96,64,0.35)';
+    ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
     ctx.fillStyle = 'rgba(180,210,190,0.5)';
     ctx.fillText(lbl, ML - 4, y + 3);
   }
-
-  // Left axis border
   ctx.strokeStyle = 'rgba(42,96,64,0.6)';
   ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(ML, MT); ctx.lineTo(ML, MT + CH); ctx.stroke();
 
-  function drawSeries(pct, xOff) {
-    if (!pct || pct.length === 0) return;
-    const sn = pct.length;
+  // Filled ribbon between the two lines (where both exist)
+  const sharedLen = Math.min((totalHistory || []).length, (winnerHistory || []).length);
+  if (sharedLen >= 2) {
+    const shOffT = offT + (totalHistory.length  - sharedLen);
+    const shOffW = offW + (winnerHistory.length - sharedLen);
+    ctx.beginPath();
+    // top edge: total cash left→right
+    for (let i = 0; i < sharedLen; i++) {
+      const x = toX(shOffT + i), y = toY(totalHistory[totalHistory.length - sharedLen + i]);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    // bottom edge: winner cash right→left
+    for (let i = sharedLen - 1; i >= 0; i--) {
+      ctx.lineTo(toX(shOffW + i), toY(winnerHistory[winnerHistory.length - sharedLen + i]));
+    }
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(129,140,248,0.1)';
+    ctx.fill();
+  }
+
+  // Draw one series with green/red segments
+  function drawSeries(history, xOff) {
+    if (!history || history.length < 1) return;
+    const sn = history.length;
     if (sn === 1) {
       ctx.beginPath();
-      ctx.arc(toX(xOff), toY(pct[0]), Math.max(dotR, 4), 0, Math.PI * 2);
+      ctx.arc(toX(xOff), toY(history[0]), Math.max(dotR, 4), 0, Math.PI * 2);
       ctx.fillStyle = '#22c55e'; ctx.fill();
       return;
     }
     for (let i = 0; i < sn - 1; i++) {
-      const x1 = toX(xOff + i),     y1 = toY(pct[i]);
-      const x2 = toX(xOff + i + 1), y2 = toY(pct[i + 1]);
-      const up = pct[i + 1] >= pct[i];
-      ctx.beginPath();
-      ctx.fillStyle = up ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)';
-      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
-      ctx.lineTo(x2, toY(0)); ctx.lineTo(x1, toY(0));
-      ctx.closePath(); ctx.fill();
+      const x1 = toX(xOff + i),     y1 = toY(history[i]);
+      const x2 = toX(xOff + i + 1), y2 = toY(history[i + 1]);
+      const up = history[i + 1] >= history[i];
       ctx.beginPath();
       ctx.strokeStyle = up ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)';
       ctx.lineWidth = 2;
       ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
       ctx.stroke();
     }
-    pct.forEach((v, i) => {
-      const up = i === 0 || v >= pct[i - 1];
+    history.forEach((v, i) => {
+      const up = i === 0 || v >= history[i - 1];
       const r  = i === sn - 1 ? Math.max(dotR, 3) : dotR;
       if (r > 0) {
         ctx.beginPath();
@@ -599,8 +606,8 @@ function drawGameCashChart(totalHistory, winnerHistory) {
     });
   }
 
-  drawSeries(totalPct,  n - totalPct.length);
-  drawSeries(winnerPct, n - winnerPct.length);
+  drawSeries(totalHistory,  offT);
+  drawSeries(winnerHistory, offW);
 
   const ref = hasTotal ? totalHistory : winnerHistory;
   document.getElementById('gameCashOldest').textContent = 'oldest: ' + fmtCash(ref[0]);
