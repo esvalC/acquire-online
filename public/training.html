@@ -502,7 +502,7 @@ function fmtDateTime(iso) {
   });
 }
 
-/* ── Game Cash Chart — ribbon between lines, shared tight axis ── */
+/* ── Game Cash Chart — broken axis (compressed middle gap) ────── */
 function drawGameCashChart(totalHistory, winnerHistory) {
   const canvas = document.getElementById('gameCashChart');
   if (!canvas) return;
@@ -510,9 +510,12 @@ function drawGameCashChart(totalHistory, winnerHistory) {
   const hasWinner = winnerHistory && winnerHistory.length >= 1;
   if (!hasTotal && !hasWinner) return;
 
+  const allT = totalHistory  || [];
+  const allW = winnerHistory || [];
+
   const ctx = canvas.getContext('2d');
   const W   = canvas.offsetWidth || 500;
-  const H   = 220;
+  const H   = 500;
   canvas.width  = W * devicePixelRatio;
   canvas.height = H * devicePixelRatio;
   ctx.scale(devicePixelRatio, devicePixelRatio);
@@ -520,61 +523,89 @@ function drawGameCashChart(totalHistory, winnerHistory) {
   const ML = 46, MR = 8, MT = 10, MB = 10;
   const CW = W - ML - MR, CH = H - MT - MB;
 
-  // Y scale: tight to actual data range across both series
-  const allVals = [...(totalHistory || []), ...(winnerHistory || [])];
-  const lo  = Math.min(...allVals);
-  const hi  = Math.max(...allVals);
-  const pad = (hi - lo) * 0.06;
-  const yMin = lo - pad, yMax = hi + pad, yRng = yMax - yMin || 1;
-  const toY  = v => MT + CH - ((v - yMin) / yRng) * CH;
+  // Three zones: bottom (0–70k), compressed middle (70k–110k), top (110k–Y_TOP)
+  const BRKLO = 70000, BRKHI = 110000;
+  const Y_TOP = Math.ceil((Math.max(...(allT.length ? allT : [140000])) * 1.05) / 5000) * 5000;
+  const topH  = CH * 0.42, midH = CH * 0.08, botH = CH * 0.50;
 
-  // X scale — align both series to right edge
-  const n    = Math.max((totalHistory || []).length, (winnerHistory || []).length);
+  function toY(v) {
+    if (v >= BRKHI) {
+      return MT + topH * (1 - (v - BRKHI) / (Y_TOP - BRKHI));
+    } else if (v >= BRKLO) {
+      return MT + topH + midH * (1 - (v - BRKLO) / (BRKHI - BRKLO));
+    } else {
+      return MT + topH + midH + botH * (1 - v / BRKLO);
+    }
+  }
+
+  // X scale
+  const n    = Math.max(allT.length, allW.length);
   const toX  = i => ML + (n > 1 ? (i / (n - 1)) * CW : CW / 2);
-  const offT = n - (totalHistory  || []).length;
-  const offW = n - (winnerHistory || []).length;
+  const offT = n - allT.length;
+  const offW = n - allW.length;
   const dotR = n <= 5 ? 5 : n <= 15 ? 3.5 : n <= 40 ? 2.5 : n <= 100 ? 1.5 : 0;
 
-  // Grid + Y labels
   ctx.font = '9px "DM Sans", sans-serif';
   ctx.textAlign = 'right';
-  const TICKS = 5;
-  for (let i = 0; i <= TICKS; i++) {
-    const f   = i / TICKS;
-    const y   = MT + CH * f;
-    const val = yMax - f * yRng;
-    const lbl = val >= 1000 ? '$' + Math.round(val / 1000) + 'k' : '$' + Math.round(val);
-    ctx.strokeStyle = 'rgba(42,96,64,0.35)';
-    ctx.lineWidth = 1;
+
+  // Grid + labels: top zone
+  const topStep = Math.round((Y_TOP - BRKHI) / 3 / 5000) * 5000 || 5000;
+  for (let v = BRKHI; v <= Y_TOP; v += topStep) {
+    const y = toY(v);
+    ctx.strokeStyle = 'rgba(42,96,64,0.35)'; ctx.lineWidth = 1;
     ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
     ctx.fillStyle = 'rgba(180,210,190,0.5)';
-    ctx.fillText(lbl, ML - 4, y + 3);
+    ctx.fillText('$' + Math.round(v / 1000) + 'k', ML - 4, y + 3);
   }
-  ctx.strokeStyle = 'rgba(42,96,64,0.6)';
-  ctx.lineWidth = 1;
+
+  // Grid + labels: bottom zone
+  [0, 20000, 40000, 60000, BRKLO].forEach(v => {
+    const y = toY(v);
+    ctx.strokeStyle = 'rgba(42,96,64,0.35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(180,210,190,0.5)';
+    ctx.fillText(v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$0', ML - 4, y + 3);
+  });
+
+  // Break indicators at BRKLO and BRKHI — dashed line + "~" label
+  [BRKLO, BRKHI].forEach(v => {
+    const y = toY(v);
+    ctx.save();
+    ctx.strokeStyle = 'rgba(180,210,190,0.3)'; ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
+    ctx.restore();
+    ctx.fillStyle = 'rgba(180,210,190,0.35)';
+    ctx.fillText('$' + Math.round(v / 1000) + 'k', ML - 4, y + 3);
+    // Zigzag break marks on axis
+    ctx.strokeStyle = 'rgba(180,210,190,0.5)'; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(ML - 2, y - 5); ctx.lineTo(ML + 2, y - 1);
+    ctx.lineTo(ML - 2, y + 3); ctx.lineTo(ML + 2, y + 7);
+    ctx.stroke();
+  });
+
+  // Left axis border
+  ctx.strokeStyle = 'rgba(42,96,64,0.6)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(ML, MT); ctx.lineTo(ML, MT + CH); ctx.stroke();
 
-  // Filled ribbon between the two lines (where both exist)
-  const sharedLen = Math.min((totalHistory || []).length, (winnerHistory || []).length);
-  if (sharedLen >= 2) {
-    const shOffT = offT + (totalHistory.length  - sharedLen);
-    const shOffW = offW + (winnerHistory.length - sharedLen);
+  // Ribbon fill between the two lines
+  const shLen = Math.min(allT.length, allW.length);
+  if (shLen >= 2) {
+    const tO = offT + (allT.length - shLen), wO = offW + (allW.length - shLen);
     ctx.beginPath();
-    // top edge: total cash left→right
-    for (let i = 0; i < sharedLen; i++) {
-      const x = toX(shOffT + i), y = toY(totalHistory[totalHistory.length - sharedLen + i]);
+    for (let i = 0; i < shLen; i++) {
+      const x = toX(tO + i), y = toY(allT[allT.length - shLen + i]);
       i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
     }
-    // bottom edge: winner cash right→left
-    for (let i = sharedLen - 1; i >= 0; i--) {
-      ctx.lineTo(toX(shOffW + i), toY(winnerHistory[winnerHistory.length - sharedLen + i]));
-    }
+    for (let i = shLen - 1; i >= 0; i--)
+      ctx.lineTo(toX(wO + i), toY(allW[allW.length - shLen + i]));
     ctx.closePath();
     ctx.fillStyle = 'rgba(129,140,248,0.1)';
     ctx.fill();
   }
 
-  // Draw one series with green/red segments
+  // Draw series with green/red segments
   function drawSeries(history, xOff) {
     if (!history || history.length < 1) return;
     const sn = history.length;
@@ -585,13 +616,12 @@ function drawGameCashChart(totalHistory, winnerHistory) {
       return;
     }
     for (let i = 0; i < sn - 1; i++) {
-      const x1 = toX(xOff + i),     y1 = toY(history[i]);
-      const x2 = toX(xOff + i + 1), y2 = toY(history[i + 1]);
       const up = history[i + 1] >= history[i];
       ctx.beginPath();
       ctx.strokeStyle = up ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)';
       ctx.lineWidth = 2;
-      ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
+      ctx.moveTo(toX(xOff + i), toY(history[i]));
+      ctx.lineTo(toX(xOff + i + 1), toY(history[i + 1]));
       ctx.stroke();
     }
     history.forEach((v, i) => {
@@ -606,8 +636,8 @@ function drawGameCashChart(totalHistory, winnerHistory) {
     });
   }
 
-  drawSeries(totalHistory,  offT);
-  drawSeries(winnerHistory, offW);
+  drawSeries(allT, offT);
+  drawSeries(allW, offW);
 
   const ref = hasTotal ? totalHistory : winnerHistory;
   document.getElementById('gameCashOldest').textContent = 'oldest: ' + fmtCash(ref[0]);
