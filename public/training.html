@@ -502,7 +502,7 @@ function fmtDateTime(iso) {
   });
 }
 
-/* ── Game Cash Chart — split bands, each zoomed to its range ─── */
+/* ── Game Cash Chart — tall shared axis, green/red segments ─────*/
 function drawGameCashChart(totalHistory, winnerHistory) {
   const canvas = document.getElementById('gameCashChart');
   if (!canvas) return;
@@ -512,57 +512,53 @@ function drawGameCashChart(totalHistory, winnerHistory) {
 
   const ctx = canvas.getContext('2d');
   const W   = canvas.offsetWidth || 500;
-  const H   = 300;
+  const H   = 700;
   canvas.width  = W * devicePixelRatio;
   canvas.height = H * devicePixelRatio;
   ctx.scale(devicePixelRatio, devicePixelRatio);
 
-  const ML = 46, MR = 8, GAP = 12;
-  const CW = W - ML - MR;
-  // Top band: total cash. Bottom band: winner cash. Equal height minus gap.
-  const BH = (H - GAP) / 2;  // band height
-  const bands = [
-    { history: totalHistory,  top: 0,        color: '#818cf8' },
-    { history: winnerHistory, top: BH + GAP, color: '#d4971e' },
-  ];
+  const ML = 46, MR = 8, MT = 10, MB = 10;
+  const CW = W - ML - MR, CH = H - MT - MB;
 
-  // X scale shared
+  // Shared Y scale — tight padding so movement fills the space
+  const allVals = [...(totalHistory || []), ...(winnerHistory || [])];
+  const lo  = Math.min(...allVals);
+  const hi  = Math.max(...allVals);
+  const pad = (hi - lo) * 0.05 || hi * 0.02 || 500;
+  const yMin = Math.max(0, lo - pad);
+  const yMax = hi + pad;
+  const yRng = yMax - yMin || 1;
+  const toY  = v => MT + CH - ((v - yMin) / yRng) * CH;
+
+  // X scale — longer series defines spacing
   const n    = Math.max((totalHistory || []).length, (winnerHistory || []).length);
   const toX  = i => ML + (n > 1 ? (i / (n - 1)) * CW : CW / 2);
   const dotR = n <= 5 ? 5 : n <= 15 ? 3.5 : n <= 40 ? 2.5 : n <= 100 ? 1.5 : 0;
 
+  // Grid + Y-axis labels (7 ticks for tall chart)
   ctx.font = '9px "DM Sans", sans-serif';
   ctx.textAlign = 'right';
-
-  bands.forEach(({ history, top, color }) => {
-    if (!history || history.length === 0) return;
-
-    // Tight Y scale per band
-    const lo  = Math.min(...history);
-    const hi  = Math.max(...history);
-    const pad = (hi - lo) * 0.35 || hi * 0.008 || 300;
-    const yMin = lo - pad, yMax = hi + pad, yRng = yMax - yMin || 1;
-    const toY = v => top + BH - ((v - yMin) / yRng) * BH;
-
-    // Grid lines + labels (3 per band)
-    [0, 0.5, 1].forEach(f => {
-      const y   = top + BH * f;
-      const val = yMax - f * yRng;
-      const lbl = val >= 1000 ? '$' + Math.round(val / 1000) + 'k' : '$' + Math.round(val);
-      ctx.strokeStyle = 'rgba(42,96,64,0.35)';
-      ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
-      ctx.fillStyle = 'rgba(180,210,190,0.5)';
-      ctx.fillText(lbl, ML - 4, y + 3);
-    });
-
-    // Left axis border for this band
-    ctx.strokeStyle = 'rgba(42,96,64,0.6)';
+  const TICKS = 7;
+  for (let i = 0; i <= TICKS; i++) {
+    const f   = i / TICKS;
+    const y   = MT + CH * f;
+    const val = yMax - f * yRng;
+    const lbl = val >= 1000 ? '$' + Math.round(val / 1000) + 'k' : '$' + Math.round(val);
+    ctx.strokeStyle = 'rgba(42,96,64,0.35)';
     ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(ML, top); ctx.lineTo(ML, top + BH); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(180,210,190,0.5)';
+    ctx.fillText(lbl, ML - 4, y + 3);
+  }
 
-    const sn   = history.length;
-    const xOff = n - sn;
+  // Left axis border
+  ctx.strokeStyle = 'rgba(42,96,64,0.6)';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(ML, MT); ctx.lineTo(ML, MT + CH); ctx.stroke();
+
+  function drawSeries(history, xOff) {
+    if (!history || history.length === 0) return;
+    const sn = history.length;
 
     if (sn === 1) {
       ctx.beginPath();
@@ -577,9 +573,9 @@ function drawGameCashChart(totalHistory, winnerHistory) {
       const up = history[i + 1] >= history[i];
 
       ctx.beginPath();
-      ctx.fillStyle = up ? 'rgba(34,197,94,0.06)' : 'rgba(239,68,68,0.06)';
+      ctx.fillStyle = up ? 'rgba(34,197,94,0.05)' : 'rgba(239,68,68,0.05)';
       ctx.moveTo(x1, y1); ctx.lineTo(x2, y2);
-      ctx.lineTo(x2, top + BH); ctx.lineTo(x1, top + BH);
+      ctx.lineTo(x2, MT + CH); ctx.lineTo(x1, MT + CH);
       ctx.closePath(); ctx.fill();
 
       ctx.beginPath();
@@ -599,14 +595,10 @@ function drawGameCashChart(totalHistory, winnerHistory) {
         ctx.fill();
       }
     });
+  }
 
-    // Series label inside band (top-left)
-    ctx.fillStyle = color;
-    ctx.textAlign = 'left';
-    ctx.font = '9px "DM Sans", sans-serif';
-    ctx.fillText(color === '#818cf8' ? 'Total cash' : "Winner's cash", ML + 4, top + 10);
-    ctx.textAlign = 'right';
-  });
+  drawSeries(totalHistory,  n - (totalHistory  || []).length);
+  drawSeries(winnerHistory, n - (winnerHistory || []).length);
 
   const ref = hasTotal ? totalHistory : winnerHistory;
   document.getElementById('gameCashOldest').textContent = 'oldest: ' + fmtCash(ref[0]);
