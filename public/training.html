@@ -607,6 +607,8 @@ function drawGameCashChart(totalHistory, winnerHistory) {
       ctx.fillRect(x - 4, y - 4, 8, 8);
       return;
     }
+
+    // Bars
     for (let i = 0; i < sn - 1; i++) {
       const x1 = toX(xOff + i), y1 = toY(history[i]);
       const x2 = toX(xOff + i + 1), y2 = toY(history[i + 1]);
@@ -614,6 +616,20 @@ function drawGameCashChart(totalHistory, winnerHistory) {
       ctx.fillStyle = up ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)';
       ctx.fillRect(x1, Math.min(y1, y2), x2 - x1, Math.max(Math.abs(y2 - y1), 1));
     }
+
+    // Moving average line
+    const win = Math.max(3, Math.min(10, Math.round(sn / 4)));
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+    ctx.lineWidth = 1.5;
+    let started = false;
+    for (let i = 0; i < sn; i++) {
+      if (i < win - 1) continue;
+      const avg = history.slice(i - win + 1, i + 1).reduce((a, b) => a + b, 0) / win;
+      const x = toX(xOff + i), y = toY(avg);
+      started ? ctx.lineTo(x, y) : (ctx.moveTo(x, y), started = true);
+    }
+    ctx.stroke();
   }
 
   drawSeries(allT, offT);
