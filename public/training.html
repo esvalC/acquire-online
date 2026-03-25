@@ -502,11 +502,11 @@ function fmtDateTime(iso) {
   });
 }
 
-/* ── Game Cash Chart — broken axis (compressed middle gap) ────── */
+/* ── Game Cash Chart — broken axis, each zone tight to its data ─ */
 function drawGameCashChart(totalHistory, winnerHistory) {
   const canvas = document.getElementById('gameCashChart');
   if (!canvas) return;
-  const hasTotal  = totalHistory  && totalHistory.length  >= 1;
+  const hasTotal  = totalHistory  && totalHistory.length >= 1;
   const hasWinner = winnerHistory && winnerHistory.length >= 1;
   if (!hasTotal && !hasWinner) return;
 
@@ -515,26 +515,39 @@ function drawGameCashChart(totalHistory, winnerHistory) {
 
   const ctx = canvas.getContext('2d');
   const W   = canvas.offsetWidth || 500;
-  const H   = 500;
+  const H   = 380;
   canvas.width  = W * devicePixelRatio;
   canvas.height = H * devicePixelRatio;
   ctx.scale(devicePixelRatio, devicePixelRatio);
 
-  const ML = 46, MR = 8, MT = 10, MB = 10;
+  const ML = 50, MR = 8, MT = 10, MB = 10;
   const CW = W - ML - MR, CH = H - MT - MB;
 
-  // Three zones: bottom (0–70k), compressed middle (70k–110k), top (110k–Y_TOP)
-  const BRKLO = 70000, BRKHI = 110000;
-  const Y_TOP = Math.ceil((Math.max(...(allT.length ? allT : [140000])) * 1.05) / 5000) * 5000;
-  const topH  = CH * 0.42, midH = CH * 0.08, botH = CH * 0.50;
+  // Tight range per series — pad 35% of actual variation (min 2000 so there's always room)
+  function tightRange(arr) {
+    if (!arr || arr.length === 0) return { lo: 0, hi: 1 };
+    const lo = Math.min(...arr), hi = Math.max(...arr);
+    const pad = Math.max((hi - lo) * 0.35, 2000);
+    return { lo: lo - pad, hi: hi + pad };
+  }
+  const rT = tightRange(allT);
+  const rW = tightRange(allW);
 
+  // Zone heights: top 46% = total cash, bottom 46% = winner cash, middle 8% = compressed gap
+  const topH = CH * 0.46, midH = CH * 0.08, botH = CH * 0.46;
+
+  // Map a value to canvas Y using the broken axis
   function toY(v) {
-    if (v >= BRKHI) {
-      return MT + topH * (1 - (v - BRKHI) / (Y_TOP - BRKHI));
-    } else if (v >= BRKLO) {
-      return MT + topH + midH * (1 - (v - BRKLO) / (BRKHI - BRKLO));
+    if (v >= rT.lo) {
+      // Top zone: rT.lo (bottom of zone) → rT.hi (top of zone)
+      return MT + topH * (1 - (v - rT.lo) / (rT.hi - rT.lo));
+    } else if (v >= rW.hi) {
+      // Middle compressed gap
+      const frac = (v - rW.hi) / (rT.lo - rW.hi || 1);
+      return MT + topH + midH * (1 - frac);
     } else {
-      return MT + topH + midH + botH * (1 - v / BRKLO);
+      // Bottom zone: rW.lo (bottom) → rW.hi (top)
+      return MT + topH + midH + botH * (1 - (v - rW.lo) / (rW.hi - rW.lo));
     }
   }
 
@@ -548,62 +561,41 @@ function drawGameCashChart(totalHistory, winnerHistory) {
   ctx.font = '9px "DM Sans", sans-serif';
   ctx.textAlign = 'right';
 
-  // Grid + labels: top zone
-  const topStep = Math.round((Y_TOP - BRKHI) / 3 / 5000) * 5000 || 5000;
-  for (let v = BRKHI; v <= Y_TOP; v += topStep) {
-    const y = toY(v);
-    ctx.strokeStyle = 'rgba(42,96,64,0.35)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
-    ctx.fillStyle = 'rgba(180,210,190,0.5)';
-    ctx.fillText('$' + Math.round(v / 1000) + 'k', ML - 4, y + 3);
+  // Draw grid + labels for a zone
+  function drawZone(zLo, zHi, zTop, zH, ticks) {
+    for (let i = 0; i <= ticks; i++) {
+      const frac = i / ticks;
+      const val  = zHi - frac * (zHi - zLo);
+      const y    = zTop + zH * frac;
+      ctx.strokeStyle = 'rgba(42,96,64,0.35)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
+      ctx.fillStyle = 'rgba(180,210,190,0.55)';
+      ctx.fillText(val >= 1000 ? '$' + Math.round(val / 1000) + 'k' : '$' + Math.round(val), ML - 4, y + 3);
+    }
   }
+  drawZone(rT.lo, rT.hi, MT,            topH, 4);
+  drawZone(rW.lo, rW.hi, MT + topH + midH, botH, 4);
 
-  // Grid + labels: bottom zone
-  [0, 20000, 40000, 60000, BRKLO].forEach(v => {
-    const y = toY(v);
-    ctx.strokeStyle = 'rgba(42,96,64,0.35)'; ctx.lineWidth = 1;
-    ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
-    ctx.fillStyle = 'rgba(180,210,190,0.5)';
-    ctx.fillText(v >= 1000 ? '$' + Math.round(v / 1000) + 'k' : '$0', ML - 4, y + 3);
-  });
-
-  // Break indicators at BRKLO and BRKHI — dashed line + "~" label
-  [BRKLO, BRKHI].forEach(v => {
-    const y = toY(v);
-    ctx.save();
-    ctx.strokeStyle = 'rgba(180,210,190,0.3)'; ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
-    ctx.restore();
-    ctx.fillStyle = 'rgba(180,210,190,0.35)';
-    ctx.fillText('$' + Math.round(v / 1000) + 'k', ML - 4, y + 3);
-    // Zigzag break marks on axis
-    ctx.strokeStyle = 'rgba(180,210,190,0.5)'; ctx.lineWidth = 1.5;
+  // Break line between zones
+  const breakY = MT + topH + midH / 2;
+  ctx.save();
+  ctx.strokeStyle = 'rgba(180,210,190,0.25)'; ctx.lineWidth = 1;
+  ctx.setLineDash([3, 5]);
+  ctx.beginPath(); ctx.moveTo(ML, MT + topH); ctx.lineTo(ML + CW, MT + topH); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(ML, MT + topH + midH); ctx.lineTo(ML + CW, MT + topH + midH); ctx.stroke();
+  ctx.restore();
+  // Zigzag on axis at both break edges
+  [MT + topH, MT + topH + midH].forEach(by => {
+    ctx.strokeStyle = 'rgba(180,210,190,0.6)'; ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.moveTo(ML - 2, y - 5); ctx.lineTo(ML + 2, y - 1);
-    ctx.lineTo(ML - 2, y + 3); ctx.lineTo(ML + 2, y + 7);
+    ctx.moveTo(ML - 2, by - 4); ctx.lineTo(ML + 2, by);
+    ctx.lineTo(ML - 2, by + 4);
     ctx.stroke();
   });
 
   // Left axis border
   ctx.strokeStyle = 'rgba(42,96,64,0.6)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(ML, MT); ctx.lineTo(ML, MT + CH); ctx.stroke();
-
-  // Ribbon fill between the two lines
-  const shLen = Math.min(allT.length, allW.length);
-  if (shLen >= 2) {
-    const tO = offT + (allT.length - shLen), wO = offW + (allW.length - shLen);
-    ctx.beginPath();
-    for (let i = 0; i < shLen; i++) {
-      const x = toX(tO + i), y = toY(allT[allT.length - shLen + i]);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    for (let i = shLen - 1; i >= 0; i--)
-      ctx.lineTo(toX(wO + i), toY(allW[allW.length - shLen + i]));
-    ctx.closePath();
-    ctx.fillStyle = 'rgba(129,140,248,0.1)';
-    ctx.fill();
-  }
 
   // Draw series with green/red segments
   function drawSeries(history, xOff) {
