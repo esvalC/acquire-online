@@ -597,35 +597,23 @@ function drawGameCashChart(totalHistory, winnerHistory) {
   ctx.strokeStyle = 'rgba(42,96,64,0.6)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(ML, MT); ctx.lineTo(ML, MT + CH); ctx.stroke();
 
-  // Draw series with green/red segments
+  // Draw series as filled rectangles — opposite corners are consecutive points
   function drawSeries(history, xOff) {
     if (!history || history.length < 1) return;
     const sn = history.length;
     if (sn === 1) {
-      ctx.beginPath();
-      ctx.arc(toX(xOff), toY(history[0]), Math.max(dotR, 4), 0, Math.PI * 2);
-      ctx.fillStyle = '#22c55e'; ctx.fill();
+      const x = toX(xOff), y = toY(history[0]);
+      ctx.fillStyle = '#22c55e';
+      ctx.fillRect(x - 4, y - 4, 8, 8);
       return;
     }
     for (let i = 0; i < sn - 1; i++) {
+      const x1 = toX(xOff + i), y1 = toY(history[i]);
+      const x2 = toX(xOff + i + 1), y2 = toY(history[i + 1]);
       const up = history[i + 1] >= history[i];
-      ctx.beginPath();
-      ctx.strokeStyle = up ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)';
-      ctx.lineWidth = 2;
-      ctx.moveTo(toX(xOff + i), toY(history[i]));
-      ctx.lineTo(toX(xOff + i + 1), toY(history[i + 1]));
-      ctx.stroke();
+      ctx.fillStyle = up ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)';
+      ctx.fillRect(x1, Math.min(y1, y2), x2 - x1, Math.max(Math.abs(y2 - y1), 1));
     }
-    history.forEach((v, i) => {
-      const up = i === 0 || v >= history[i - 1];
-      const r  = i === sn - 1 ? Math.max(dotR, 3) : dotR;
-      if (r > 0) {
-        ctx.beginPath();
-        ctx.arc(toX(xOff + i), toY(v), r, 0, Math.PI * 2);
-        ctx.fillStyle = up ? 'rgba(34,197,94,0.95)' : 'rgba(239,68,68,0.95)';
-        ctx.fill();
-      }
-    });
   }
 
   drawSeries(allT, offT);
