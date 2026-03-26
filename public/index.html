@@ -1502,7 +1502,7 @@
     <div class="turn-info">
       <span id="turnLabel">Turn 1</span>
       <span id="currentPlayerLabel">—</span>
-      <span class="turn-clock" id="turnClock">0:00</span>
+      <span class="turn-clock" id="turnClock" title="Time on this turn">⏱ <span id="turnClockVal">0:00</span></span>
       <span id="spectatorBadge" style="display:none;" class="spectator-badge">Spectating</span>
     </div>
     <div id="lastAction"></div>
@@ -2710,7 +2710,7 @@ function updateTurnClock() {
   const total = (gameState.turnTimers[gameState.currentPlayerIdx] || 0) + elapsed;
   const mins = Math.floor(total / 60);
   const secs = total % 60;
-  document.getElementById('turnClock').textContent = `${mins}:${String(secs).padStart(2, '0')}`;
+  document.getElementById('turnClockVal').textContent = `${mins}:${String(secs).padStart(2, '0')}`;
 }
 
 /* ── Quickstart banner ─────────────────────────── */
@@ -2747,6 +2747,17 @@ function getTilePlacementType(tile) {
 }
 
 /* ── Client-side tile analysis (for hover preview) ── */
+function clientStockPrice(chain, size) {
+  if (size < 2) return 0;
+  let base;
+  if (size <= 2) base = 0; else if (size <= 3) base = 1; else if (size <= 4) base = 2;
+  else if (size <= 5) base = 3; else if (size <= 10) base = 4; else if (size <= 20) base = 5;
+  else if (size <= 30) base = 6; else if (size <= 40) base = 7; else base = 8;
+  const tier = CHAIN_TIER_INFO[chain]?.tier || '$';
+  const offset = tier === '$$$' ? 2 : tier === '$$' ? 1 : 0;
+  return (base + offset) * 100 + 200;
+}
+
 function analyzeTileClient(tile) {
   const st = gameState;
   const num = parseInt(tile); const letter = tile.replace(/[0-9]/g, '');
@@ -2769,7 +2780,10 @@ function analyzeTileClient(tile) {
   }
   if (adjChains.size === 1) {
     const ch = [...adjChains][0];
-    return { action: `Expand ${ch}`, detail: `${st.chains[ch].size} → ${st.chains[ch].size + 1} tiles · $${st.chains[ch].price}` };
+    const newSize = st.chains[ch].size + 1;
+    const newPrice = clientStockPrice(ch, newSize);
+    const priceNote = newPrice !== st.chains[ch].price ? ` → $${newPrice}` : ` · $${newPrice}`;
+    return { action: `Expand ${ch}`, detail: `${st.chains[ch].size} → ${newSize} tiles${priceNote}` };
   }
   if (adjLone > 0) return { action: 'Found new chain', detail: 'You pick the name + get 1 free share' };
   return { action: 'Lone tile', detail: 'No adjacent tiles — just a marker' };
@@ -3331,7 +3345,7 @@ function renderGameOver() {
 }
 
 /* ── Socket actions ────────────────────────────── */
-function placeTile(tile) { socket.emit('placeTile', { tile }); }
+function placeTile(tile) { hideTilePreview(); socket.emit('placeTile', { tile }); }
 function chooseChain(chain) { socket.emit('chooseChain', { chain }); }
 function chooseMergerSurvivor(chain) { socket.emit('chooseMergerSurvivor', { chain }); }
 function declareEnd() { socket.emit('declareGameEnd'); }
@@ -3426,12 +3440,12 @@ function findRuleAnswer(q) {
   q = q.toLowerCase();
   if (q.includes('tile') && (q.includes('place')||q.includes('play')||q.includes('put'))) return RULES_KB['tile placement'];
   if (q.includes('merger')||q.includes('merge')||q.includes('acqui')) return RULES_KB['merger'];
+  if (q.includes('found')||q.includes('create')||q.includes('new chain')||q.includes('start')||q.includes('free share')||q.includes('founder')) return RULES_KB['founding'];
   if (q.includes('buy')||q.includes('stock')||q.includes('purchase')||q.includes('share')) return RULES_KB['buy stock'];
   if (q.includes('end')||q.includes('over')||q.includes('win')||q.includes('finish')) return RULES_KB['end game'];
   if (q.includes('bonus')||q.includes('majority')||q.includes('minority')||q.includes('payout')) return RULES_KB['bonus'];
   if (q.includes('safe')||q.includes('protect')||q.includes('immune')) return RULES_KB['safe chain'];
   if (q.includes('trade')||q.includes('trading')||q.includes('swap')||q.includes('exchange')) return RULES_KB['trading stock'];
-  if (q.includes('found')||q.includes('create')||q.includes('new chain')||q.includes('start')) return RULES_KB['founding'];
   if (q.includes('tier')||q.includes('cheap')||q.includes('expensive')||q.includes('price')) return RULES_KB['chain tiers'];
   return RULES_KB['default'];
 }
