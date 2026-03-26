@@ -486,7 +486,7 @@ function scheduleBotTurn(code) {
   if (actingBotIdx === null) return;
 
   room.botScheduled = true;
-  const delay = 900 + Math.random() * 1100;
+  const delay = 1800 + Math.random() * 2200;
 
   setTimeout(() => {
     room.botScheduled = false;

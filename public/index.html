@@ -2638,14 +2638,16 @@ function showAnnotationBubble(anchorEl, mainText, subText) {
     bubble.style.transition = 'opacity 0.3s';
     bubble.style.opacity = '0';
     setTimeout(() => bubble.remove(), 300);
-  }, 2700);
+  }, 4050);
 }
 
 function detectBotCommentary(savedPrevPhase, savedPrevIdx, savedPrevBoard, savedPrevStocks, newState) {
   if (!botCommentaryEnabled) return;
-  if (savedPrevIdx < 0 || !newState.playerList) return;
-  const prevPlayer = newState.playerList[savedPrevIdx];
-  if (!prevPlayer || !prevPlayer.isBot) return;
+  if (savedPrevIdx < 0 || !newState.players || !newState.playerList) return;
+  const prevPlayer = newState.players[savedPrevIdx]; // game-ordered — correct after quickstart shuffle
+  if (!prevPlayer) return;
+  const prevPlayerMeta = newState.playerList.find(x => x.name === prevPlayer.name);
+  if (!prevPlayerMeta || !prevPlayerMeta.isBot) return;
   const botName = prevPlayer.name;
 
   // Tile placement
