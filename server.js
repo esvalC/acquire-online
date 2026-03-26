@@ -332,6 +332,17 @@ function broadcastState(code) {
 
   const playerList = room.players.map(p => ({ name: p.name, isBot: p.isBot || false }));
 
+  // Capture spectator snapshot for replay before recording game end
+  const spectatorState = engine.getClientState(room.game, -1);
+  spectatorState.playerList = playerList;
+  room.replaySnapshots = room.replaySnapshots || [];
+  room.replaySnapshots.push(JSON.parse(JSON.stringify(spectatorState)));
+
+  // Record game result BEFORE emitting so sessionId is available in the game-over state
+  if (room.game.phase === 'gameOver' && !room.gameRecorded) {
+    recordGameEnd(code);
+  }
+
   for (const p of room.players) {
     if (p.socketId && !p.isBot) {
       const clientState = engine.getClientState(room.game, p.idx);
@@ -341,18 +352,8 @@ function broadcastState(code) {
     }
   }
 
-  // Capture spectator snapshot for replay (deep-cloned so mutable game state can't overwrite it)
-  const spectatorState = engine.getClientState(room.game, -1);
-  spectatorState.playerList = playerList;
-  room.replaySnapshots = room.replaySnapshots || [];
-  room.replaySnapshots.push(JSON.parse(JSON.stringify(spectatorState)));
   for (const s of room.spectators) {
     io.to(s.socketId).emit('gameState', spectatorState);
-  }
-
-  // Record game result once when it transitions to gameOver
-  if (room.game.phase === 'gameOver' && !room.gameRecorded) {
-    recordGameEnd(code);
   }
 
   // Schedule next bot move if this is a solo room
@@ -485,7 +486,7 @@ function scheduleBotTurn(code) {
   if (actingBotIdx === null) return;
 
   room.botScheduled = true;
-  const delay = 700 + Math.random() * 700;
+  const delay = 900 + Math.random() * 1100;
 
   setTimeout(() => {
     room.botScheduled = false;
