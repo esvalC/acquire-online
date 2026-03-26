@@ -1655,6 +1655,20 @@
       <button class="drawer-close" onclick="closeProfileDrawer()">✕</button>
     </div>
 
+    <!-- Always-visible settings -->
+    <div style="padding:10px 0 14px;border-bottom:1px solid var(--border);margin-bottom:14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:13px;">Bot Commentary</div>
+          <div style="font-size:11px;color:var(--text-muted);">Speech bubbles for bot moves</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="botCommentaryToggle" onchange="toggleBotCommentary(this.checked)" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
     <!-- Logged-out: tabs for Login / Register -->
     <div id="drawerLoggedOut">
       <div class="auth-tabs" style="margin-bottom:16px;">
@@ -1762,16 +1776,6 @@
             </div>
             <label class="toggle-switch">
               <input type="checkbox" id="visibilityToggle" onchange="toggleVisibility(this.checked)" />
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-            <div>
-              <div style="font-size:13px;">Bot Commentary</div>
-              <div style="font-size:11px;color:var(--text-muted);">Show speech bubbles for bot moves</div>
-            </div>
-            <label class="toggle-switch">
-              <input type="checkbox" id="botCommentaryToggle" onchange="toggleBotCommentary(this.checked)" />
               <span class="toggle-slider"></span>
             </label>
           </div>
