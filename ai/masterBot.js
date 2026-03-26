@@ -398,4 +398,4 @@ function decideMasterAction(game, playerIdx) {
   return null;
 }
 
-module.exports = { decideMasterAction };
+module.exports = { decideMasterAction, loadWeights, forward, encodeState };

@@ -1,47 +1,59 @@
 /**
- * ai/mcts.js — Flat Monte Carlo search for Acquire
+ * ai/mcts.js — Neural-guided search for Acquire
  *
- * For each legal action, simulate SIMS_PER_ACTION rollouts to estimate its
- * win probability, then return the action with the best win rate.
+ * For each legal action, apply it to a cloned state and evaluate the result
+ * using the Master Bot value network. Pick the action with the highest
+ * predicted win probability.
  *
- * Performance strategy:
- *   - Rollouts use a lightweight fast-bot (NOT the full heuristic) so each
- *     simulation is ~0.15ms instead of ~0.7ms
- *   - Depth is capped at ROLLOUT_DEPTH turns; after that, a portfolio
- *     evaluation function estimates who's winning instead of playing to end
- *   - Only placeTile and mergerDecision use MCTS; buyStock/chooseChain/
- *     chooseMergerSurvivor use the existing heuristic (already near-optimal)
+ * If the v3 weights are not loaded (first run or missing file), falls back to
+ * flat Monte Carlo with heuristic rollouts so the bot still works.
  *
- * Typical performance: ~15ms per MCTS decision (well within 700ms bot delay)
+ * Performance: ~0.5ms per decision (one forward pass per candidate action),
+ * versus ~15ms previously for 5 random rollouts to game end.
  */
 
 const engine = require('../gameEngine');
 
-// Lazy to avoid circular dependency (mcts.js is only loaded from inside a
-// running decideBotAction call, after botAI.js is fully initialized)
-let _botAI = null;
-function getBotAI() {
-  if (!_botAI) _botAI = require('../botAI');
-  return _botAI;
-}
+// Lazy loaders to avoid circular dependencies
+let _botAI     = null;
+let _masterBot = null;
+function getBotAI()     { if (!_botAI)     _botAI     = require('../botAI');     return _botAI; }
+function getMasterBot() { if (!_masterBot) _masterBot = require('./masterBot');  return _masterBot; }
 
-/* ── Tuning knobs ────────────────────────────────────────────── */
-const SIMS_PER_ACTION = 5;    // simulations per candidate action (fewer but higher quality)
-const MAX_ACTIONS     = 7;    // cap on candidates
+const MAX_ACTIONS = 7; // cap on candidates considered
 
 /* ── Game state clone ────────────────────────────────────────── */
 function cloneGame(game) {
   return JSON.parse(JSON.stringify(game));
 }
 
-/* ── Heuristic rollout to game end ───────────────────────────── */
-// Uses the real heuristic bot at medium difficulty — accurate signal,
-// still fast (medium bots run ~100k turns/sec).
-const MAX_ROLLOUT_TURNS = 2000;
+/* ── Value-network position evaluator ───────────────────────── */
+// Returns a score in [0,1] for the given player after the game state
+// has already had an action applied. Uses the v3 value head.
+// Falls back to a heuristic estimate if weights aren't available.
+function evaluatePosition(game, playerIdx, myName) {
+  if (game.phase === 'gameOver') {
+    return game.standings?.[0]?.name === myName ? 1 : 0;
+  }
 
-function rollout(game, myName) {
+  const mb = getMasterBot();
+  const weights = mb.loadWeights();
+  if (weights) {
+    try {
+      const { value } = mb.forward(weights, mb.encodeState(game, playerIdx));
+      return value[playerIdx];
+    } catch {}
+  }
+
+  // Fallback: heuristic rollout (original behaviour)
+  return rolloutFallback(game, myName);
+}
+
+/* ── Fallback: heuristic rollout to game end ─────────────────── */
+// Only used when v3 weights aren't loaded.
+const MAX_ROLLOUT_TURNS = 2000;
+function rolloutFallback(game, myName) {
   const { decideBotAction } = getBotAI();
-  // Build bot configs from the current player list
   const KNOWN_PERSONALITY = { Aria:'balanced', Rex:'focused', Nova:'diversified', Colt:'focused', Vera:'balanced' };
   const bots = game.players.map(p => ({
     name: p.name,
@@ -91,10 +103,6 @@ function candidateMergerDecisions(game, playerIdx) {
   return [...candidates.values()];
 }
 
-/* ── Legal actions for MCTS phases ───────────────────────────── */
-// Note: buyStock, chooseChain, chooseMergerSurvivor are handled by the
-// heuristic bot in decideMctsAction() — MCTS only covers placeTile and mergerDecision.
-
 function legalTileActions(game) {
   const { playable } = engine.getPlayableTiles(game);
   return (playable || []).map(t => ({ type: 'placeTile', tile: t })).slice(0, MAX_ACTIONS);
@@ -111,56 +119,67 @@ function applyAction(game, playerIdx, action) {
   } catch {}
 }
 
+/* ── Settle intermediate phases after tile placement ─────────── */
+// After placing a tile the game may enter chooseChain (new chain) or
+// chooseMergerSurvivor (tied merger). Resolve these with a quick heuristic
+// so the value network evaluates a fully-settled board state.
+function settlePendingPhases(sim, playerIdx) {
+  for (let safety = 0; safety < 10; safety++) {
+    if (sim.phase === 'chooseChain') {
+      const avail = engine.HOTEL_CHAINS.filter(c => !sim.chains[c].active);
+      if (avail.length === 0) break;
+      // Pick cheapest to found (gives most merger-survivor flexibility)
+      engine.chooseChain(sim, playerIdx, avail[0]);
+    } else if (sim.phase === 'chooseMergerSurvivor') {
+      const tied = sim.pendingMerger?.tiedChains || [];
+      if (tied.length === 0) break;
+      engine.chooseMergerSurvivor(sim, playerIdx, tied[0]);
+    } else {
+      break;
+    }
+  }
+}
+
 /* ── Main entry ──────────────────────────────────────────────── */
 /**
- * Decide the best action for the given player using flat Monte Carlo.
- * For non-tile/merger phases, falls back to the fast heuristic.
- * Returns an action object (for applyAction), or null if the phase
- * is not handled here (caller should fall through to heuristic).
+ * Decide the best action using value-network guided search.
+ * Evaluates each candidate action with a single forward pass.
+ * Returns an action object, or null to fall through to heuristic.
  */
 function decideMctsAction(game, playerIdx) {
   const phase  = game.phase;
   const myName = game.players[playerIdx].name;
 
-  // ── placeTile: this is where MCTS shines most ──
+  // ── placeTile: evaluate each tile with the value network ──
   if (phase === 'placeTile' && game.currentPlayerIdx === playerIdx) {
     const actions = legalTileActions(game);
     if (actions.length === 0) return { type: 'buyStock', purchases: {} };
     if (actions.length === 1) return actions[0];
 
-    const wins  = new Array(actions.length).fill(0);
-    for (let ai = 0; ai < actions.length; ai++) {
-      for (let s = 0; s < SIMS_PER_ACTION; s++) {
-        const sim = cloneGame(game);
-        applyAction(sim, playerIdx, actions[ai]);
-        wins[ai] += rollout(sim, myName);
-      }
+    let best = actions[0], bestScore = -1;
+    for (const action of actions) {
+      const sim = cloneGame(game);
+      applyAction(sim, playerIdx, action);
+      settlePendingPhases(sim, playerIdx);
+      const score = evaluatePosition(sim, playerIdx, myName);
+      if (score > bestScore) { bestScore = score; best = action; }
     }
-    let bestIdx = 0, bestWins = -1;
-    for (let i = 0; i < actions.length; i++) {
-      if (wins[i] > bestWins) { bestWins = wins[i]; bestIdx = i; }
-    }
-    return actions[bestIdx];
+    return best;
   }
 
-  // ── mergerDecision: trade vs sell trade-off benefits from lookahead ──
+  // ── mergerDecision: evaluate each sell/trade option ──
   if (phase === 'mergerDecision' && game.pendingMerger?.decidingPlayer === playerIdx) {
     const actions = candidateMergerDecisions(game, playerIdx);
     if (actions.length === 1) return actions[0];
 
-    const wins = new Array(actions.length).fill(0);
-    for (let ai = 0; ai < actions.length; ai++) {
-      for (let s = 0; s < SIMS_PER_ACTION; s++) {
-        const sim = cloneGame(game);
-        applyAction(sim, playerIdx, actions[ai]);
-        wins[ai] += rollout(sim, myName);
-      }
+    let best = actions[0], bestScore = -1;
+    for (const action of actions) {
+      const sim = cloneGame(game);
+      applyAction(sim, playerIdx, action);
+      const score = evaluatePosition(sim, playerIdx, myName);
+      if (score > bestScore) { bestScore = score; best = action; }
     }
-    let bestIdx = 0, bestWins = -1;
-    for (let i = 0; i < actions.length; i++) {
-      if (wins[i] > bestWins) { bestWins = wins[i]; bestIdx = i; }
-    }
-    return actions[bestIdx];
+    return best;
   }
 
   // All other phases: signal caller to use heuristic
