@@ -639,6 +639,13 @@ function advanceTurn(state) {
   if (skips >= state.players.length) {
     state.log.push('No player has a legal move — game ends automatically.');
     endGame(state);
+    return;
+  }
+
+  // Auto-end when a chain hits 41+ tiles or all active chains are safe
+  if (checkGameEnd(state)) {
+    state.log.push('End game conditions met — game ends automatically.');
+    endGame(state);
   }
 }
 

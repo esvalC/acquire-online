@@ -3246,11 +3246,11 @@ function renderHeader() {
   document.getElementById('turnLabel').textContent = `Turn ${gameState.turnNumber}`;
   document.getElementById('currentPlayerLabel').textContent = gameState.players[gameState.currentPlayerIdx]?.name || '';
   const canEnd = gameState.canDeclareEnd;
-  document.getElementById('btnDeclareEnd').style.display = (canEnd && gameState.currentPlayerIdx === myIdx) ? 'inline-block' : 'none';
+  document.getElementById('btnDeclareEnd').style.display = 'none';
   // Show a one-time toast the first time end conditions are met
   if (canEnd && !window._endConditionNotified) {
     window._endConditionNotified = true;
-    showToast('Game can now end — use "End Game" when ready');
+    showToast('End game conditions met — game will end automatically after current turn');
   }
   document.getElementById('btnRestartSolo').style.display = isSoloGame ? 'inline-block' : 'none';
   // Spectator badge
