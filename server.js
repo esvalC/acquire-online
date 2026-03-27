@@ -18,6 +18,7 @@ const db         = require('./db');
 const { signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone } = require('./auth');
 
 const app    = express();
+app.set('trust proxy', 1); // nginx sits in front — trust X-Forwarded-For for rate limiting
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: ['https://playonlineacquire.com', 'http://localhost:3000'] } });
 
