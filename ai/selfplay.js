@@ -272,6 +272,35 @@ async function runBenchmark(totalGames, opts = {}) {
     const elapsedMs  = Date.now() - t0;
     const played     = g - errors;
     const remainMs   = timeLimitMs === Infinity ? null : Math.max(0, timeLimitMs - elapsedMs);
+    const avg = a => a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0;
+
+    // Read existing file to carry forward history arrays
+    const MAX_HIST = 500;
+    let prevHistory = {};
+    if (played > 0) {
+      try {
+        const existing = JSON.parse(fs.readFileSync(opts.statsFile, 'utf8'));
+        prevHistory = existing.botMetricHistory || {};
+      } catch {}
+    }
+
+    // Append current running average to each bot's history
+    const botMetricHistory = {};
+    for (const b of BOTS) {
+      const n = b.name;
+      const prev = prevHistory[n] || { mergerBonus: [], chainsFound: [], majorities: [], elo: [] };
+      if (played > 0) {
+        botMetricHistory[n] = {
+          mergerBonus: [...prev.mergerBonus, Math.round(avg(mergerBonuses[n]))].slice(-MAX_HIST),
+          chainsFound: [...prev.chainsFound, +avg(chainsFoundArr[n]).toFixed(2)].slice(-MAX_HIST),
+          majorities:  [...prev.majorities,  +avg(majoritiesArr[n]).toFixed(2)].slice(-MAX_HIST),
+          elo:         [...prev.elo,         elo[n]].slice(-MAX_HIST),
+        };
+      } else {
+        botMetricHistory[n] = prev;
+      }
+    }
+
     const stats = {
       gamesPlayed:     played,
       gamesTotal:      g,
@@ -282,10 +311,10 @@ async function runBenchmark(totalGames, opts = {}) {
       timeLimitSecs:   opts.timeLimitSecs || null,
       avgTurns:        played > 0 ? +(totalTurns / played).toFixed(1) : 0,
       updatedAt:       new Date().toISOString(),
+      botMetricHistory,
       bots: BOTS.map(b => {
         const w   = wins[b.name];
         const arr = cashes[b.name];
-        const avg = a => a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0;
         return {
           name:             b.name,
           difficulty:       b.difficulty,
@@ -295,13 +324,12 @@ async function runBenchmark(totalGames, opts = {}) {
           avgCash:          arr.length ? Math.round(avg(arr)) : 0,
           elo:              elo[b.name],
           avgMergerBonus:   Math.round(avg(mergerBonuses[b.name])),
-          avgPortfolio:     Math.round(avg(portfolioValues[b.name])),
           avgChainsFound:   +avg(chainsFoundArr[b.name]).toFixed(2),
           avgMajorities:    +avg(majoritiesArr[b.name]).toFixed(2),
         };
       }).sort((a,b) => b.elo - a.elo),
     };
-    try { fs.writeFileSync(opts.statsFile, JSON.stringify(stats, null, 2)); } catch {}
+    try { fs.writeFileSync(opts.statsFile, JSON.stringify(stats)); } catch {}
   }
 
   while (g < totalGames) {
