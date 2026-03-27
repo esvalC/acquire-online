@@ -1172,21 +1172,18 @@ async function train() {
       }
       winnerCashWindow = [];
 
-      // Append skill metric snapshot to rolling history
+      // Append skill metric snapshot — aggregate across all bots (same network)
       const avgArr = a => a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0;
+      const allMerger  = BOTS.flatMap(b => mergerBonuses[b.name]);
+      const allChains  = BOTS.flatMap(b => chainsFoundArr[b.name]);
+      const allMaj     = BOTS.flatMap(b => majoritiesArr[b.name]);
+      botMetricHistory.mergerBonus = [...(botMetricHistory.mergerBonus || []), Math.round(avgArr(allMerger))].slice(-MAX_HIST);
+      botMetricHistory.chainsFound = [...(botMetricHistory.chainsFound || []), +avgArr(allChains).toFixed(2)].slice(-MAX_HIST);
+      botMetricHistory.majorities  = [...(botMetricHistory.majorities  || []), +avgArr(allMaj).toFixed(2)].slice(-MAX_HIST);
       for (const b of BOTS) {
-        const n = b.name;
-        const prev = botMetricHistory[n] || { mergerBonus: [], chainsFound: [], majorities: [], elo: [] };
-        botMetricHistory[n] = {
-          mergerBonus: [...prev.mergerBonus, Math.round(avgArr(mergerBonuses[n]))].slice(-MAX_HIST),
-          chainsFound: [...prev.chainsFound, +avgArr(chainsFoundArr[n]).toFixed(2)].slice(-MAX_HIST),
-          majorities:  [...prev.majorities,  +avgArr(majoritiesArr[n]).toFixed(2)].slice(-MAX_HIST),
-          elo:         [...prev.elo,          elo[n]].slice(-MAX_HIST),
-        };
-        // Reset windows for next checkpoint
-        mergerBonuses[n]  = [];
-        chainsFoundArr[n] = [];
-        majoritiesArr[n]  = [];
+        mergerBonuses[b.name]  = [];
+        chainsFoundArr[b.name] = [];
+        majoritiesArr[b.name]  = [];
       }
 
       log(`  step=${t} games=${gamesTotal} loss=${avgTot} (pol=${avgPol} val=${avgVal}) elapsed=${elapsedS}s buf=${replay.size} errors=${errors}\n`);

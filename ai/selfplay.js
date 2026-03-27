@@ -292,22 +292,15 @@ async function runBenchmark(totalGames, opts = {}) {
       } catch {}
     }
 
-    // Append current running average to each bot's history
-    const botMetricHistory = {};
-    for (const b of BOTS) {
-      const n = b.name;
-      const prev = prevHistory[n] || { mergerBonus: [], chainsFound: [], majorities: [], elo: [] };
-      if (played > 0) {
-        botMetricHistory[n] = {
-          mergerBonus: [...prev.mergerBonus, Math.round(avg(mergerBonuses[n]))].slice(-MAX_HIST),
-          chainsFound: [...prev.chainsFound, +avg(chainsFoundArr[n]).toFixed(2)].slice(-MAX_HIST),
-          majorities:  [...prev.majorities,  +avg(majoritiesArr[n]).toFixed(2)].slice(-MAX_HIST),
-          elo:         [...prev.elo,         elo[n]].slice(-MAX_HIST),
-        };
-      } else {
-        botMetricHistory[n] = prev;
-      }
-    }
+    // Append current running average — aggregate across all bots (same network)
+    const allMerger = BOTS.flatMap(b => mergerBonuses[b.name]);
+    const allChains = BOTS.flatMap(b => chainsFoundArr[b.name]);
+    const allMaj    = BOTS.flatMap(b => majoritiesArr[b.name]);
+    const botMetricHistory = played > 0 ? {
+      mergerBonus: [...(prevHistory.mergerBonus || []), Math.round(avg(allMerger))].slice(-MAX_HIST),
+      chainsFound: [...(prevHistory.chainsFound || []), +avg(allChains).toFixed(2)].slice(-MAX_HIST),
+      majorities:  [...(prevHistory.majorities  || []), +avg(allMaj).toFixed(2)].slice(-MAX_HIST),
+    } : prevHistory;
 
     const stats = {
       gamesPlayed:     played,

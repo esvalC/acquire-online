@@ -741,39 +741,22 @@ function renderLeaderboard(bots) {
     </table>`;
 }
 
-/* ── Per-bot metric line chart (same aesthetic as gameCashChart) */
-function drawBotMetricChart(canvasId, legendId, currentId, previewId, botHistories, field, fmtFn) {
-  if (!botHistories) return;
+/* ── Single-line metric chart (aggregated master bot) ────────── */
+function drawBotMetricChart(canvasId, legendId, currentId, previewId, history, field, fmtFn) {
+  if (!history) return;
+  const hist = history[field] || [];
+  if (!hist.length) return;
 
-  // Collect series — skip bots with no data
-  const entries = Object.entries(botHistories)
-    .map(([name, h]) => ({ name, hist: h[field] || [] }))
-    .filter(e => e.hist.length > 0);
-  if (!entries.length) return;
+  const latest = hist[hist.length - 1];
+  document.getElementById(previewId).textContent = fmtFn(latest);
+  document.getElementById(currentId).innerHTML =
+    `<div style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:500;color:var(--gold);">${fmtFn(latest)}</div>`;
+  document.getElementById(legendId).innerHTML = '';
 
-  // Current-value display (sorted best→worst)
-  const bots = entries.map(e => ({ name: e.name, val: e.hist[e.hist.length - 1] }))
-    .sort((a,b) => b.val - a.val);
-  document.getElementById(previewId).textContent = bots[0].name + ' ' + fmtFn(bots[0].val);
-  document.getElementById(currentId).innerHTML = bots.map(b =>
-    `<div>
-      <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500;color:${BOT_COLORS[b.name]||'var(--gold)'};">${fmtFn(b.val)}</div>
-      <div style="font-size:10px;color:var(--text-muted);margin-top:3px">${b.name}</div>
-    </div>`
-  ).join('');
-
-  // Legend
-  document.getElementById(legendId).innerHTML = entries.map(e =>
-    `<div class="legend-item">
-      <div class="legend-swatch" style="background:${BOT_COLORS[e.name]||'#4ade80'}"></div>${e.name}
-    </div>`
-  ).join('');
-
-  // Canvas
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
-  const W  = canvas.offsetWidth || 500;
-  const H  = 240;
+  const W = canvas.offsetWidth || 500;
+  const H = 240;
   canvas.width  = W * devicePixelRatio;
   canvas.height = H * devicePixelRatio;
   const ctx = canvas.getContext('2d');
@@ -781,18 +764,14 @@ function drawBotMetricChart(canvasId, legendId, currentId, previewId, botHistori
 
   const ML = 52, MR = 8, MT = 10, MB = 10;
   const CW = W - ML - MR, CH = H - MT - MB;
+  const n = hist.length;
 
-  // Global y range with padding
-  const allVals = entries.flatMap(e => e.hist);
-  const lo0 = Math.min(...allVals), hi0 = Math.max(...allVals);
+  const lo0 = Math.min(...hist), hi0 = Math.max(...hist);
   const pad = Math.max((hi0 - lo0) * 0.3, hi0 * 0.05, 1);
   const lo = lo0 - pad, hi = hi0 + pad;
+  const toX = i => ML + (n > 1 ? (i / (n - 1)) * CW : CW / 2);
+  const toY = v => MT + CH * (1 - (v - lo) / (hi - lo));
 
-  const maxN = Math.max(...entries.map(e => e.hist.length));
-  const toX  = i => ML + (maxN > 1 ? (i / (maxN - 1)) * CW : CW / 2);
-  const toY  = v => MT + CH * (1 - (v - lo) / (hi - lo));
-
-  // Grid lines + Y labels
   ctx.font = '9px "DM Sans", sans-serif';
   ctx.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
@@ -804,38 +783,30 @@ function drawBotMetricChart(canvasId, legendId, currentId, previewId, botHistori
     ctx.fillStyle = 'rgba(180,210,190,0.55)';
     ctx.fillText(fmtFn(val), ML - 4, y + 3);
   }
-  // Left axis border
   ctx.strokeStyle = 'rgba(42,96,64,0.6)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(ML, MT); ctx.lineTo(ML, MT + CH); ctx.stroke();
 
-  // Draw each bot's line + moving average
-  for (const { name, hist } of entries) {
-    const color = BOT_COLORS[name] || '#4ade80';
-    const off   = maxN - hist.length;
-    const n     = hist.length;
-    const win   = Math.max(3, Math.min(10, Math.round(n / 4)));
-
-    // Raw line (faint)
-    ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 0.35;
-    ctx.beginPath();
-    for (let i = 0; i < n; i++) {
-      const x = toX(off + i), y = toY(hist[i]);
-      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    // Moving average (bold)
-    ctx.lineWidth = 2; ctx.globalAlpha = 1;
-    ctx.beginPath();
-    let started = false;
-    for (let i = win - 1; i < n; i++) {
-      const avg = hist.slice(i - win + 1, i + 1).reduce((a,b) => a+b, 0) / win;
-      const x = toX(off + i), y = toY(avg);
-      started ? ctx.lineTo(x, y) : (ctx.moveTo(x, y), started = true);
-    }
-    ctx.stroke();
-    ctx.globalAlpha = 1;
+  // Raw line (faint gold)
+  ctx.strokeStyle = 'var(--gold)'; ctx.lineWidth = 1; ctx.globalAlpha = 0.35;
+  ctx.beginPath();
+  for (let i = 0; i < n; i++) {
+    const x = toX(i), y = toY(hist[i]);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
   }
+  ctx.stroke();
+
+  // Moving average (bold gold)
+  const win = Math.max(3, Math.min(10, Math.round(n / 4)));
+  ctx.lineWidth = 2; ctx.globalAlpha = 1;
+  ctx.beginPath();
+  let started = false;
+  for (let i = win - 1; i < n; i++) {
+    const avg = hist.slice(i - win + 1, i + 1).reduce((a,b) => a+b, 0) / win;
+    const x = toX(i), y = toY(avg);
+    started ? ctx.lineTo(x, y) : (ctx.moveTo(x, y), started = true);
+  }
+  ctx.stroke();
+  ctx.globalAlpha = 1;
 }
 
 /* ── Instance log ────────────────────────────────────────────── */
