@@ -1008,6 +1008,7 @@ async function train() {
         winnerCashAvg:    winnerCashHistory[winnerCashHistory.length - 1] || null,
         winnerCashHistory: winnerCashHistory.slice(),
         bestMasterCash, bestCashHistory: bestCashHistory.slice(),
+        botMetricHistory,
         instanceLog: instanceLog.slice(0, 30),
         elapsedSecs: parseInt(elapsedS),
         gamesPerSec:  gamesThisRun > 0 ? +(gamesThisRun / parseInt(elapsedS)).toFixed(2) : 0,
@@ -1069,6 +1070,30 @@ async function train() {
   let bestMasterCash = weights.bestMasterCash || 0;
   const bestCashHistory = weights.bestCashHistory ? [...weights.bestCashHistory] : [];
   const t0 = Date.now();
+
+  // Upload an initial stats snapshot immediately on startup so the dashboard
+  // reflects the correct gamesTotal right away instead of waiting up to 1000
+  // games for the first periodic checkpoint upload.
+  try {
+    const initStats = {
+      step: t, gamesTotal, gamesThisRun: 0,
+      gamesPlayed: gamesTotal, masterGames: 0, errors: 0,
+      avgLoss: weights.gameCashHistory ? null : null,
+      lossHistory: [], replaySize: 0,
+      gameCashAvg: gameCashHistory[gameCashHistory.length - 1] || null,
+      gameCashHistory: gameCashHistory.slice(),
+      winnerCashAvg: winnerCashHistory[winnerCashHistory.length - 1] || null,
+      winnerCashHistory: winnerCashHistory.slice(),
+      bestMasterCash, bestCashHistory: bestCashHistory.slice(),
+      botMetricHistory,
+      weightSaveWarning: lastSaveWarning,
+      updatedAt: new Date().toISOString(),
+    };
+    const tmpStats = '/tmp/training_stats.json';
+    fs.writeFileSync(tmpStats, JSON.stringify(initStats));
+    execSync(`aws s3 cp "${tmpStats}" s3://${S3_BUCKET}/training_stats.json`, { timeout: 15000, stdio: 'pipe' });
+    log(`  [startup] stats uploaded → gamesTotal=${gamesTotal}\n`);
+  } catch (e) { log(`  [startup] stats upload failed: ${e.message}\n`); }
 
   while (Date.now() - t0 < TIME_LIMIT) {
     // ── Self-play game ────────────────────────────────────────── */
