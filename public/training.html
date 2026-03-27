@@ -770,11 +770,12 @@ function drawBotMetricChart(canvasId, legendId, currentId, previewId, history, f
   const n = hist.length;
 
   const lo0 = Math.min(...hist), hi0 = Math.max(...hist);
-  const pad = Math.max((hi0 - lo0) * 0.3, hi0 * 0.05, 1);
+  const pad = Math.max((hi0 - lo0) * 0.35, hi0 * 0.05, 1);
   const lo = lo0 - pad, hi = hi0 + pad;
   const toX = i => ML + (n > 1 ? (i / (n - 1)) * CW : CW / 2);
   const toY = v => MT + CH * (1 - (v - lo) / (hi - lo));
 
+  // Grid + labels
   ctx.font = '9px "DM Sans", sans-serif';
   ctx.textAlign = 'right';
   for (let i = 0; i <= 4; i++) {
@@ -789,27 +790,33 @@ function drawBotMetricChart(canvasId, legendId, currentId, previewId, history, f
   ctx.strokeStyle = 'rgba(42,96,64,0.6)'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(ML, MT); ctx.lineTo(ML, MT + CH); ctx.stroke();
 
-  // Raw line (faint gold)
-  ctx.strokeStyle = 'var(--gold)'; ctx.lineWidth = 1; ctx.globalAlpha = 0.35;
-  ctx.beginPath();
-  for (let i = 0; i < n; i++) {
-    const x = toX(i), y = toY(hist[i]);
-    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  // Green/red bars between consecutive points
+  if (n === 1) {
+    ctx.fillStyle = '#22c55e';
+    ctx.fillRect(toX(0) - 4, toY(hist[0]) - 4, 8, 8);
+  } else {
+    for (let i = 0; i < n - 1; i++) {
+      const x1 = toX(i), y1 = toY(hist[i]);
+      const x2 = toX(i + 1), y2 = toY(hist[i + 1]);
+      const up = hist[i + 1] >= hist[i];
+      ctx.fillStyle = up ? 'rgba(34,197,94,0.85)' : 'rgba(239,68,68,0.85)';
+      ctx.fillRect(x1, Math.min(y1, y2), x2 - x1, Math.max(Math.abs(y2 - y1), 1));
+    }
   }
-  ctx.stroke();
 
-  // Moving average (bold gold)
+  // Moving average (white line)
   const win = Math.max(3, Math.min(10, Math.round(n / 4)));
-  ctx.lineWidth = 2; ctx.globalAlpha = 1;
   ctx.beginPath();
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = 1.5;
   let started = false;
-  for (let i = win - 1; i < n; i++) {
-    const avg = hist.slice(i - win + 1, i + 1).reduce((a,b) => a+b, 0) / win;
+  for (let i = 0; i < n; i++) {
+    if (i < win - 1) continue;
+    const avg = hist.slice(i - win + 1, i + 1).reduce((a, b) => a + b, 0) / win;
     const x = toX(i), y = toY(avg);
     started ? ctx.lineTo(x, y) : (ctx.moveTo(x, y), started = true);
   }
   ctx.stroke();
-  ctx.globalAlpha = 1;
 }
 
 /* ── Instance log ────────────────────────────────────────────── */
