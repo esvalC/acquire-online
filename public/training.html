@@ -355,6 +355,8 @@
     </div>
   </header>
 
+  <div id="weightSaveWarning" style="display:none;background:#7c2d12;color:#fca5a5;padding:10px 20px;font-size:13px;font-family:'JetBrains Mono',monospace;border-bottom:1px solid #991b1b;"></div>
+
   <div id="offlineMsg">
     <div class="offline-title">Training Offline</div>
     No data — the training instance may be down or starting up.
@@ -862,6 +864,15 @@ async function refresh() {
       : `Stale · ${fmtTime(lag)} ago`;
     document.getElementById('updatedAt').textContent =
       'Updated ' + new Date(data.updatedAt).toLocaleTimeString();
+
+    // Weight save warning
+    const warnEl = document.getElementById('weightSaveWarning');
+    if (data.weightSaveWarning) {
+      warnEl.textContent = '⚠ Weight save degraded: ' + data.weightSaveWarning;
+      warnEl.style.display = 'block';
+    } else {
+      warnEl.style.display = 'none';
+    }
 
     // Total games
     const total = data.gamesTotal || 0;

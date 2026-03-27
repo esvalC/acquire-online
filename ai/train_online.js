@@ -174,14 +174,18 @@ function loadOrInit() {
   return initWeights();
 }
 
+let lastSaveWarning = null; // set if local write failed; cleared on success
+
 function saveWeights(weights) {
   fs.mkdirSync(path.dirname(WEIGHTS_PATH), { recursive: true });
   const json = JSON.stringify(weights);
   // Write locally (best-effort — permission errors must not crash training)
   try {
     fs.writeFileSync(WEIGHTS_PATH, json);
+    lastSaveWarning = null; // local write succeeded
   } catch (e) {
-    log(`  [warn] local weight save failed (${e.code}) — uploading via /tmp\n`);
+    lastSaveWarning = `local write failed (${e.code}) — weights only in S3`;
+    log(`  [warn] ${lastSaveWarning}\n`);
   }
   // Always upload to S3 via /tmp so a bad local path never blocks progress
   try {
@@ -1226,6 +1230,7 @@ async function train() {
         updatedAt: new Date().toISOString(),
         avgTurns:        gamesThisRun > 0 ? +(totalTurns / gamesThisRun).toFixed(1) : 0,
         exportedRecords: replay.size,
+        weightSaveWarning: lastSaveWarning,
         botMetricHistory,
         bots: BOTS.map(b => {
           const cash = avgCash[b.name] || [];
