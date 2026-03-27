@@ -122,14 +122,26 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
       let score = 2 + survivorMyShares * 0.1 + defunctMyShares * 0.3;
       // mergerSeeking trait: positive = bonus for merge tiles, negative = penalty
       score += traits.mergerSeeking * mult * 2.5;
-      // Hard+ endgame: trigger mergers only if we win the defunct chain payout
-      if (endgame) {
-        const defunctChain = sorted[1];
-        const defunctOpp   = maxOpponentShares(game, defunctChain.chain, botIdx);
-        if (defunctChain.myShares > defunctOpp) score += 4; // we get the payout
-        else if (defunctChain.myShares === 0)   score -= 2; // waste of a turn
-        // Expert: avoid triggering mergers where opponent wins the payout
-        if (difficulty === 'expert' && defunctChain.myShares < defunctOpp) score -= 3;
+      // Hard+: for every defunct chain check whether this merger is net-positive.
+      // Paying out a large bonus to a leading opponent is worse than waiting.
+      if (hardOrBetter) {
+        for (const d of sorted.slice(1)) {
+          const defunctOpp = maxOpponentShares(game, d.chain, botIdx);
+          if (d.myShares > defunctOpp) {
+            // We collect the majority bonus — strong incentive to trigger
+            score += endgame ? 4.5 : 2.5;
+          } else if (d.myShares === defunctOpp && d.myShares > 0) {
+            // Tied — split bonus, neutral
+            score += endgame ? 1.0 : 0.5;
+          } else if (d.myShares === 0) {
+            // We hold nothing in defunct chain — opponent gets full payout
+            score -= endgame ? 2.0 : 1.5;
+          } else {
+            // Opponent leads in defunct chain — they collect, we don't
+            score -= endgame ? 3.0 : 1.5;
+            if (difficulty === 'expert') score -= 1.0; // extra expert caution
+          }
+        }
       }
       return score;
     }
@@ -194,11 +206,32 @@ function chooseBotChain(game, botIdx, difficulty) {
     return available[Math.floor(Math.random() * available.length)];
   }
 
-  // 1. Chains we own the most stock in
-  // 2. Chains where we already lead (own more than any opponent)
-  // 3. Chains with fewer opponent shares (lower competition)
-  // 4. Higher-tier chains as final tiebreaker
-  const tierOrder = { Continental: 3, Imperial: 3, Festival: 2, Worldwide: 2, American: 2, Tower: 1, Luxor: 1 };
+  // Tier assignments: cheap (1), mid (2), expensive (3)
+  const TIER = { Continental: 3, Imperial: 3, Festival: 2, Worldwide: 2, American: 2, Tower: 1, Luxor: 1 };
+
+  // Board-position-aware tier preference (strategy guide insight):
+  //   Edge/corner: prefer EXPENSIVE tier — deters opponents (each share costs more),
+  //     acting as a "capital trap" for a chain that won't grow much anyway.
+  //   Center: prefer MID tier — good growth prospects, balanced cost to defend.
+  //   Low cash: prefer CHEAP tier — preserve liquidity over deterrence.
+  let preferredTier = 2; // default: mid
+  const pc = game.pendingChainChoice;
+  if (pc) {
+    const isEdge = pc.row === 0 || pc.row === 8 || pc.col === 0 || pc.col === 11;
+    const isNearEdge = pc.row <= 1 || pc.row >= 7 || pc.col <= 1 || pc.col >= 10;
+    if (player.cash < 2500) {
+      preferredTier = 1; // low cash → cheap chain, easy to defend
+    } else if (isEdge || isNearEdge) {
+      preferredTier = 3; // edge position → expensive, deters competition
+    } else {
+      preferredTier = 2; // center → mid tier
+    }
+  }
+
+  // 1. Chains we own the most stock in (existing investment)
+  // 2. Chains where we already lead
+  // 3. Chains with fewer opponent shares (less contested)
+  // 4. Board-position-appropriate tier as tiebreaker
   return available.slice().sort((a, b) => {
     const aOwned = player.stocks[a] || 0;
     const bOwned = player.stocks[b] || 0;
@@ -211,7 +244,10 @@ function chooseBotChain(game, botIdx, difficulty) {
     const bLeads = bOwned > bMaxOpp;
     if (aLeads !== bLeads) return aLeads ? -1 : 1;
     if (aMaxOpp !== bMaxOpp) return aMaxOpp - bMaxOpp;
-    return (tierOrder[b] || 1) - (tierOrder[a] || 1);
+    // Prefer the tier closest to our board-position-derived target
+    const aDist = Math.abs((TIER[a] || 2) - preferredTier);
+    const bDist = Math.abs((TIER[b] || 2) - preferredTier);
+    return aDist - bDist;
   })[0];
 }
 
@@ -300,6 +336,19 @@ function decideBotMerger(game, botIdx, difficulty) {
   return { sell: defunctShares - trade - hold, trade };
 }
 
+/* ── Wealth estimation (cash + stock value at current prices) ── */
+function estimateWealth(game, playerIdx) {
+  const player = game.players[playerIdx];
+  let wealth = player.cash;
+  for (const c of engine.HOTEL_CHAINS) {
+    const ch = game.chains[c];
+    if (!ch.active || !ch.tiles.length) continue;
+    const shares = player.stocks[c] || 0;
+    if (shares > 0) wealth += shares * engine.stockPrice(c, ch.tiles.length);
+  }
+  return wealth;
+}
+
 /* ── Early game detection ────────────────────────────────────── */
 // tileBag starts at 108 tiles. Early game = most tiles still unplayed.
 function isEarlyGame(game) {
@@ -382,6 +431,21 @@ function chainDesirability(c, botIdx, game, traits, mult, difficulty) {
   else if (c.size === 9) score += difficulty === 'expert' ? 3.5 : hardOrBetter ? 2.5 : 1.5;
   else if (c.size === 8) score += difficulty === 'expert' ? 2.5 : hardOrBetter ? 1.5 : 1.0;
 
+  // Bank break: when the share supply is nearly gone, locking in position NOW
+  // is critical — these are last-chance purchases. Priority scales with urgency.
+  // (Strategy guide: "≤3 shares left → 2x priority")
+  if (c.room <= 5 && difficulty !== 'easy') {
+    score += (6 - c.room) * (difficulty === 'expert' ? 2.0 : 1.5);
+  }
+
+  // Diminishing returns: if already leading by 4+ shares, the marginal value of
+  // another share drops — that money is better spent contesting other chains.
+  // A 4-share lead is comfortable; redirect investment rather than piling on.
+  if (hardOrBetter) {
+    const lead = c.myShares - maxOpp;
+    if (lead >= 4) score -= Math.min(lead - 3, 5) * (difficulty === 'expert' ? 2.0 : 1.2);
+  }
+
   // Top-2 filter (expert only): Acquire bonuses only go to top-2 shareholders.
   // Heavy penalty for buying into a chain where 2+ opponents are already well
   // ahead — you will never see a payout from that position.
@@ -456,6 +520,9 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
     const alreadyBuying = purchases[chain] || 0;
     if (alreadyBuying >= c.room) return false;
     if (c.price > moneyLeft) return false;
+    // Cash floor: never drop below $500 outside endgame. Mid-game liquidity is
+    // essential for responding to mergers and contesting new chains.
+    if (!endgame && moneyLeft - c.price < 500) return false;
     purchases[chain] = alreadyBuying + 1;
     moneyLeft -= c.price;
     bought++;
@@ -578,16 +645,15 @@ function decideBotAction(game, botIdx, personality, difficulty, botName) {
   // on the table); delay if small chains could be merged for bonuses, especially
   // if currently losing (need that comeback).
   if (game.phase === 'placeTile' && game.currentPlayerIdx === botIdx && engine.canDeclareGameEnd(game)) {
-    const myPlayer   = game.players[botIdx];
-    const opponents  = game.players.filter((_, i) => i !== botIdx);
-    const bestOpp    = Math.max(...opponents.map(p => p.cash));
+    const myWealth   = estimateWealth(game, botIdx);
+    const bestOpp    = Math.max(...game.players.map((_, i) => i === botIdx ? 0 : estimateWealth(game, i)));
     const smallChains = engine.HOTEL_CHAINS.filter(c => {
       const ch = game.chains[c];
       return ch.active && ch.tiles.length < 11; // not safe yet — merger money still available
     });
-    const isWinning      = myPlayer.cash >= bestOpp;
+    const isWinning      = myWealth >= bestOpp;
     const noSmallChains  = smallChains.length === 0;
-    const bigLead        = myPlayer.cash > bestOpp * 1.20; // 20%+ lead — safe to end
+    const bigLead        = myWealth > bestOpp * 1.20; // 20%+ lead — safe to end
 
     if (noSmallChains || bigLead || (isWinning && smallChains.length <= 1)) {
       engine.declareGameEnd(game, botIdx);
