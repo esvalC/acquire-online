@@ -312,15 +312,6 @@
     font-style: italic;
   }
 
-  /* ── Bot metric bars ── */
-  .bot-row { display:flex; align-items:center; gap:10px; padding:5px 0; }
-  .bot-row:not(:last-child) { border-bottom:1px solid rgba(42,96,64,0.3); }
-  .bot-rank { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted); width:14px; flex-shrink:0; }
-  .bot-name { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim); width:42px; flex-shrink:0; }
-  .bot-bar-wrap { flex:1; height:8px; background:rgba(42,96,64,0.25); border-radius:4px; overflow:hidden; }
-  .bot-bar { height:100%; border-radius:4px; background:var(--green); transition:width 0.4s; }
-  .bot-val { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--gold); width:64px; text-align:right; flex-shrink:0; }
-
   /* ── Leaderboard table ── */
   .lb-table { width:100%; border-collapse:collapse; font-family:'JetBrains Mono',monospace; font-size:11px; }
   .lb-table th { color:var(--text-muted); text-align:right; padding:4px 6px; font-weight:500; border-bottom:1px solid var(--border); }
@@ -461,8 +452,10 @@
         </div>
       </div>
       <div class="card-body">
-        <div id="mergerbonusChart" style="padding-top:14px"></div>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:10px">Majority + minority bonuses received per game · directly measures positional dominance</div>
+        <div id="mergerbonusCurrent" style="display:flex;gap:24px;padding-top:16px;flex-wrap:wrap"></div>
+        <div class="chart-wrap" style="margin-top:12px"><canvas id="mergerbonusCanvas"></canvas></div>
+        <div id="mergerbonusLegend" class="chart-legend"></div>
+        <div class="chart-sub" style="margin-top:6px">each point = 10 games · majority + minority bonuses per game · measures positional dominance</div>
       </div>
     </div>
 
@@ -476,8 +469,10 @@
         </div>
       </div>
       <div class="card-body">
-        <div id="chainsfoundedChart" style="padding-top:14px"></div>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:10px">How often each bot founds new chains · free share + first-mover advantage</div>
+        <div id="chainsfoundedCurrent" style="display:flex;gap:24px;padding-top:16px;flex-wrap:wrap"></div>
+        <div class="chart-wrap" style="margin-top:12px"><canvas id="chainsfoundedCanvas"></canvas></div>
+        <div id="chainsfoundedLegend" class="chart-legend"></div>
+        <div class="chart-sub" style="margin-top:6px">each point = 10 games · free share + first-mover advantage on each founding</div>
       </div>
     </div>
 
@@ -491,8 +486,10 @@
         </div>
       </div>
       <div class="card-body">
-        <div id="majoritiesChart" style="padding-top:14px"></div>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:10px">Chains where bot held ≥ opponent's shares at game end · 0 is valid for diversified bots</div>
+        <div id="majoritiesCurrent" style="display:flex;gap:24px;padding-top:16px;flex-wrap:wrap"></div>
+        <div class="chart-wrap" style="margin-top:12px"><canvas id="majoritiesCanvas"></canvas></div>
+        <div id="majoritiesLegend" class="chart-legend"></div>
+        <div class="chart-sub" style="margin-top:6px">each point = 10 games · chains where bot led or tied opponent at game end</div>
       </div>
     </div>
 
@@ -718,9 +715,10 @@ function drawGameCashChart(totalHistory, winnerHistory) {
   document.getElementById('gameCashNewest').textContent = 'latest: '  + fmtCash(ref[ref.length - 1]);
 }
 
-/* ── Bot leaderboard & metric bar charts ────────────────────── */
+/* ── Bot colors ─────────────────────────────────────────────── */
 const BOT_COLORS = { Nova:'#4ade80', Aria:'#60a5fa', Rex:'#f87171', Colt:'#fbbf24', Vera:'#c084fc' };
 
+/* ── Bot leaderboard ────────────────────────────────────────── */
 function renderLeaderboard(bots) {
   if (!bots || !bots.length) return;
   const sorted = [...bots].sort((a,b) => b.elo - a.elo);
@@ -743,21 +741,101 @@ function renderLeaderboard(bots) {
     </table>`;
 }
 
-function renderMetricBars(containerId, previewId, bots, field, fmtFn, higherBetter=true) {
-  if (!bots || !bots.length) return;
-  const sorted = [...bots].sort((a,b) => higherBetter ? b[field]-a[field] : a[field]-b[field]);
-  const max = Math.max(...sorted.map(b => b[field] || 0)) || 1;
-  document.getElementById(previewId).textContent = fmtFn(sorted[0][field]);
-  document.getElementById(containerId).innerHTML = sorted.map((b,i) => {
-    const pct = Math.round(((b[field] || 0) / max) * 100);
-    const color = BOT_COLORS[b.name] || 'var(--green)';
-    return `<div class="bot-row">
-      <span class="bot-rank">${i+1}</span>
-      <span class="bot-name">${b.name}</span>
-      <div class="bot-bar-wrap"><div class="bot-bar" style="width:${pct}%;background:${color}"></div></div>
-      <span class="bot-val">${fmtFn(b[field])}</span>
-    </div>`;
-  }).join('');
+/* ── Per-bot metric line chart (same aesthetic as gameCashChart) */
+function drawBotMetricChart(canvasId, legendId, currentId, previewId, botHistories, field, fmtFn) {
+  if (!botHistories) return;
+
+  // Collect series — skip bots with no data
+  const entries = Object.entries(botHistories)
+    .map(([name, h]) => ({ name, hist: h[field] || [] }))
+    .filter(e => e.hist.length > 0);
+  if (!entries.length) return;
+
+  // Current-value display (sorted best→worst)
+  const bots = entries.map(e => ({ name: e.name, val: e.hist[e.hist.length - 1] }))
+    .sort((a,b) => b.val - a.val);
+  document.getElementById(previewId).textContent = bots[0].name + ' ' + fmtFn(bots[0].val);
+  document.getElementById(currentId).innerHTML = bots.map(b =>
+    `<div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500;color:${BOT_COLORS[b.name]||'var(--gold)'};">${fmtFn(b.val)}</div>
+      <div style="font-size:10px;color:var(--text-muted);margin-top:3px">${b.name}</div>
+    </div>`
+  ).join('');
+
+  // Legend
+  document.getElementById(legendId).innerHTML = entries.map(e =>
+    `<div class="legend-item">
+      <div class="legend-swatch" style="background:${BOT_COLORS[e.name]||'#4ade80'}"></div>${e.name}
+    </div>`
+  ).join('');
+
+  // Canvas
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  const W  = canvas.offsetWidth || 500;
+  const H  = 240;
+  canvas.width  = W * devicePixelRatio;
+  canvas.height = H * devicePixelRatio;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(devicePixelRatio, devicePixelRatio);
+
+  const ML = 52, MR = 8, MT = 10, MB = 10;
+  const CW = W - ML - MR, CH = H - MT - MB;
+
+  // Global y range with padding
+  const allVals = entries.flatMap(e => e.hist);
+  const lo0 = Math.min(...allVals), hi0 = Math.max(...allVals);
+  const pad = Math.max((hi0 - lo0) * 0.3, hi0 * 0.05, 1);
+  const lo = lo0 - pad, hi = hi0 + pad;
+
+  const maxN = Math.max(...entries.map(e => e.hist.length));
+  const toX  = i => ML + (maxN > 1 ? (i / (maxN - 1)) * CW : CW / 2);
+  const toY  = v => MT + CH * (1 - (v - lo) / (hi - lo));
+
+  // Grid lines + Y labels
+  ctx.font = '9px "DM Sans", sans-serif';
+  ctx.textAlign = 'right';
+  for (let i = 0; i <= 4; i++) {
+    const frac = i / 4;
+    const val  = hi - frac * (hi - lo);
+    const y    = MT + CH * frac;
+    ctx.strokeStyle = 'rgba(42,96,64,0.35)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(ML, y); ctx.lineTo(ML + CW, y); ctx.stroke();
+    ctx.fillStyle = 'rgba(180,210,190,0.55)';
+    ctx.fillText(fmtFn(val), ML - 4, y + 3);
+  }
+  // Left axis border
+  ctx.strokeStyle = 'rgba(42,96,64,0.6)'; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(ML, MT); ctx.lineTo(ML, MT + CH); ctx.stroke();
+
+  // Draw each bot's line + moving average
+  for (const { name, hist } of entries) {
+    const color = BOT_COLORS[name] || '#4ade80';
+    const off   = maxN - hist.length;
+    const n     = hist.length;
+    const win   = Math.max(3, Math.min(10, Math.round(n / 4)));
+
+    // Raw line (faint)
+    ctx.strokeStyle = color; ctx.lineWidth = 1; ctx.globalAlpha = 0.35;
+    ctx.beginPath();
+    for (let i = 0; i < n; i++) {
+      const x = toX(off + i), y = toY(hist[i]);
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    // Moving average (bold)
+    ctx.lineWidth = 2; ctx.globalAlpha = 1;
+    ctx.beginPath();
+    let started = false;
+    for (let i = win - 1; i < n; i++) {
+      const avg = hist.slice(i - win + 1, i + 1).reduce((a,b) => a+b, 0) / win;
+      const x = toX(off + i), y = toY(avg);
+      started ? ctx.lineTo(x, y) : (ctx.moveTo(x, y), started = true);
+    }
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
 }
 
 /* ── Instance log ────────────────────────────────────────────── */
@@ -845,9 +923,11 @@ async function refresh() {
     // Bot leaderboard + metric cards
     if (data.bots && data.bots.length) {
       renderLeaderboard(data.bots);
-      renderMetricBars('mergerbonusChart',   'mergerbonusPreview',   data.bots, 'avgMergerBonus',  fmtCash);
-      renderMetricBars('chainsfoundedChart', 'chainsfoundedPreview', data.bots, 'avgChainsFound',  v => (v||0).toFixed(2)+'/g');
-      renderMetricBars('majoritiesChart',    'majoritiesPreview',    data.bots, 'avgMajorities',   v => (v||0).toFixed(2));
+    }
+    if (data.botMetricHistory) {
+      drawBotMetricChart('mergerbonusCanvas',   'mergerbonusLegend',   'mergerbonusCurrent',   'mergerbonusPreview',   data.botMetricHistory, 'mergerBonus', fmtCash);
+      drawBotMetricChart('chainsfoundedCanvas', 'chainsfoundedLegend', 'chainsfoundedCurrent', 'chainsfoundedPreview', data.botMetricHistory, 'chainsFound', v => (+v||0).toFixed(2)+'/g');
+      drawBotMetricChart('majoritiesCanvas',    'majoritiesLegend',    'majoritiesCurrent',    'majoritiesPreview',    data.botMetricHistory, 'majorities',  v => (+v||0).toFixed(2));
     }
 
     // Instance log
