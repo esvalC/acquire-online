@@ -533,6 +533,7 @@ function toggleCard(id) {
   const isCollapsed = card.classList.toggle('collapsed');
   state[id] = isCollapsed;
   saveCollapsed(state);
+  if (!isCollapsed) refresh();
 }
 
 function applyCollapsed() {
