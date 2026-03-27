@@ -495,6 +495,23 @@
       </div>
     </div>
 
+    <!-- Defunct Stocks Held -->
+    <div class="card collapsed" id="card-defunct">
+      <div class="card-header" onclick="toggleCard('defunct')">
+        <span class="card-title">Defunct Stocks Held at End</span>
+        <div class="card-header-right">
+          <span class="card-preview" id="defunctPreview">—</span>
+          <span class="chevron">▾</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="defunctCurrent" style="display:flex;gap:24px;padding-top:16px;flex-wrap:wrap"></div>
+        <div class="chart-wrap" style="margin-top:12px"><canvas id="defunctCanvas"></canvas></div>
+        <div id="defunctLegend" class="chart-legend"></div>
+        <div class="chart-sub" style="margin-top:6px">each point = 1,000 games · avg worthless shares held per player at game end · lower is better</div>
+      </div>
+    </div>
+
     <!-- Spot Instance Log -->
     <div class="card" id="card-instances">
       <div class="card-header" onclick="toggleCard('instances')">
@@ -915,9 +932,10 @@ async function refresh() {
       renderLeaderboard(data.bots);
     }
     if (data.botMetricHistory) {
-      drawBotMetricChart('mergerbonusCanvas',   'mergerbonusLegend',   'mergerbonusCurrent',   'mergerbonusPreview',   data.botMetricHistory, 'mergerBonus', fmtCash);
-      drawBotMetricChart('chainsfoundedCanvas', 'chainsfoundedLegend', 'chainsfoundedCurrent', 'chainsfoundedPreview', data.botMetricHistory, 'chainsFound', v => (+v||0).toFixed(2)+'/g');
-      drawBotMetricChart('majoritiesCanvas',    'majoritiesLegend',    'majoritiesCurrent',    'majoritiesPreview',    data.botMetricHistory, 'majorities',  v => (+v||0).toFixed(2));
+      drawBotMetricChart('mergerbonusCanvas',   'mergerbonusLegend',   'mergerbonusCurrent',   'mergerbonusPreview',   data.botMetricHistory, 'mergerBonus',   fmtCash);
+      drawBotMetricChart('chainsfoundedCanvas', 'chainsfoundedLegend', 'chainsfoundedCurrent', 'chainsfoundedPreview', data.botMetricHistory, 'chainsFound',   v => (+v||0).toFixed(2)+'/g');
+      drawBotMetricChart('majoritiesCanvas',    'majoritiesLegend',    'majoritiesCurrent',    'majoritiesPreview',    data.botMetricHistory, 'majorities',    v => (+v||0).toFixed(2));
+      drawBotMetricChart('defunctCanvas',       'defunctLegend',       'defunctCurrent',       'defunctPreview',       data.botMetricHistory, 'defunctStocks', v => (+v||0).toFixed(2));
     }
 
     // Instance log

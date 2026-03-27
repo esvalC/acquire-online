@@ -704,7 +704,20 @@ function computeGameMetrics(game) {
     }
     majorities[player.name] = majCount;
   }
-  return { bonuses, founded, majorities };
+  // Defunct stocks held at game end: stocks in chains that were absorbed during
+  // play. endGame() only touches active chains, so inactive-chain stocks remain
+  // non-zero in player.stocks after game over. These are worth $0 — pure lost cash.
+  const defunctHeld = {}; // { playerName: totalDefunctShares }
+  for (const player of game.players) {
+    let total = 0;
+    for (const chain of engine.HOTEL_CHAINS) {
+      if (!game.chains[chain].active) {
+        total += player.stocks[chain] || 0;
+      }
+    }
+    defunctHeld[player.name] = total;
+  }
+  return { bonuses, founded, majorities, defunctHeld };
 }
 
 /* ── Run one self-play game ───────────────────────────────────── */
@@ -782,9 +795,22 @@ function runGame(bots, weights, masterSlots) {
     outcomeByName[p.name] = rankScore(game.standings, p.name);
   }
 
+  // Penalise holding defunct (absorbed-chain) stocks at game end.
+  // Each defunct share costs 0.04 of value signal, capped at 0.30.
+  // This creates direct gradient pressure to sell/trade during mergers
+  // even in games the bot is winning (where rank alone gives no signal).
+  const metrics = computeGameMetrics(game);
+  const defunctHeld = metrics.defunctHeld || {};
+  const outcomeAdjusted = {};
+  for (const p of game.players) {
+    const base    = outcomeByName[p.name] ?? 0.2;
+    const penalty = Math.min(0.30, (defunctHeld[p.name] || 0) * 0.04);
+    outcomeAdjusted[p.name] = Math.max(0, base - penalty);
+  }
+
   // Value targets: per-player outcomes in player-index order
   // [outcome_player0, outcome_player1, ..., outcome_player4]
-  const valueTargets = game.players.map(p => outcomeByName[p.name] ?? 0.2);
+  const valueTargets = game.players.map(p => outcomeAdjusted[p.name] ?? 0.2);
 
   // Build final records (attach value targets to each pending tile-decision)
   const records = pending.map(r => ({
@@ -795,7 +821,7 @@ function runGame(bots, weights, masterSlots) {
     playerIdx:    r.playerIdx,
   }));
 
-  return { records, standings: game.standings, turns, metrics: computeGameMetrics(game) };
+  return { records, standings: game.standings, turns, metrics };
 }
 
 /* ── Replay buffer (ring buffer) ──────────────────────────────── */
@@ -1047,7 +1073,8 @@ async function train() {
   const mergerBonuses  = {};
   const chainsFoundArr = {};
   const majoritiesArr  = {};
-  for (const b of BOTS) { mergerBonuses[b.name] = []; chainsFoundArr[b.name] = []; majoritiesArr[b.name] = []; }
+  const defunctArr     = {};
+  for (const b of BOTS) { mergerBonuses[b.name] = []; chainsFoundArr[b.name] = []; majoritiesArr[b.name] = []; defunctArr[b.name] = []; }
   const MAX_HIST = 500;
   // Load existing botMetricHistory from last stats write so history survives restarts
   let botMetricHistory = {};
@@ -1152,9 +1179,11 @@ async function train() {
           mergerBonuses[b.name].push(result.metrics.bonuses[b.name] || 0);
           chainsFoundArr[b.name].push(result.metrics.founded[b.name] || 0);
           majoritiesArr[b.name].push(result.metrics.majorities[b.name] || 0);
+          defunctArr[b.name].push(result.metrics.defunctHeld[b.name] || 0);
           if (mergerBonuses[b.name].length  > 5000) mergerBonuses[b.name].shift();
           if (chainsFoundArr[b.name].length > 5000) chainsFoundArr[b.name].shift();
           if (majoritiesArr[b.name].length  > 5000) majoritiesArr[b.name].shift();
+          if (defunctArr[b.name].length     > 5000) defunctArr[b.name].shift();
         }
       }
     }
@@ -1215,13 +1244,16 @@ async function train() {
       const allMerger  = BOTS.flatMap(b => mergerBonuses[b.name]);
       const allChains  = BOTS.flatMap(b => chainsFoundArr[b.name]);
       const allMaj     = BOTS.flatMap(b => majoritiesArr[b.name]);
-      botMetricHistory.mergerBonus = [...(botMetricHistory.mergerBonus || []), Math.round(avgArr(allMerger))].slice(-MAX_HIST);
-      botMetricHistory.chainsFound = [...(botMetricHistory.chainsFound || []), +avgArr(allChains).toFixed(2)].slice(-MAX_HIST);
-      botMetricHistory.majorities  = [...(botMetricHistory.majorities  || []), +avgArr(allMaj).toFixed(2)].slice(-MAX_HIST);
+      const allDefunct = BOTS.flatMap(b => defunctArr[b.name]);
+      botMetricHistory.mergerBonus   = [...(botMetricHistory.mergerBonus   || []), Math.round(avgArr(allMerger))].slice(-MAX_HIST);
+      botMetricHistory.chainsFound   = [...(botMetricHistory.chainsFound   || []), +avgArr(allChains).toFixed(2)].slice(-MAX_HIST);
+      botMetricHistory.majorities    = [...(botMetricHistory.majorities    || []), +avgArr(allMaj).toFixed(2)].slice(-MAX_HIST);
+      botMetricHistory.defunctStocks = [...(botMetricHistory.defunctStocks || []), +avgArr(allDefunct).toFixed(2)].slice(-MAX_HIST);
       for (const b of BOTS) {
         mergerBonuses[b.name]  = [];
         chainsFoundArr[b.name] = [];
         majoritiesArr[b.name]  = [];
+        defunctArr[b.name]     = [];
       }
 
       log(`  step=${t} games=${gamesTotal} loss=${avgTot} (pol=${avgPol} val=${avgVal}) elapsed=${elapsedS}s buf=${replay.size} errors=${errors}\n`);
