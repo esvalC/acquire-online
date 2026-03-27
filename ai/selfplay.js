@@ -178,24 +178,32 @@ function computeGameMetrics(game) {
     if (f) founded[f[1]] = (founded[f[1]] || 0) + 1;
   }
 
+  // Reconstruct final stock holdings from end-game sell log entries
+  // (endGame zeroes stocks before we can read them directly)
+  const finalStocks = {};
+  for (const entry of (game.log || [])) {
+    const s = entry.match(/^(\w+) sells (\d+) (\w+) shares for/);
+    if (s) {
+      const [, name, qty, chain] = s;
+      if (!finalStocks[name]) finalStocks[name] = {};
+      finalStocks[name][chain] = (finalStocks[name][chain] || 0) + parseInt(qty, 10);
+    }
+  }
+
   const portfolios = {}, majorities = {};
-  for (let i = 0; i < game.players.length; i++) {
-    const player = game.players[i];
-    let wealth = player.cash;
+  for (const player of game.players) {
+    const holdings = finalStocks[player.name] || {};
     let majCount = 0;
     for (const c of engine.HOTEL_CHAINS) {
-      const ch = game.chains[c];
-      if (!ch.active || ch.tiles.length === 0) continue;
-      const mine = player.stocks[c] || 0;
+      const mine = holdings[c] || 0;
       if (mine > 0) {
-        wealth += mine * engine.stockPrice(c, ch.tiles.length);
         const maxOpp = game.players
-          .filter((_, j) => j !== i)
-          .reduce((mx, p) => Math.max(mx, p.stocks[c] || 0), 0);
+          .filter(p => p.name !== player.name)
+          .reduce((mx, p) => Math.max(mx, (finalStocks[p.name] || {})[c] || 0), 0);
         if (mine >= maxOpp) majCount++;
       }
     }
-    portfolios[player.name] = wealth;
+    portfolios[player.name] = player.cash;
     majorities[player.name] = majCount;
   }
 
