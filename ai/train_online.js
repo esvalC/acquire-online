@@ -656,6 +656,34 @@ function masterShareForGame(gamesTotal) {
   return 0.95;                           // near-pure self-play
 }
 
+/* ── Per-game skill metrics ───────────────────────────────────── */
+function computeGameMetrics(game) {
+  const bonuses = {}, founded = {};
+  for (const entry of (game.log || [])) {
+    const m = entry.match(/^(\w+) (?:also )?receives \$(\d+)/);
+    if (m) bonuses[m[1]] = (bonuses[m[1]] || 0) + parseInt(m[2], 10);
+    const f = entry.match(/^(\w+) founded \w+ and received/);
+    if (f) founded[f[1]] = (founded[f[1]] || 0) + 1;
+  }
+  const majorities = {};
+  for (let i = 0; i < game.players.length; i++) {
+    const player = game.players[i];
+    let majCount = 0;
+    for (const c of engine.HOTEL_CHAINS) {
+      const ch = game.chains[c];
+      if (!ch.active || ch.tiles.length === 0) continue;
+      const mine = player.stocks[c] || 0;
+      if (mine > 0) {
+        const maxOpp = game.players.filter((_, j) => j !== i)
+          .reduce((mx, p) => Math.max(mx, p.stocks[c] || 0), 0);
+        if (mine >= maxOpp) majCount++;
+      }
+    }
+    majorities[player.name] = majCount;
+  }
+  return { bonuses, founded, majorities };
+}
+
 /* ── Run one self-play game ───────────────────────────────────── */
 // Returns { records, standings } or null on error.
 function runGame(bots, weights, masterSlots) {
@@ -744,7 +772,7 @@ function runGame(bots, weights, masterSlots) {
     playerIdx:    r.playerIdx,
   }));
 
-  return { records, standings: game.standings, turns };
+  return { records, standings: game.standings, turns, metrics: computeGameMetrics(game) };
 }
 
 /* ── Replay buffer (ring buffer) ──────────────────────────────── */
@@ -991,6 +1019,19 @@ async function train() {
   let   totalTurns = 0;
   for (const b of BOTS) { wins[b.name] = 0; podiums[b.name] = 0; avgCash[b.name] = []; elo[b.name] = 1500; }
 
+  // Skill metric accumulators (reset each run, history persisted in stats)
+  const mergerBonuses  = {};
+  const chainsFoundArr = {};
+  const majoritiesArr  = {};
+  for (const b of BOTS) { mergerBonuses[b.name] = []; chainsFoundArr[b.name] = []; majoritiesArr[b.name] = []; }
+  const MAX_HIST = 500;
+  // Load existing botMetricHistory from last stats write so history survives restarts
+  let botMetricHistory = {};
+  try {
+    const prev = JSON.parse(fs.readFileSync('/tmp/training_stats.json', 'utf8'));
+    botMetricHistory = prev.botMetricHistory || {};
+  } catch {}
+
   // "ELO" equivalent: track master bot's average ending cash over time.
   // We record the rolling average every 1000 games so you can see the
   // trend: a rising curve means the bot is accumulating more money per game.
@@ -1054,6 +1095,17 @@ async function train() {
         }
       }
       replay.pushAll(result.records);
+      // Accumulate skill metrics
+      if (result.metrics) {
+        for (const b of BOTS) {
+          mergerBonuses[b.name].push(result.metrics.bonuses[b.name] || 0);
+          chainsFoundArr[b.name].push(result.metrics.founded[b.name] || 0);
+          majoritiesArr[b.name].push(result.metrics.majorities[b.name] || 0);
+          if (mergerBonuses[b.name].length  > 5000) mergerBonuses[b.name].shift();
+          if (chainsFoundArr[b.name].length > 5000) chainsFoundArr[b.name].shift();
+          if (majoritiesArr[b.name].length  > 5000) majoritiesArr[b.name].shift();
+        }
+      }
     }
 
     // ── Train every TRAIN_EVERY games once buffer has enough data ─ */
@@ -1107,6 +1159,23 @@ async function train() {
       }
       winnerCashWindow = [];
 
+      // Append skill metric snapshot to rolling history
+      const avgArr = a => a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0;
+      for (const b of BOTS) {
+        const n = b.name;
+        const prev = botMetricHistory[n] || { mergerBonus: [], chainsFound: [], majorities: [], elo: [] };
+        botMetricHistory[n] = {
+          mergerBonus: [...prev.mergerBonus, Math.round(avgArr(mergerBonuses[n]))].slice(-MAX_HIST),
+          chainsFound: [...prev.chainsFound, +avgArr(chainsFoundArr[n]).toFixed(2)].slice(-MAX_HIST),
+          majorities:  [...prev.majorities,  +avgArr(majoritiesArr[n]).toFixed(2)].slice(-MAX_HIST),
+          elo:         [...prev.elo,          elo[n]].slice(-MAX_HIST),
+        };
+        // Reset windows for next checkpoint
+        mergerBonuses[n]  = [];
+        chainsFoundArr[n] = [];
+        majoritiesArr[n]  = [];
+      }
+
       log(`  step=${t} games=${gamesTotal} loss=${avgTot} (pol=${avgPol} val=${avgVal}) elapsed=${elapsedS}s buf=${replay.size} errors=${errors}\n`);
 
       const gamesThisRun = gamesTotal - startGamesTotal;
@@ -1138,6 +1207,7 @@ async function train() {
         updatedAt: new Date().toISOString(),
         avgTurns:        gamesThisRun > 0 ? +(totalTurns / gamesThisRun).toFixed(1) : 0,
         exportedRecords: replay.size,
+        botMetricHistory,
         bots: BOTS.map(b => {
           const cash = avgCash[b.name] || [];
           const w    = wins[b.name] || 0;
