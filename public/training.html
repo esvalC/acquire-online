@@ -312,6 +312,24 @@
     font-style: italic;
   }
 
+  /* ── Bot metric bars ── */
+  .bot-row { display:flex; align-items:center; gap:10px; padding:5px 0; }
+  .bot-row:not(:last-child) { border-bottom:1px solid rgba(42,96,64,0.3); }
+  .bot-rank { font-family:'JetBrains Mono',monospace; font-size:11px; color:var(--text-muted); width:14px; flex-shrink:0; }
+  .bot-name { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--text-dim); width:42px; flex-shrink:0; }
+  .bot-bar-wrap { flex:1; height:8px; background:rgba(42,96,64,0.25); border-radius:4px; overflow:hidden; }
+  .bot-bar { height:100%; border-radius:4px; background:var(--green); transition:width 0.4s; }
+  .bot-val { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--gold); width:64px; text-align:right; flex-shrink:0; }
+
+  /* ── Leaderboard table ── */
+  .lb-table { width:100%; border-collapse:collapse; font-family:'JetBrains Mono',monospace; font-size:11px; }
+  .lb-table th { color:var(--text-muted); text-align:right; padding:4px 6px; font-weight:500; border-bottom:1px solid var(--border); }
+  .lb-table th:first-child { text-align:left; }
+  .lb-table td { padding:5px 6px; text-align:right; border-bottom:1px solid rgba(42,96,64,0.2); }
+  .lb-table td:first-child { text-align:left; color:var(--text-dim); }
+  .lb-table tr:last-child td { border-bottom:none; }
+  .lb-table .hi { color:var(--gold); }
+
   /* ── Offline ── */
   #offlineMsg {
     text-align: center;
@@ -415,6 +433,66 @@
       <div class="card-body">
         <div id="errorDisplay" class="error-zero">0</div>
         <div class="big-number-sub">game errors in current run</div>
+      </div>
+    </div>
+
+    <!-- Bot Leaderboard -->
+    <div class="card collapsed" id="card-leaderboard">
+      <div class="card-header" onclick="toggleCard('leaderboard')">
+        <span class="card-title">Bot Leaderboard</span>
+        <div class="card-header-right">
+          <span class="card-preview" id="leaderboardPreview">—</span>
+          <span class="chevron">▾</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="leaderboardTable" style="padding-top:14px"></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:10px">ELO starts at 1500 · K=32 pairwise</div>
+      </div>
+    </div>
+
+    <!-- Merger Bonuses -->
+    <div class="card collapsed" id="card-mergerbonus">
+      <div class="card-header" onclick="toggleCard('mergerbonus')">
+        <span class="card-title">Avg Merger Bonus / Game</span>
+        <div class="card-header-right">
+          <span class="card-preview" id="mergerbonusPreview">—</span>
+          <span class="chevron">▾</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="mergerbonusChart" style="padding-top:14px"></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:10px">Majority + minority bonuses received per game · directly measures positional dominance</div>
+      </div>
+    </div>
+
+    <!-- Chains Founded -->
+    <div class="card collapsed" id="card-chainsfounded">
+      <div class="card-header" onclick="toggleCard('chainsfounded')">
+        <span class="card-title">Chains Founded / Game</span>
+        <div class="card-header-right">
+          <span class="card-preview" id="chainsfoundedPreview">—</span>
+          <span class="chevron">▾</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="chainsfoundedChart" style="padding-top:14px"></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:10px">How often each bot founds new chains · free share + first-mover advantage</div>
+      </div>
+    </div>
+
+    <!-- Majority Positions -->
+    <div class="card collapsed" id="card-majorities">
+      <div class="card-header" onclick="toggleCard('majorities')">
+        <span class="card-title">Majority Positions at End</span>
+        <div class="card-header-right">
+          <span class="card-preview" id="majoritiesPreview">—</span>
+          <span class="chevron">▾</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="majoritiesChart" style="padding-top:14px"></div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:10px">Chains where bot held ≥ opponent's shares at game end · 0 is valid for diversified bots</div>
       </div>
     </div>
 
@@ -640,6 +718,48 @@ function drawGameCashChart(totalHistory, winnerHistory) {
   document.getElementById('gameCashNewest').textContent = 'latest: '  + fmtCash(ref[ref.length - 1]);
 }
 
+/* ── Bot leaderboard & metric bar charts ────────────────────── */
+const BOT_COLORS = { Nova:'#4ade80', Aria:'#60a5fa', Rex:'#f87171', Colt:'#fbbf24', Vera:'#c084fc' };
+
+function renderLeaderboard(bots) {
+  if (!bots || !bots.length) return;
+  const sorted = [...bots].sort((a,b) => b.elo - a.elo);
+  document.getElementById('leaderboardPreview').textContent = sorted[0].name;
+  document.getElementById('leaderboardTable').innerHTML =
+    `<table class="lb-table">
+      <thead><tr>
+        <th>#</th><th style="text-align:left">Bot</th>
+        <th>ELO</th><th>Win%</th><th>Top3%</th><th>Avg Cash</th>
+      </tr></thead>
+      <tbody>${sorted.map((b,i) => `<tr>
+        <td style="color:var(--text-muted)">${i+1}</td>
+        <td>${b.name}</td>
+        <td class="hi">${b.elo}</td>
+        <td>${b.winPct}%</td>
+        <td>${b.top3Pct}%</td>
+        <td>${fmtCash(b.avgCash)}</td>
+      </tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function renderMetricBars(containerId, previewId, bots, field, fmtFn, higherBetter=true) {
+  if (!bots || !bots.length) return;
+  const sorted = [...bots].sort((a,b) => higherBetter ? b[field]-a[field] : a[field]-b[field]);
+  const max = Math.max(...sorted.map(b => b[field] || 0)) || 1;
+  document.getElementById(previewId).textContent = fmtFn(sorted[0][field]);
+  document.getElementById(containerId).innerHTML = sorted.map((b,i) => {
+    const pct = Math.round(((b[field] || 0) / max) * 100);
+    const color = BOT_COLORS[b.name] || 'var(--green)';
+    return `<div class="bot-row">
+      <span class="bot-rank">${i+1}</span>
+      <span class="bot-name">${b.name}</span>
+      <div class="bot-bar-wrap"><div class="bot-bar" style="width:${pct}%;background:${color}"></div></div>
+      <span class="bot-val">${fmtFn(b[field])}</span>
+    </div>`;
+  }).join('');
+}
+
 /* ── Instance log ────────────────────────────────────────────── */
 function renderInstanceLog(log) {
   const el = document.getElementById('instanceLog');
@@ -721,6 +841,14 @@ async function refresh() {
     errEl.textContent = fmtNum(errs);
     errEl.className   = errs === 0 ? 'error-zero' : 'error-nonzero';
     document.getElementById('errorsPreview').textContent = errs === 0 ? 'none' : fmtNum(errs);
+
+    // Bot leaderboard + metric cards
+    if (data.bots && data.bots.length) {
+      renderLeaderboard(data.bots);
+      renderMetricBars('mergerbonusChart',   'mergerbonusPreview',   data.bots, 'avgMergerBonus',  fmtCash);
+      renderMetricBars('chainsfoundedChart', 'chainsfoundedPreview', data.bots, 'avgChainsFound',  v => (v||0).toFixed(2)+'/g');
+      renderMetricBars('majoritiesChart',    'majoritiesPreview',    data.bots, 'avgMajorities',   v => (v||0).toFixed(2));
+    }
 
     // Instance log
     renderInstanceLog(data.instanceLog);

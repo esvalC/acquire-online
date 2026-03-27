@@ -160,7 +160,46 @@ function runGame(bots, opts = {}) {
     }));
   }
 
-  return { winner, standings, turns, error: null, records };
+  const metrics = computeGameMetrics(game);
+  return { winner, standings, turns, error: null, records, metrics };
+}
+
+/* ── Per-game skill metrics ──────────────────────────────────── */
+// Computed from game.log + game.players after the game ends.
+function computeGameMetrics(game) {
+  const bonuses = {}, founded = {};
+
+  for (const entry of (game.log || [])) {
+    // All bonus lines: "Name receives $X ..." or "Name also receives $X ..."
+    const m = entry.match(/^(\w+) (?:also )?receives \$(\d+)/);
+    if (m) bonuses[m[1]] = (bonuses[m[1]] || 0) + parseInt(m[2], 10);
+    // Chain founding: "Name founded ChainName and received 1 free share"
+    const f = entry.match(/^(\w+) founded \w+ and received/);
+    if (f) founded[f[1]] = (founded[f[1]] || 0) + 1;
+  }
+
+  const portfolios = {}, majorities = {};
+  for (let i = 0; i < game.players.length; i++) {
+    const player = game.players[i];
+    let wealth = player.cash;
+    let majCount = 0;
+    for (const c of engine.HOTEL_CHAINS) {
+      const ch = game.chains[c];
+      if (!ch.active || ch.tiles.length === 0) continue;
+      const mine = player.stocks[c] || 0;
+      if (mine > 0) {
+        wealth += mine * engine.stockPrice(c, ch.tiles.length);
+        const maxOpp = game.players
+          .filter((_, j) => j !== i)
+          .reduce((mx, p) => Math.max(mx, p.stocks[c] || 0), 0);
+        if (mine >= maxOpp) majCount++;
+      }
+    }
+    portfolios[player.name] = wealth;
+    majorities[player.name] = majCount;
+  }
+
+  return { bonuses, founded, portfolios, majorities };
 }
 
 /* ── Aggregate results ───────────────────────────────────────── */
@@ -200,11 +239,20 @@ async function runBenchmark(totalGames, opts = {}) {
   let   exportStream = null;
   let   exportedRecords = 0;
 
+  const mergerBonuses   = {};
+  const portfolioValues = {};
+  const chainsFoundArr  = {};
+  const majoritiesArr   = {};
+
   for (const b of BOTS) {
-    wins[b.name]    = 0;
-    podiums[b.name] = 0;
-    cashes[b.name]  = [];
-    elo[b.name]     = 1500; // chess starting ELO
+    wins[b.name]           = 0;
+    podiums[b.name]        = 0;
+    cashes[b.name]         = [];
+    elo[b.name]            = 1500;
+    mergerBonuses[b.name]  = [];
+    portfolioValues[b.name]= [];
+    chainsFoundArr[b.name] = [];
+    majoritiesArr[b.name]  = [];
   }
 
   if (opts.exportFile) {
@@ -237,14 +285,19 @@ async function runBenchmark(totalGames, opts = {}) {
       bots: BOTS.map(b => {
         const w   = wins[b.name];
         const arr = cashes[b.name];
+        const avg = a => a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0;
         return {
-          name:       b.name,
-          difficulty: b.difficulty,
-          wins:       w,
-          winPct:     played > 0 ? +((w / played) * 100).toFixed(1) : 0,
-          top3Pct:    played > 0 ? +((podiums[b.name] / played) * 100).toFixed(1) : 0,
-          avgCash:    arr.length ? Math.round(arr.reduce((s,v)=>s+v,0)/arr.length) : 0,
-          elo:        elo[b.name],
+          name:             b.name,
+          difficulty:       b.difficulty,
+          wins:             w,
+          winPct:           played > 0 ? +((w / played) * 100).toFixed(1) : 0,
+          top3Pct:          played > 0 ? +((podiums[b.name] / played) * 100).toFixed(1) : 0,
+          avgCash:          arr.length ? Math.round(avg(arr)) : 0,
+          elo:              elo[b.name],
+          avgMergerBonus:   Math.round(avg(mergerBonuses[b.name])),
+          avgPortfolio:     Math.round(avg(portfolioValues[b.name])),
+          avgChainsFound:   +avg(chainsFoundArr[b.name]).toFixed(2),
+          avgMajorities:    +avg(majoritiesArr[b.name]).toFixed(2),
         };
       }).sort((a,b) => b.elo - a.elo),
     };
@@ -276,6 +329,16 @@ async function runBenchmark(totalGames, opts = {}) {
       const { name, cash } = result.standings[i];
       if (i < 3) podiums[name]++;
       cashes[name].push(cash);
+    }
+
+    if (result.metrics) {
+      for (const b of BOTS) {
+        const n = b.name;
+        mergerBonuses[n].push(result.metrics.bonuses[n]    || 0);
+        portfolioValues[n].push(result.metrics.portfolios[n] || 0);
+        chainsFoundArr[n].push(result.metrics.founded[n]   || 0);
+        majoritiesArr[n].push(result.metrics.majorities[n] || 0);
+      }
     }
 
     // Write training records — respect backpressure to avoid OOM
