@@ -1049,7 +1049,10 @@ async function train() {
 
   while (Date.now() - t0 < TIME_LIMIT) {
     // ── Self-play game ────────────────────────────────────────── */
-    const bots = shuffle(BOTS);
+    // Player count: 70% 4-player, 15% 3-player, 15% 5-player
+    const r = Math.random();
+    const nPlayers = r < 0.15 ? 3 : r < 0.30 ? 5 : 4;
+    const bots = shuffle(BOTS).slice(0, nPlayers);
     const pMaster = masterShareForGame(gamesTotal);
     const masterSlots = new Set(bots.map((_, i) => i).filter(() => Math.random() < pMaster));
 
