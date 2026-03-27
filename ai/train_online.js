@@ -176,9 +176,18 @@ function loadOrInit() {
 
 function saveWeights(weights) {
   fs.mkdirSync(path.dirname(WEIGHTS_PATH), { recursive: true });
-  fs.writeFileSync(WEIGHTS_PATH, JSON.stringify(weights));
+  const json = JSON.stringify(weights);
+  // Write locally (best-effort — permission errors must not crash training)
   try {
-    execSync(`aws s3 cp "${WEIGHTS_PATH}" s3://${S3_BUCKET}/${S3_KEY}`, { timeout: 30000, stdio: 'pipe' });
+    fs.writeFileSync(WEIGHTS_PATH, json);
+  } catch (e) {
+    log(`  [warn] local weight save failed (${e.code}) — uploading via /tmp\n`);
+  }
+  // Always upload to S3 via /tmp so a bad local path never blocks progress
+  try {
+    const tmp = '/tmp/master_weights_upload.json';
+    fs.writeFileSync(tmp, json);
+    execSync(`aws s3 cp "${tmp}" s3://${S3_BUCKET}/${S3_KEY}`, { timeout: 30000, stdio: 'pipe' });
     log(`  [s3] uploaded → s3://${S3_BUCKET}/${S3_KEY}\n`);
   } catch (e) {
     log(`  [s3] upload failed: ${e.message}\n`);
