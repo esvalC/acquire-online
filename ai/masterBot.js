@@ -61,8 +61,6 @@ function tryReloadFromS3() {
       if (!candidate.body || !candidate.policyHead || !candidate.valueHead) return;
       _weights   = candidate;
       _loadError = null;
-      fs.mkdirSync(path.dirname(WEIGHTS_PATH), { recursive: true });
-      fs.copyFileSync(TMP_PATH, WEIGHTS_PATH);
       console.log(`[masterBot] Hot-reloaded v3 weights from S3 (${new Date().toISOString()})`);
     } catch {}
   });
