@@ -295,13 +295,21 @@ app.get('/api/training-stats', (req, res) => {
   }
   const bucket = process.env.S3_BUCKET || 'acquire-training-data';
   exec(`aws s3 cp s3://${bucket}/training_stats.json /tmp/training_stats_cache.json 2>/dev/null`, (err) => {
-    if (err) return res.json({ error: 'Training not running or stats unavailable.' });
+    if (err) {
+      _trainingStatsCache = null; // clear so next request retries S3 rather than serving stale data
+      _trainingStatsCacheTime = 0;
+      return res.json({ error: 'Training not running or stats unavailable.' });
+    }
     try {
       const data = JSON.parse(require('fs').readFileSync('/tmp/training_stats_cache.json', 'utf8'));
       _trainingStatsCache = data;
       _trainingStatsCacheTime = now;
       res.json(data);
-    } catch { res.json({ error: 'Could not parse stats.' }); }
+    } catch {
+      _trainingStatsCache = null;
+      _trainingStatsCacheTime = 0;
+      res.json({ error: 'Could not parse stats.' });
+    }
   });
 });
 
