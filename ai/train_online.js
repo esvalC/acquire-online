@@ -70,13 +70,23 @@ const POLICY_TEMP = 0.5;
 const EPS = 0.10;
 
 // Target cash for absolute reward component
-// Rank-based value targets: win-focused, steep drop-off.
-// Bot learns to WIN, not just accumulate cash.
-const RANK_SCORES = [1.0, 0.5, 0.25, 0.1, 0.0]; // 1st → 5th place
+// Rank-based value targets. Avoid 0.0 and 1.0 — sigmoid gradient vanishes there.
+// Small margin bonus rewards dominant wins over narrow wins without pigeonholing.
+const RANK_SCORES = [0.88, 0.60, 0.38, 0.18, 0.05]; // 1st → 5th place
 function rankScore(standings, myName) {
   const sorted = [...standings].sort((a, b) => b.cash - a.cash);
   const rank   = sorted.findIndex(p => p.name === myName);
-  return RANK_SCORES[rank] ?? 0.0;
+  const base   = RANK_SCORES[rank] ?? 0.05;
+  // Cash margin bonus: ±0.08 based on how far above/below opponent average.
+  // tanh maps any lead/deficit to (-1,1), keeping bonus bounded.
+  const myEntry = sorted[rank];
+  if (myEntry && sorted.length > 1) {
+    const avgOppCash = sorted.filter((_, i) => i !== rank)
+                             .reduce((s, p) => s + p.cash, 0) / (sorted.length - 1);
+    const lead = (myEntry.cash - avgOppCash) / (avgOppCash + 1);
+    return Math.max(0.02, Math.min(0.95, base + 0.08 * Math.tanh(lead)));
+  }
+  return base;
 }
 
 /* ── Bot roster ───────────────────────────────────────────────── */
@@ -871,7 +881,15 @@ function computeGameMetrics(game) {
     }
     defunctHeld[player.name] = total;
   }
-  return { bonuses, founded, majorities, defunctHeld };
+  // Cash lead: player's final cash vs average of opponents.
+  // Positive = performed better than average opponent; negative = worse.
+  const cashLead = {};
+  for (const player of game.players) {
+    const opps = game.players.filter(p => p.name !== player.name);
+    const avgOpp = opps.length > 0 ? opps.reduce((s, p) => s + p.cash, 0) / opps.length : 0;
+    cashLead[player.name] = Math.round(player.cash - avgOpp);
+  }
+  return { bonuses, founded, majorities, defunctHeld, cashLead };
 }
 
 /* ── Run one self-play game ───────────────────────────────────── */
@@ -928,7 +946,7 @@ function runGame(bots, weights, masterSlots) {
         const result = takeMasterAction(game, i, weights);
         acted = result.acted;
         if (result.acted && result.record) {
-          pending.push({ playerIdx: i, name: gp.name, ...result.record });
+          pending.push({ playerIdx: i, name: gp.name, turnNumber: turns, ...result.record });
         }
       } else {
         try { acted = decideBotAction(game, i, bot.personality, bot.difficulty, bot.name); }
@@ -966,13 +984,15 @@ function runGame(bots, weights, masterSlots) {
   // [outcome_player0, outcome_player1, ..., outcome_player4]
   const valueTargets = game.players.map(p => outcomeAdjusted[p.name] ?? 0.2);
 
-  // Build final records (attach value targets to each pending tile-decision)
+  // Build final records (attach value targets + turn position for TD blending)
   const records = pending.map(r => ({
     state:        r.state,
     policyTarget: r.policyTarget,
     legalIndices: r.legalIndices,
     valueTargets,
     playerIdx:    r.playerIdx,
+    turnNumber:   r.turnNumber || 0,
+    totalTurns:   turns,
   }));
 
   return { records, standings: game.standings, turns, metrics };
@@ -1027,7 +1047,7 @@ function trainStep(weights, adam, replay, t) {
   let totalPolicyLoss = 0;
   let totalValueLoss  = 0;
 
-  for (const { state, policyTarget, legalIndices, valueTargets, playerIdx } of batch) {
+  for (const { state, policyTarget, legalIndices, valueTargets, playerIdx, turnNumber, totalTurns } of batch) {
     const fwd = forward(weights, state);
     const { h, policyLogits, value } = fwd;
 
@@ -1051,23 +1071,23 @@ function trainStep(weights, adam, replay, t) {
       }
     }
 
-    // ── Value loss: MSE per player ────────────────────────────── */
-    // value[i] is sigmoid output for player i; valueTargets[i] is truth.
-    // ∂MSE/∂sigmoid_i = 2*(pred_i - target_i)
-    // ∂sigmoid/∂z_i = pred_i*(1-pred_i)   → chain rule gives:
-    // ∂L/∂z_i = 2*(pred_i - target_i)*pred_i*(1-pred_i)
+    // ── Value loss: MSE per player with TD-style confidence blending ── */
+    // Early-game states have high outcome variance — blending their target
+    // toward the uniform prior (0.2) reduces gradient noise without stopping
+    // learning. Confidence ramps to 1.0 over the final 40 turns of the game.
+    const PRIOR_VAL  = 1.0 / VALUE_DIM; // 0.2 for 5-player
+    const tLeft      = Math.max(0, (totalTurns || 80) - (turnNumber || 0));
+    const confidence = Math.min(1.0, 1.0 - Math.max(0, tLeft - 40) / (totalTurns || 80));
+
     let vLoss = 0;
     const valueDelta = new Float64Array(VALUE_DIM);
     for (let i = 0; i < VALUE_DIM; i++) {
-      const pred = value[i];
-      const tgt  = valueTargets[i] ?? 0.2;
-      const err  = pred - tgt;
+      const pred    = value[i];
+      const vtFinal = valueTargets[i] ?? PRIOR_VAL;
+      // Blend: late-game → full final outcome; early-game → partial prior blend
+      const tgt     = confidence * vtFinal + (1 - confidence) * PRIOR_VAL;
+      const err     = pred - tgt;
       vLoss        += err * err;
-      // The sigmoid gradient is baked into backpropLayersWithReturn because we
-      // pass 'sigmoid' as activation, but we need to pass pre-sigmoid delta.
-      // Easier: compute the pre-activation delta manually here.
-      // ∂L/∂z_value_i = (pred_i - target_i) * pred_i*(1-pred_i)   [BCE-style]
-      // For MSE: 2*(pred_i - target_i)*pred_i*(1-pred_i)
       valueDelta[i] = 2 * err * pred * (1 - pred);
     }
     totalValueLoss += vLoss / VALUE_DIM;
@@ -1228,14 +1248,24 @@ async function train() {
   const chainsFoundArr = {};
   const majoritiesArr  = {};
   const defunctArr     = {};
-  for (const b of BOTS) { mergerBonuses[b.name] = []; chainsFoundArr[b.name] = []; majoritiesArr[b.name] = []; defunctArr[b.name] = []; }
+  const cashLeadArr    = {};
+  for (const b of BOTS) {
+    mergerBonuses[b.name]  = [];
+    chainsFoundArr[b.name] = [];
+    majoritiesArr[b.name]  = [];
+    defunctArr[b.name]     = [];
+    cashLeadArr[b.name]    = [];
+  }
   const MAX_HIST = 500;
-  // Load existing botMetricHistory from last stats write so history survives restarts
+  // Load existing botMetricHistory from last stats write so history survives restarts.
+  // Skip on fresh start (gamesTotal=0) to avoid carrying over stale history.
   let botMetricHistory = {};
-  try {
-    const prev = JSON.parse(fs.readFileSync('/tmp/training_stats.json', 'utf8'));
-    botMetricHistory = prev.botMetricHistory || {};
-  } catch {}
+  if (gamesTotal > 0) {
+    try {
+      const prev = JSON.parse(fs.readFileSync('/tmp/training_stats.json', 'utf8'));
+      botMetricHistory = prev.botMetricHistory || {};
+    } catch {}
+  }
 
   // "ELO" equivalent: track master bot's average ending cash over time.
   // We record the rolling average every 1000 games so you can see the
@@ -1345,10 +1375,12 @@ async function train() {
           chainsFoundArr[b.name].push(result.metrics.founded[b.name] || 0);
           majoritiesArr[b.name].push(result.metrics.majorities[b.name] || 0);
           defunctArr[b.name].push(result.metrics.defunctHeld[b.name] || 0);
+          cashLeadArr[b.name].push(result.metrics.cashLead?.[b.name] || 0);
           if (mergerBonuses[b.name].length  > 5000) mergerBonuses[b.name].shift();
           if (chainsFoundArr[b.name].length > 5000) chainsFoundArr[b.name].shift();
           if (majoritiesArr[b.name].length  > 5000) majoritiesArr[b.name].shift();
           if (defunctArr[b.name].length     > 5000) defunctArr[b.name].shift();
+          if (cashLeadArr[b.name].length    > 5000) cashLeadArr[b.name].shift();
         }
       }
     }
@@ -1408,19 +1440,22 @@ async function train() {
 
       // Append skill metric snapshot — aggregate across all bots (same network)
       const avgArr = a => a.length ? a.reduce((s,v)=>s+v,0)/a.length : 0;
-      const allMerger  = BOTS.flatMap(b => mergerBonuses[b.name]);
-      const allChains  = BOTS.flatMap(b => chainsFoundArr[b.name]);
-      const allMaj     = BOTS.flatMap(b => majoritiesArr[b.name]);
-      const allDefunct = BOTS.flatMap(b => defunctArr[b.name]);
+      const allMerger   = BOTS.flatMap(b => mergerBonuses[b.name]);
+      const allChains   = BOTS.flatMap(b => chainsFoundArr[b.name]);
+      const allMaj      = BOTS.flatMap(b => majoritiesArr[b.name]);
+      const allDefunct  = BOTS.flatMap(b => defunctArr[b.name]);
+      const allCashLead = BOTS.flatMap(b => cashLeadArr[b.name]);
       botMetricHistory.mergerBonus   = [...(botMetricHistory.mergerBonus   || []), Math.round(avgArr(allMerger))].slice(-MAX_HIST);
       botMetricHistory.chainsFound   = [...(botMetricHistory.chainsFound   || []), +avgArr(allChains).toFixed(2)].slice(-MAX_HIST);
       botMetricHistory.majorities    = [...(botMetricHistory.majorities    || []), +avgArr(allMaj).toFixed(2)].slice(-MAX_HIST);
       botMetricHistory.defunctStocks = [...(botMetricHistory.defunctStocks || []), +avgArr(allDefunct).toFixed(2)].slice(-MAX_HIST);
+      botMetricHistory.cashLead      = [...(botMetricHistory.cashLead      || []), Math.round(avgArr(allCashLead))].slice(-MAX_HIST);
       for (const b of BOTS) {
         mergerBonuses[b.name]  = [];
         chainsFoundArr[b.name] = [];
         majoritiesArr[b.name]  = [];
         defunctArr[b.name]     = [];
+        cashLeadArr[b.name]    = [];
       }
 
       log(`  step=${t} games=${gamesTotal} loss=${avgTot} (pol=${avgPol} val=${avgVal}) elapsed=${elapsedS}s buf=${replay.size} errors=${errors}\n`);
