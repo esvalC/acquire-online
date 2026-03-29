@@ -1285,21 +1285,10 @@ async function train() {
   // Upload an initial stats snapshot immediately on startup so the dashboard
   // reflects the correct gamesTotal right away instead of waiting up to 1000
   // games for the first periodic checkpoint upload.
-  // Never let the displayed counter go backwards: if S3 already shows a higher
-  // gamesTotal (from before a restart), keep that value in the startup snapshot.
   try {
-    let displayGames = gamesTotal;
-    try {
-      execSync(`aws s3 cp s3://${S3_BUCKET}/training_stats.json /tmp/prev_training_stats.json`, { timeout: 10000, stdio: 'pipe' });
-      const prev = JSON.parse(fs.readFileSync('/tmp/prev_training_stats.json', 'utf8'));
-      if ((prev.gamesTotal || 0) > displayGames) {
-        displayGames = prev.gamesTotal;
-        log(`  [startup] checkpoint=${gamesTotal}, keeping prev display=${displayGames}\n`);
-      }
-    } catch {}
     const initStats = {
-      step: t, gamesTotal: displayGames, gamesThisRun: 0,
-      gamesPlayed: displayGames, masterGames: 0, errors: 0,
+      step: t, gamesTotal, gamesThisRun: 0,
+      gamesPlayed: gamesTotal, masterGames: 0, errors: 0,
       avgLoss: null,
       lossHistory: [], replaySize: 0,
       gameCashAvg: gameCashHistory[gameCashHistory.length - 1] || null,
@@ -1314,7 +1303,7 @@ async function train() {
     const tmpStats = '/tmp/training_stats.json';
     fs.writeFileSync(tmpStats, JSON.stringify(initStats));
     execSync(`aws s3 cp "${tmpStats}" s3://${S3_BUCKET}/training_stats.json`, { timeout: 15000, stdio: 'pipe' });
-    log(`  [startup] stats uploaded → gamesTotal=${displayGames}\n`);
+    log(`  [startup] stats uploaded → gamesTotal=${gamesTotal}\n`);
   } catch (e) { log(`  [startup] stats upload failed: ${e.message}\n`); }
 
   while (Date.now() - t0 < TIME_LIMIT) {
