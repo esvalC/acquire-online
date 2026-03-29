@@ -3,7 +3,7 @@
  * ai/train_online.js — AlphaZero-style training for the Master Bot
  *
  * Architecture: shared body + DUAL HEADS
- *   Input (258) → FC(256)→ReLU → FC(128)→ReLU → FC(64)→ReLU → h
+ *   Input (265) → FC(256)→ReLU → FC(128)→ReLU → FC(64)→ReLU → h
  *   h → policy head: FC(108) → tile logits (softmax during training)
  *   h → value  head: FC(5)   → per-player win probabilities (sigmoid)
  *
@@ -38,6 +38,7 @@ function getArg(flag, def) {
 
 /* ── Config ───────────────────────────────────────────────────── */
 const BATCH_SIZE   = 256;     // samples per gradient step (from replay buffer)
+const TRAIN_STEPS  = 10;     // gradient steps per training interval
 const TRAIN_EVERY  = 100;     // games between gradient steps
 const SAVE_EVERY   = 1000;    // games between weight saves to disk+S3
 const REPLAY_SIZE  = 20000;   // max entries in replay buffer
@@ -52,7 +53,7 @@ const S3_BUCKET    = process.env.S3_BUCKET || 'acquire-training-data';
 const S3_KEY       = 'master_weights.json';
 
 /* ── Architecture constants ───────────────────────────────────── */
-const INPUT_DIM   = 258;  // 108 board + 108 tile hand + 35 chain features + 1 myCash + 4 oppCash + 1 tileBag
+const INPUT_DIM   = 265;  // 108 board + 108 tile hand + 42 chain features (6 each) + 1 myCash + 4 oppCash + 1 tileBag
 const HIDDEN      = [256, 128, 64];
 const POLICY_DIM  = 108;  // 9 rows × 12 cols (one logit per board cell)
 const VALUE_DIM   = 5;    // one sigmoid per player position
@@ -137,7 +138,7 @@ function initWeights() {
   const bodyOut  = HIDDEN[HIDDEN.length - 1]; // 64
 
   return {
-    version:    3,
+    version:    4,
     body,
     policyHead: [heLayer(bodyOut, POLICY_DIM)],
     valueHead:  [heLayer(bodyOut, VALUE_DIM)],
@@ -149,10 +150,10 @@ function loadOrInit() {
   try {
     const raw = fs.readFileSync(WEIGHTS_PATH, 'utf8');
     const w   = JSON.parse(raw);
-    if (!w.version || w.version < 3) {
-      log('  Old weight format detected — will try S3 before reinitializing.\n');
+    if (!w.version || w.version < 4) {
+      log('  Old weight format (pre-v4) — architecture changed (INPUT_DIM=265), reinitializing.\n');
     } else {
-      log(`  Loaded v3 weights from ${WEIGHTS_PATH}\n`);
+      log(`  Loaded v4 weights from ${WEIGHTS_PATH}\n`);
       return w;
     }
   } catch { /* no local file */ }
@@ -163,14 +164,14 @@ function loadOrInit() {
     execSync(`aws s3 cp s3://${S3_BUCKET}/${S3_KEY} "${WEIGHTS_PATH}"`, { timeout: 30000, stdio: 'pipe' });
     const raw = fs.readFileSync(WEIGHTS_PATH, 'utf8');
     const w   = JSON.parse(raw);
-    if (w.version >= 3) {
-      log(`  Resumed v3 weights from S3 — continuing from previous run.\n`);
+    if (w.version >= 4) {
+      log(`  Resumed v4 weights from S3 — continuing from previous run.\n`);
       return w;
     }
   } catch { /* S3 not available or no valid weights */ }
 
   // 3. Fresh start
-  log('  Initializing fresh v3 weights (policy + value heads).\n');
+  log('  Initializing fresh v4 weights (policy + value heads).\n');
   return initWeights();
 }
 
@@ -227,6 +228,37 @@ function softmax(arr) {
   for (let i = 0; i < arr.length; i++) { out[i] = Math.exp(arr[i] - max); sum += out[i]; }
   for (let i = 0; i < out.length; i++) out[i] /= sum;
   return out;
+}
+
+/* ── Fast inference-only forward pass (no activation tracking) ── */
+// Returns value probabilities per player (Float64Array of VALUE_DIM).
+function inferForward(weights, input) {
+  let x = input;
+  for (const { W, b } of weights.body) {
+    const out = new Float64Array(b.length);
+    for (let j = 0; j < b.length; j++) {
+      let sum = b[j];
+      const Wj = W[j];
+      for (let i = 0; i < x.length; i++) sum += Wj[i] * x[i];
+      out[j] = sum > 0 ? sum : 0; // ReLU
+    }
+    x = out;
+  }
+  for (let li = 0; li < weights.valueHead.length; li++) {
+    const { W, b } = weights.valueHead[li];
+    const isLast = li === weights.valueHead.length - 1;
+    const out = new Float64Array(b.length);
+    for (let j = 0; j < b.length; j++) {
+      let sum = b[j];
+      const Wj = W[j];
+      for (let i = 0; i < x.length; i++) sum += Wj[i] * x[i];
+      out[j] = isLast
+        ? 1 / (1 + Math.exp(-Math.max(-30, Math.min(30, sum)))) // sigmoid
+        : (sum > 0 ? sum : 0); // ReLU
+    }
+    x = out;
+  }
+  return x;
 }
 
 /* ── Forward pass through a list of FC layers ─────────────────── */
@@ -380,13 +412,14 @@ function zeroGrads(grads) {
 }
 
 /* ── State encoder ────────────────────────────────────────────── */
-// Input layout (258 total):
+// Input layout (265 total):
 //   [0..107]   board state (108): board[r][c] value / 7.0
 //   [108..215] tile hand (108):   1 if player holds that tile, else 0
-//   [216..250] chain features (35): 7 chains × 5 features each
-//   [251]      myCash
-//   [252..255] oppCash (4)
-//   [256]      bagCount
+//   [216..257] chain features (42): 7 chains × 6 features each
+//   [258]      myCash
+//   [259..262] oppCash (4)
+//   [263]      bagCount
+//   [264]      (reserved)
 function encodeFlat(game, playerIdx) {
   const player    = game.players[playerIdx];
   const CHAIN_IDX = {};
@@ -414,7 +447,7 @@ function encodeFlat(game, playerIdx) {
     }
   }
 
-  // 3. Chain features: 7 × 5 = 35
+  // 3. Chain features: 7 × 6 = 42
   for (const ch of engine.HOTEL_CHAINS) {
     const info = game.chains[ch];
     const size = info.tiles.length;
@@ -424,6 +457,20 @@ function encodeFlat(game, playerIdx) {
     vec[vi++] = game.players.filter((_, i) => i !== playerIdx)
                   .reduce((m, p) => Math.max(m, p.stocks[ch] || 0), 0) / 25.0;
     vec[vi++] = engine.stockPrice(ch, size) / 1000.0;
+    // Adjacent empty squares: proxy for chain growth potential.
+    // 0 = fully frozen (surrounded), higher = more room to grow.
+    let adjEmpty = 0;
+    if (info.active) {
+      for (const tileStr of info.tiles) {
+        const tr = parseInt(tileStr) - 1;
+        const tc = tileStr.charCodeAt(tileStr.length - 1) - 65;
+        if (game.board[tr - 1] !== undefined && !game.board[tr - 1][tc]) adjEmpty++;
+        if (game.board[tr + 1] !== undefined && !game.board[tr + 1][tc]) adjEmpty++;
+        if (tc > 0  && !game.board[tr][tc - 1]) adjEmpty++;
+        if (tc < 11 && !game.board[tr][tc + 1]) adjEmpty++;
+      }
+    }
+    vec[vi++] = adjEmpty / 50.0;
   }
 
   // 4. myCash: 1
@@ -455,6 +502,81 @@ function cloneForScoring(game) {
   game.log = savedLog;
   clone.log = [];
   return clone;
+}
+
+/* ── Value-guided action selection (for non-tile phases) ──────── */
+function valueGuidedAction(weights, game, playerIdx, actions) {
+  if (actions.length === 1) return actions[0];
+  const myName = game.players[playerIdx].name;
+  let bestAction = actions[0], bestScore = -1;
+  for (const action of actions) {
+    const sim = cloneForScoring(game);
+    try {
+      if      (action.type === 'buyStock')            engine.buyStock(sim, playerIdx, action.purchases || {});
+      else if (action.type === 'mergerDecision')       engine.mergerDecision(sim, playerIdx, { sell: action.sell || 0, trade: action.trade || 0 });
+      else if (action.type === 'chooseChain')          engine.chooseChain(sim, playerIdx, action.chain);
+      else if (action.type === 'chooseMergerSurvivor') engine.chooseMergerSurvivor(sim, playerIdx, action.chain);
+    } catch { continue; }
+    let score;
+    if (sim.phase === 'gameOver') {
+      score = rankScore(sim.standings || [], myName);
+    } else {
+      score = inferForward(weights, encodeFlat(sim, playerIdx))[playerIdx];
+    }
+    if (score > bestScore) { bestScore = score; bestAction = action; }
+  }
+  return bestAction;
+}
+
+/* ── Legal buy actions for training (single-chain only, fast) ─── */
+function legalBuyActionsForTraining(game, playerIdx) {
+  const player  = game.players[playerIdx];
+  const actions = [{ type: 'buyStock', purchases: {} }]; // pass option
+  for (const c of engine.HOTEL_CHAINS) {
+    const ch = game.chains[c];
+    if (!ch.active) continue;
+    const price  = engine.stockPrice(c, ch.tiles.length);
+    if (price > player.cash) continue;
+    const issued = game.players.reduce((s, p) => s + (p.stocks[c] || 0), 0);
+    if (issued >= 25) continue;
+    const maxN = Math.min(3, Math.floor(player.cash / price), 25 - issued);
+    if (maxN > 0) actions.push({ type: 'buyStock', purchases: { [c]: maxN } });
+  }
+  return actions;
+}
+
+/* ── Legal merger actions for training ────────────────────────── */
+function legalMergerActionsForTraining(game, playerIdx) {
+  const pm      = game.pendingMerger;
+  const defunct = pm.defunctChains[pm.currentDefunctIdx];
+  const held    = game.players[playerIdx].stocks[defunct] || 0;
+  if (held === 0) return [{ type: 'mergerDecision', sell: 0, trade: 0 }];
+  const survivorRoom = 25 - game.players.reduce((s, p) => s + (p.stocks[pm.survivor] || 0), 0);
+  const maxTrade     = Math.min(Math.floor(held / 2) * 2, survivorRoom * 2);
+
+  const seen = new Map();
+  const add = (sell, trade) => {
+    trade = Math.min(trade, maxTrade);
+    sell  = Math.max(0, Math.min(sell, held - trade));
+    if (sell + trade > held) return;
+    const key = `${sell},${trade}`;
+    if (!seen.has(key)) seen.set(key, { type: 'mergerDecision', sell, trade });
+  };
+
+  add(held, 0);                              // sell all
+  add(0, 0);                                 // hold all
+  if (maxTrade > 0) {
+    add(held - maxTrade, maxTrade);           // trade max, sell remainder
+    add(0, maxTrade);                         // trade max, keep remainder
+    const qTrade = Math.floor(maxTrade / 4) * 2;
+    if (qTrade > 0) {
+      add(held - qTrade, qTrade);
+      add(0, qTrade);
+    }
+  }
+  add(Math.floor(held / 2), 0);
+  add(Math.ceil(held / 2),  0);
+  return [...seen.values()];
 }
 
 /* ── Random action ────────────────────────────────────────────── */
@@ -644,17 +766,49 @@ function takeMasterAction(game, playerIdx, weights) {
       return { acted: true, record };
     }
 
-    // ── Financial decision phases: record state for value head training ──
-    // No policy target — only the value head trains on these records.
-    // The body trains too (via value gradient), learning to extract
-    // financially-relevant features from the board state.
-    if (phase === 'buyStock' ||
-        (phase === 'mergerDecision' && game.pendingMerger?.decidingPlayer === playerIdx) ||
-        phase === 'chooseChain' ||
-        phase === 'chooseMergerSurvivor') {
+    // ── Financial decision phases: value-guided action selection ──
+    // Uses value network to pick best action (same as masterBot.js inference).
+    // Records state for value head training — no policy target for these phases.
+    if (phase === 'buyStock') {
       const stateBefore = encodeFlat(game, playerIdx);
-      const acted = takeRandomAction(game, playerIdx);
-      return { acted, record: acted ? { state: stateBefore, policyTarget: null, legalIndices: [] } : null };
+      const actions = legalBuyActionsForTraining(game, playerIdx);
+      const best = valueGuidedAction(weights, game, playerIdx, actions);
+      try { engine.buyStock(game, playerIdx, best.purchases || {}); } catch { return { acted: false, record: null }; }
+      return { acted: true, record: { state: stateBefore, policyTarget: null, legalIndices: [] } };
+    }
+
+    if (phase === 'mergerDecision' && game.pendingMerger?.decidingPlayer === playerIdx) {
+      const stateBefore = encodeFlat(game, playerIdx);
+      const actions = legalMergerActionsForTraining(game, playerIdx);
+      const best = valueGuidedAction(weights, game, playerIdx, actions);
+      try { engine.mergerDecision(game, playerIdx, { sell: best.sell || 0, trade: best.trade || 0 }); } catch { return { acted: false, record: null }; }
+      return { acted: true, record: { state: stateBefore, policyTarget: null, legalIndices: [] } };
+    }
+
+    if (phase === 'chooseChain') {
+      const stateBefore = encodeFlat(game, playerIdx);
+      const available = engine.HOTEL_CHAINS.filter(c => !game.chains[c].active);
+      if (available.length === 0) return { acted: false, record: null };
+      if (available.length === 1) {
+        try { engine.chooseChain(game, playerIdx, available[0]); } catch { return { acted: false, record: null }; }
+        return { acted: true, record: { state: stateBefore, policyTarget: null, legalIndices: [] } };
+      }
+      const best = valueGuidedAction(weights, game, playerIdx, available.map(c => ({ type: 'chooseChain', chain: c })));
+      try { engine.chooseChain(game, playerIdx, best.chain); } catch { return { acted: false, record: null }; }
+      return { acted: true, record: { state: stateBefore, policyTarget: null, legalIndices: [] } };
+    }
+
+    if (phase === 'chooseMergerSurvivor') {
+      const stateBefore = encodeFlat(game, playerIdx);
+      const tied = game.pendingMerger?.tiedChains || [];
+      if (tied.length === 0) return { acted: false, record: null };
+      if (tied.length === 1) {
+        try { engine.chooseMergerSurvivor(game, playerIdx, tied[0]); } catch { return { acted: false, record: null }; }
+        return { acted: true, record: { state: stateBefore, policyTarget: null, legalIndices: [] } };
+      }
+      const best = valueGuidedAction(weights, game, playerIdx, tied.map(c => ({ type: 'chooseMergerSurvivor', chain: c })));
+      try { engine.chooseMergerSurvivor(game, playerIdx, best.chain); } catch { return { acted: false, record: null }; }
+      return { acted: true, record: { state: stateBefore, policyTarget: null, legalIndices: [] } };
     }
   } catch {}
   return { acted: takeRandomAction(game, playerIdx), record: null };
@@ -1201,13 +1355,15 @@ async function train() {
 
     // ── Train every TRAIN_EVERY games once buffer has enough data ─ */
     if (gamesTotal % TRAIN_EVERY === 0 && replay.size >= BATCH_SIZE) {
-      t++;
-      const losses = trainStep(weights, adam, replay, t);
-      if (losses) {
-        rollingLoss.policy += losses.policyLoss;
-        rollingLoss.value  += losses.valueLoss;
-        rollingLoss.total  += losses.totalLoss;
-        rollingLoss.cnt++;
+      for (let _s = 0; _s < TRAIN_STEPS; _s++) {
+        t++;
+        const losses = trainStep(weights, adam, replay, t);
+        if (losses) {
+          rollingLoss.policy += losses.policyLoss;
+          rollingLoss.value  += losses.valueLoss;
+          rollingLoss.total  += losses.totalLoss;
+          rollingLoss.cnt++;
+        }
       }
     }
 

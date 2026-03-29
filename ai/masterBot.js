@@ -1,8 +1,8 @@
 /**
  * ai/masterBot.js — Master Bot inference
  *
- * Supports weight format v3 (AlphaZero-style):
- *   { version: 3, body: [...], policyHead: [...], valueHead: [...] }
+ * Supports weight format v4 (AlphaZero-style):
+ *   { version: 4, body: [...], policyHead: [...], valueHead: [...] }
  *
  * Tile placement: use policy head logits directly (fastest — no cloning).
  *   The policy head has learned which tiles are strategically strong.
@@ -17,7 +17,7 @@ const { exec } = require('child_process');
 const engine = require('../gameEngine');
 
 const WEIGHTS_PATH     = path.join(__dirname, 'models', 'master_weights.json');
-const INPUT_DIM        = 258;  // 108 board + 108 tile hand + 35 chains + 1 myCash + 4 oppCash + 1 bagCount
+const INPUT_DIM        = 265;  // 108 board + 108 tile hand + 42 chains (6 features each) + 1 myCash + 4 oppCash + 1 bagCount
 const POLICY_DIM       = 108; // 9×12 board
 const VALUE_DIM        = 5;   // one per player
 const BAG_TOTAL        = 102;
@@ -36,13 +36,13 @@ function loadWeights() {
   try {
     const raw = fs.readFileSync(WEIGHTS_PATH, 'utf8');
     const w   = JSON.parse(raw);
-    if (!w.version || w.version < 3) {
-      _loadError = 'Old weight format (pre-v3) — retrain with new AlphaZero architecture';
+    if (!w.version || w.version < 4) {
+      _loadError = 'Old weight format (pre-v4, INPUT_DIM=258) — retraining in progress';
       console.warn('[masterBot]', _loadError);
       return null;
     }
     _weights = w;
-    console.log('[masterBot] v3 weights loaded from disk.');
+    console.log('[masterBot] v4 weights loaded from disk.');
     return _weights;
   } catch (err) {
     _loadError = 'master_weights.json not found — train first';
@@ -57,11 +57,11 @@ function tryReloadFromS3() {
     try {
       const raw       = fs.readFileSync(TMP_PATH, 'utf8');
       const candidate = JSON.parse(raw);
-      if (!candidate.version || candidate.version < 3) return;
+      if (!candidate.version || candidate.version < 4) return;
       if (!candidate.body || !candidate.policyHead || !candidate.valueHead) return;
       _weights   = candidate;
       _loadError = null;
-      console.log(`[masterBot] Hot-reloaded v3 weights from S3 (${new Date().toISOString()})`);
+      console.log(`[masterBot] Hot-reloaded v4 weights from S3 (${new Date().toISOString()})`);
     } catch {}
   });
 }
@@ -106,13 +106,13 @@ function forward(weights, input) {
 }
 
 /* ── State encoder ────────────────────────────────────────────── */
-// Input layout (258 total):
+// Input layout (265 total):
 //   [0..107]   board state (108): board[r][c] value / 7.0
 //   [108..215] tile hand (108):   1 if player holds that tile, else 0
-//   [216..250] chain features (35): 7 chains × 5 features each
-//   [251]      myCash
-//   [252..255] oppCash (4)
-//   [256]      bagCount
+//   [216..257] chain features (42): 7 chains × 6 features each (added: adjacentEmpty)
+//   [258]      myCash
+//   [259..262] oppCash (4)
+//   [263]      bagCount
 function encodeState(game, playerIdx) {
   const player    = game.players[playerIdx];
   const CHAIN_IDX = {};
@@ -140,7 +140,7 @@ function encodeState(game, playerIdx) {
     }
   }
 
-  // 3. Chain features: 7 × 5 = 35
+  // 3. Chain features: 7 × 6 = 42
   for (const ch of engine.HOTEL_CHAINS) {
     const info = game.chains[ch];
     const size = info.tiles.length;
@@ -150,6 +150,18 @@ function encodeState(game, playerIdx) {
     vec[vi++] = game.players.filter((_, i) => i !== playerIdx)
                   .reduce((m, p) => Math.max(m, p.stocks[ch] || 0), 0) / 25.0;
     vec[vi++] = engine.stockPrice(ch, size) / 1000.0;
+    let adjEmpty = 0;
+    if (info.active) {
+      for (const tileStr of info.tiles) {
+        const tr = parseInt(tileStr) - 1;
+        const tc = tileStr.charCodeAt(tileStr.length - 1) - 65;
+        if (game.board[tr - 1] !== undefined && !game.board[tr - 1][tc]) adjEmpty++;
+        if (game.board[tr + 1] !== undefined && !game.board[tr + 1][tc]) adjEmpty++;
+        if (tc > 0  && !game.board[tr][tc - 1]) adjEmpty++;
+        if (tc < 11 && !game.board[tr][tc + 1]) adjEmpty++;
+      }
+    }
+    vec[vi++] = adjEmpty / 50.0;
   }
 
   // 4. myCash: 1
@@ -320,42 +332,22 @@ function decideMasterAction(game, playerIdx) {
   if (!weights) return null;
 
   try {
-    // ── Tile placement: value-guided lookahead (resolves chooseChain inline) ── */
+    // ── Tile placement: policy head guided (trained via MCTS visit counts) ── */
+    // The policy head encodes strategic tile knowledge learned from MCTS self-play.
+    // Using it directly is faster than cloning the game per tile and avoids
+    // redundant computation (the policy head already captures multi-step lookahead
+    // from the MCTS targets it was trained on).
     if (phase === 'placeTile') {
       const { playable } = engine.getPlayableTiles(game);
       if (!playable || playable.length === 0) return null; // botAI heuristic handles passTile
       if (playable.length === 1) return { type: 'placeTile', tile: playable[0] };
 
-      const myName = game.players[playerIdx].name;
-      let best = playable[0], bestScore = -Infinity;
+      const state = encodeState(game, playerIdx);
+      const { policyLogits } = forward(weights, state);
+      let best = playable[0], bestLogit = -Infinity;
       for (const tile of playable) {
-        const sim = cloneGame(game);
-        try {
-          engine.placeTile(sim, playerIdx, tile);
-          // If placing the tile triggers chooseChain, resolve it now so the
-          // value head evaluates the fully-settled board state.
-          if (sim.phase === 'chooseChain') {
-            const avail = engine.HOTEL_CHAINS.filter(c => !sim.chains[c].active);
-            if (avail.length === 1) {
-              engine.chooseChain(sim, playerIdx, avail[0]);
-            } else if (avail.length > 1) {
-              const chainBest = bestValueAction(weights, sim, playerIdx,
-                avail.map(c => ({ type: 'chooseChain', chain: c })));
-              engine.chooseChain(sim, playerIdx, chainBest.chain);
-            }
-          }
-        } catch { continue; }
-
-        let score;
-        if (sim.phase === 'gameOver') {
-          score = sim.standings?.[0]?.name === myName ? 1 : 0;
-        } else {
-          try {
-            const { value } = forward(weights, encodeState(sim, playerIdx));
-            score = value[playerIdx];
-          } catch { score = 0.5; }
-        }
-        if (score > bestScore) { bestScore = score; best = tile; }
+        const idx = tileToIdx(tile);
+        if (policyLogits[idx] > bestLogit) { bestLogit = policyLogits[idx]; best = tile; }
       }
       return { type: 'placeTile', tile: best };
     }
