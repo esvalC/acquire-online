@@ -53,7 +53,7 @@ const S3_BUCKET    = process.env.S3_BUCKET || 'acquire-training-data';
 const S3_KEY       = 'master_weights.json';
 
 /* ── Architecture constants ───────────────────────────────────── */
-const INPUT_DIM   = 265;  // 108 board + 108 tile hand + 42 chain features (6 each) + 1 myCash + 4 oppCash + 1 tileBag
+const INPUT_DIM   = 272;  // 108 board + 108 tile hand + 49 chain features (7 each) + 1 myCash/total + 4 oppCash/total + 1 tileBag + 1 reserved
 const HIDDEN      = [256, 128, 64];
 const POLICY_DIM  = 108;  // 9 rows × 12 cols (one logit per board cell)
 const VALUE_DIM   = 5;    // one sigmoid per player position
@@ -77,14 +77,19 @@ function rankScore(standings, myName) {
   const sorted = [...standings].sort((a, b) => b.cash - a.cash);
   const rank   = sorted.findIndex(p => p.name === myName);
   const base   = RANK_SCORES[rank] ?? 0.05;
-  // Cash margin bonus: ±0.08 based on how far above/below opponent average.
-  // tanh maps any lead/deficit to (-1,1), keeping bonus bounded.
   const myEntry = sorted[rank];
   if (myEntry && sorted.length > 1) {
     const avgOppCash = sorted.filter((_, i) => i !== rank)
                              .reduce((s, p) => s + p.cash, 0) / (sorted.length - 1);
     const lead = (myEntry.cash - avgOppCash) / (avgOppCash + 1);
-    return Math.max(0.02, Math.min(0.95, base + 0.08 * Math.tanh(lead)));
+    const rankComponent = Math.max(0.02, Math.min(0.95, base + 0.08 * Math.tanh(lead)));
+    // Cash-relative component: rewards dominant cash positions, not just rank.
+    // cashFraction = my share of total pot; fairShare = random baseline (1/n).
+    const totalCash = sorted.reduce((s, p) => s + p.cash, 0) || 1;
+    const cashFraction = myEntry.cash / totalCash;
+    const fairShare    = 1 / sorted.length;
+    const cashComponent = Math.max(0.02, Math.min(0.95, 0.5 + 2.5 * (cashFraction - fairShare)));
+    return 0.70 * rankComponent + 0.30 * cashComponent;
   }
   return base;
 }
@@ -97,6 +102,18 @@ const BOTS = [
   { name: 'Colt', personality: 'focused',     difficulty: 'hard' },
   { name: 'Vera', personality: 'balanced',    difficulty: 'hard' },
 ];
+
+/* ── Historical opponent pool ─────────────────────────────────── */
+// Keeps snapshots of past weights so non-master slots play against
+// older versions of the model instead of the current weights.
+// Creates genuine competitive pressure and prevents convergence to
+// a trivial symmetric equilibrium.
+const HIST_POOL_SIZE = 8;    // max snapshots to keep in memory
+const SNAPSHOT_EVERY = 5000; // games between snapshots
+
+function snapshotWeights(w) {
+  return JSON.parse(JSON.stringify({ body: w.body, policyHead: w.policyHead, valueHead: w.valueHead }));
+}
 
 /* ── ELO tracking (matches selfplay.js / dashboard expectations) ── */
 const ELO_K = 32;
@@ -148,7 +165,7 @@ function initWeights() {
   const bodyOut  = HIDDEN[HIDDEN.length - 1]; // 64
 
   return {
-    version:    4,
+    version:    5,
     body,
     policyHead: [heLayer(bodyOut, POLICY_DIM)],
     valueHead:  [heLayer(bodyOut, VALUE_DIM)],
@@ -160,10 +177,10 @@ function loadOrInit() {
   try {
     const raw = fs.readFileSync(WEIGHTS_PATH, 'utf8');
     const w   = JSON.parse(raw);
-    if (!w.version || w.version < 4) {
-      log('  Old weight format (pre-v4) — architecture changed (INPUT_DIM=265), reinitializing.\n');
+    if (!w.version || w.version < 5) {
+      log('  Old weight format (pre-v5) — architecture changed (INPUT_DIM=272), reinitializing.\n');
     } else {
-      log(`  Loaded v4 weights from ${WEIGHTS_PATH}\n`);
+      log(`  Loaded v5 weights from ${WEIGHTS_PATH}\n`);
       return w;
     }
   } catch { /* no local file */ }
@@ -174,14 +191,14 @@ function loadOrInit() {
     execSync(`aws s3 cp s3://${S3_BUCKET}/${S3_KEY} "${WEIGHTS_PATH}"`, { timeout: 30000, stdio: 'pipe' });
     const raw = fs.readFileSync(WEIGHTS_PATH, 'utf8');
     const w   = JSON.parse(raw);
-    if (w.version >= 4) {
-      log(`  Resumed v4 weights from S3 — continuing from previous run.\n`);
+    if (w.version >= 5) {
+      log(`  Resumed v5 weights from S3 — continuing from previous run.\n`);
       return w;
     }
   } catch { /* S3 not available or no valid weights */ }
 
   // 3. Fresh start
-  log('  Initializing fresh v4 weights (policy + value heads).\n');
+  log('  Initializing fresh v5 weights (policy + value heads).\n');
   return initWeights();
 }
 
@@ -422,14 +439,15 @@ function zeroGrads(grads) {
 }
 
 /* ── State encoder ────────────────────────────────────────────── */
-// Input layout (265 total):
-//   [0..107]   board state (108): board[r][c] value / 7.0
-//   [108..215] tile hand (108):   1 if player holds that tile, else 0
-//   [216..257] chain features (42): 7 chains × 6 features each
-//   [258]      myCash
-//   [259..262] oppCash (4)
-//   [263]      bagCount
-//   [264]      (reserved)
+// Input layout (272 total):
+//   [0..107]   board state (108)
+//   [108..215] tile hand (108)
+//   [216..264] chain features (49): 7 chains × 7 features each
+//              per chain: [active, size/41, myShares/25, maxOppShares/25, price/1000, adjEmpty/50, myShareFraction]
+//   [265]      myCash / totalGameCash
+//   [266..269] oppCash[k] / totalGameCash (4)
+//   [270]      bagCount / 102
+//   [271]      reserved
 function encodeFlat(game, playerIdx) {
   const player    = game.players[playerIdx];
   const CHAIN_IDX = {};
@@ -457,7 +475,7 @@ function encodeFlat(game, playerIdx) {
     }
   }
 
-  // 3. Chain features: 7 × 6 = 42
+  // 3. Chain features: 7 × 7 = 49
   for (const ch of engine.HOTEL_CHAINS) {
     const info = game.chains[ch];
     const size = info.tiles.length;
@@ -468,7 +486,6 @@ function encodeFlat(game, playerIdx) {
                   .reduce((m, p) => Math.max(m, p.stocks[ch] || 0), 0) / 25.0;
     vec[vi++] = engine.stockPrice(ch, size) / 1000.0;
     // Adjacent empty squares: proxy for chain growth potential.
-    // 0 = fully frozen (surrounded), higher = more room to grow.
     let adjEmpty = 0;
     if (info.active) {
       for (const tileStr of info.tiles) {
@@ -481,14 +498,18 @@ function encodeFlat(game, playerIdx) {
       }
     }
     vec[vi++] = adjEmpty / 50.0;
+    // myShareFraction: my shares as fraction of all issued shares for this chain
+    const totalIssued = game.players.reduce((s, p) => s + (p.stocks[ch] || 0), 0);
+    vec[vi++] = totalIssued > 0 ? (player.stocks[ch] || 0) / totalIssued : 0;
   }
 
-  // 4. myCash: 1
-  vec[vi++] = player.cash / 6000.0;
+  // 4. myCash relative to total cash in play: 1
+  const totalGameCash = game.players.reduce((s, p) => s + p.cash, 0) || 1;
+  vec[vi++] = player.cash / totalGameCash;
 
-  // 5. oppCash: 4
+  // 5. oppCash relative to total: 4
   const opps = game.players.filter((_, i) => i !== playerIdx);
-  for (let k = 0; k < 4; k++) vec[vi++] = (opps[k] ? opps[k].cash / 6000.0 : 0);
+  for (let k = 0; k < 4; k++) vec[vi++] = (opps[k] ? opps[k].cash / totalGameCash : 0);
 
   // 6. bagCount: 1
   vec[vi++] = (game.tileBag ? game.tileBag.length : 0) / BAG_TOTAL;
@@ -892,13 +913,75 @@ function computeGameMetrics(game) {
   return { bonuses, founded, majorities, defunctHeld, cashLead };
 }
 
+/* ── Greedy bot action (historical opponents — no MCTS, no records) ── */
+// Uses policy argmax for tile placement and value-guided 1-step for
+// financial decisions. Faster than full MCTS; used for non-master slots
+// when a historical weight snapshot is available.
+function greedyBotAction(game, playerIdx, weights) {
+  const phase = game.phase;
+  try {
+    if (phase === 'placeTile') {
+      const { playable } = engine.getPlayableTiles(game);
+      if (playable.length === 0) { engine.passTile(game, playerIdx); return true; }
+      const state = encodeFlat(game, playerIdx);
+      const { policyLogits } = forward(weights, state);
+      let best = playable[0], bestLogit = -Infinity;
+      for (const tile of playable) {
+        const logit = policyLogits[tileToIdx(tile)];
+        if (logit > bestLogit) { bestLogit = logit; best = tile; }
+      }
+      engine.placeTile(game, playerIdx, best);
+      return true;
+    }
+    if (phase === 'buyStock') {
+      const actions = legalBuyActionsForTraining(game, playerIdx);
+      const best = valueGuidedAction(weights, game, playerIdx, actions);
+      engine.buyStock(game, playerIdx, best.purchases || {});
+      return true;
+    }
+    if (phase === 'mergerDecision' && game.pendingMerger?.decidingPlayer === playerIdx) {
+      const actions = legalMergerActionsForTraining(game, playerIdx);
+      const best = valueGuidedAction(weights, game, playerIdx, actions);
+      engine.mergerDecision(game, playerIdx, { sell: best.sell || 0, trade: best.trade || 0 });
+      return true;
+    }
+    if (phase === 'chooseChain') {
+      const available = engine.HOTEL_CHAINS.filter(c => !game.chains[c].active);
+      if (!available.length) return false;
+      if (available.length === 1) { engine.chooseChain(game, playerIdx, available[0]); return true; }
+      const best = valueGuidedAction(weights, game, playerIdx, available.map(c => ({ type: 'chooseChain', chain: c })));
+      engine.chooseChain(game, playerIdx, best.chain);
+      return true;
+    }
+    if (phase === 'chooseMergerSurvivor') {
+      const tied = game.pendingMerger?.tiedChains || [];
+      if (!tied.length) return false;
+      if (tied.length === 1) { engine.chooseMergerSurvivor(game, playerIdx, tied[0]); return true; }
+      const best = valueGuidedAction(weights, game, playerIdx, tied.map(c => ({ type: 'chooseMergerSurvivor', chain: c })));
+      engine.chooseMergerSurvivor(game, playerIdx, best.chain);
+      return true;
+    }
+  } catch {}
+  return takeRandomAction(game, playerIdx);
+}
+
 /* ── Run one self-play game ───────────────────────────────────── */
-// Returns { records, standings } or null on error.
-function runGame(bots, weights, masterSlots) {
+// Returns { records, standings, turns, metrics } or null on error.
+function runGame(bots, weights, masterSlots, histPool = []) {
   const names  = bots.map(b => b.name);
   const game   = engine.createGame(names, { quickstart: true });
   const byName = {};
   for (const b of bots) byName[b.name] = b;
+
+  // Pre-assign historical weights to non-master slots (one random snapshot each)
+  const opponentWeights = {};
+  if (histPool.length > 0) {
+    for (let i = 0; i < bots.length; i++) {
+      if (!masterSlots.has(i)) {
+        opponentWeights[i] = histPool[Math.floor(Math.random() * histPool.length)];
+      }
+    }
+  }
 
   let turns = 0;
   // pending: tile-placement records waiting for game-end value targets
@@ -921,24 +1004,6 @@ function runGame(bots, weights, masterSlots) {
           : game.currentPlayerIdx === i;
       if (!isActive) continue;
 
-      // End-game declaration: master bots (takeMasterAction) never call
-      // declareGameEnd themselves, so without this check games run to MAX_TURNS
-      // and return null — bots never see the final stock payout which is where
-      // most of the money is. Mirror the heuristic bot's end-game logic here.
-      if (game.phase === 'placeTile' && engine.canDeclareGameEnd(game)) {
-        const myPlayer    = game.players[i];
-        const opponents   = game.players.filter((_, j) => j !== i);
-        const bestOpp     = opponents.length ? Math.max(...opponents.map(p => p.cash)) : 0;
-        const smallChains = engine.HOTEL_CHAINS.filter(c =>
-          game.chains[c].active && game.chains[c].tiles.length < 11);
-        if (smallChains.length === 0 || myPlayer.cash > bestOpp * 1.20 ||
-            (myPlayer.cash >= bestOpp && smallChains.length <= 1)) {
-          engine.declareGameEnd(game, i);
-          acted = true;
-          break;
-        }
-      }
-
       if (Math.random() < EPS) {
         // Pure random exploration — no record (would be noise)
         acted = takeRandomAction(game, i);
@@ -948,6 +1013,8 @@ function runGame(bots, weights, masterSlots) {
         if (result.acted && result.record) {
           pending.push({ playerIdx: i, name: gp.name, turnNumber: turns, ...result.record });
         }
+      } else if (opponentWeights[i]) {
+        acted = greedyBotAction(game, i, opponentWeights[i]);
       } else {
         try { acted = decideBotAction(game, i, bot.personality, bot.difficulty, bot.name); }
         catch { return null; }
@@ -1156,7 +1223,7 @@ async function train() {
   console.log('\nAcquire Master Bot — AlphaZero-style Training (v3)');
   console.log(`  LR=${LR}  batch=${BATCH_SIZE}  train_every=${TRAIN_EVERY}  replay=${REPLAY_SIZE}`);
   if (TIME_LIMIT !== Infinity) console.log(`  Time limit: ${TIME_LIMIT / 3600000}h`);
-  console.log('  Architecture: shared body [258→256→128→64] + policy head [64→108] + value head [64→5]\n');
+  console.log('  Architecture: shared body [272→256→128→64] + policy head [64→108] + value head [64→5]\n');
   console.log(`  MCTS: ${MCTS_SIMS} sims/tile, C_PUCT=${C_PUCT}\n`);
 
   const weights = loadOrInit();
@@ -1248,13 +1315,11 @@ async function train() {
   const chainsFoundArr = {};
   const majoritiesArr  = {};
   const defunctArr     = {};
-  const cashLeadArr    = {};
   for (const b of BOTS) {
     mergerBonuses[b.name]  = [];
     chainsFoundArr[b.name] = [];
     majoritiesArr[b.name]  = [];
     defunctArr[b.name]     = [];
-    cashLeadArr[b.name]    = [];
   }
   const MAX_HIST = 500;
   // Load existing botMetricHistory from last stats write so history survives restarts.
@@ -1273,6 +1338,8 @@ async function train() {
   // Master bots are all named in BOTS — we track the average across all of
   // them (since they're the same network in different seat positions).
   let masterCashWindow = [];  // cash values since last checkpoint
+  const histWeightPool = [];  // historical weight snapshots for opponent diversity
+  let masterCashLeadWindow = []; // cashLead of master slots only (vs opponents)
   const masterCashHistory = []; // one avg per 1000-game checkpoint (last 50)
   let gameCashWindow    = [];  // total cash across all players per game
   const gameCashHistory = weights.gameCashHistory ? [...weights.gameCashHistory] : []; // persisted across runs
@@ -1315,7 +1382,7 @@ async function train() {
     const pMaster = masterShareForGame(gamesTotal);
     const masterSlots = new Set(bots.map((_, i) => i).filter(() => Math.random() < pMaster));
 
-    const result = runGame(bots, weights, masterSlots);
+    const result = runGame(bots, weights, masterSlots, histWeightPool);
     gamesTotal++;
     if (!result) { errors++; }
     else {
@@ -1364,14 +1431,29 @@ async function train() {
           chainsFoundArr[b.name].push(result.metrics.founded[b.name] || 0);
           majoritiesArr[b.name].push(result.metrics.majorities[b.name] || 0);
           defunctArr[b.name].push(result.metrics.defunctHeld[b.name] || 0);
-          cashLeadArr[b.name].push(result.metrics.cashLead?.[b.name] || 0);
           if (mergerBonuses[b.name].length  > 5000) mergerBonuses[b.name].shift();
           if (chainsFoundArr[b.name].length > 5000) chainsFoundArr[b.name].shift();
           if (majoritiesArr[b.name].length  > 5000) majoritiesArr[b.name].shift();
           if (defunctArr[b.name].length     > 5000) defunctArr[b.name].shift();
-          if (cashLeadArr[b.name].length    > 5000) cashLeadArr[b.name].shift();
+        }
+        // cashLead: only track master slots vs opponents (population avg is always 0)
+        if (result.metrics.cashLead) {
+          for (const slotIdx of masterSlots) {
+            const botName = bots[slotIdx]?.name;
+            if (botName && result.metrics.cashLead[botName] !== undefined) {
+              masterCashLeadWindow.push(result.metrics.cashLead[botName]);
+              if (masterCashLeadWindow.length > 5000) masterCashLeadWindow.shift();
+            }
+          }
         }
       }
+    }
+
+    // ── Snapshot weights for historical opponent pool ─────────── */
+    if (gamesTotal % SNAPSHOT_EVERY === 0 && gamesTotal > 0) {
+      histWeightPool.push(snapshotWeights(weights));
+      if (histWeightPool.length > HIST_POOL_SIZE) histWeightPool.shift();
+      log(`  [hist] snapshot added, pool=${histWeightPool.length}/${HIST_POOL_SIZE}\n`);
     }
 
     // ── Train every TRAIN_EVERY games once buffer has enough data ─ */
@@ -1433,18 +1515,17 @@ async function train() {
       const allChains   = BOTS.flatMap(b => chainsFoundArr[b.name]);
       const allMaj      = BOTS.flatMap(b => majoritiesArr[b.name]);
       const allDefunct  = BOTS.flatMap(b => defunctArr[b.name]);
-      const allCashLead = BOTS.flatMap(b => cashLeadArr[b.name]);
       botMetricHistory.mergerBonus   = [...(botMetricHistory.mergerBonus   || []), Math.round(avgArr(allMerger))].slice(-MAX_HIST);
       botMetricHistory.chainsFound   = [...(botMetricHistory.chainsFound   || []), +avgArr(allChains).toFixed(2)].slice(-MAX_HIST);
       botMetricHistory.majorities    = [...(botMetricHistory.majorities    || []), +avgArr(allMaj).toFixed(2)].slice(-MAX_HIST);
       botMetricHistory.defunctStocks = [...(botMetricHistory.defunctStocks || []), +avgArr(allDefunct).toFixed(2)].slice(-MAX_HIST);
-      botMetricHistory.cashLead      = [...(botMetricHistory.cashLead      || []), Math.round(avgArr(allCashLead))].slice(-MAX_HIST);
+      botMetricHistory.cashLead      = [...(botMetricHistory.cashLead      || []), Math.round(avgArr(masterCashLeadWindow))].slice(-MAX_HIST);
+      masterCashLeadWindow = [];
       for (const b of BOTS) {
         mergerBonuses[b.name]  = [];
         chainsFoundArr[b.name] = [];
         majoritiesArr[b.name]  = [];
         defunctArr[b.name]     = [];
-        cashLeadArr[b.name]    = [];
       }
 
       log(`  step=${t} games=${gamesTotal} loss=${avgTot} (pol=${avgPol} val=${avgVal}) elapsed=${elapsedS}s buf=${replay.size} errors=${errors}\n`);

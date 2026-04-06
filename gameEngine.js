@@ -17,7 +17,6 @@ const HOTEL_CHAINS = [
   'Tower', 'Luxor', 'American', 'Worldwide', 'Festival', 'Imperial', 'Continental'
 ];
 const SAFE_SIZE = 11;
-const END_SIZE = 41;
 const MAX_STOCK = 25; // per chain
 
 const CHAIN_TIERS = {
@@ -642,7 +641,7 @@ function advanceTurn(state) {
     return;
   }
 
-  // Auto-end when a chain hits 41+ tiles or all active chains are safe
+  // Auto-end when all 7 chains are active and all are safe
   if (checkGameEnd(state)) {
     state.log.push('End game conditions met — game ends automatically.');
     endGame(state);
@@ -651,10 +650,10 @@ function advanceTurn(state) {
 
 /* ── End game conditions ───────────────────────────────────── */
 function checkGameEnd(state) {
-  const activeChains = HOTEL_CHAINS.filter(ch => state.chains[ch].active);
-  if (activeChains.length > 0 && activeChains.every(ch => state.chains[ch].tiles.length >= SAFE_SIZE)) return true;
-  if (activeChains.some(ch => state.chains[ch].tiles.length >= END_SIZE)) return true;
-  return false;
+  // Game ends only when all 7 chains are active AND all are safe (≥11 tiles).
+  // At that point no new chain can be founded (all slots taken) and no merger
+  // can happen (safe chains cannot be merged) — nothing meaningful remains.
+  return HOTEL_CHAINS.every(ch => state.chains[ch].active && state.chains[ch].tiles.length >= SAFE_SIZE);
 }
 
 function canDeclareGameEnd(state) { return checkGameEnd(state); }

@@ -17,7 +17,7 @@ const { exec } = require('child_process');
 const engine = require('../gameEngine');
 
 const WEIGHTS_PATH     = path.join(__dirname, 'models', 'master_weights.json');
-const INPUT_DIM        = 265;  // 108 board + 108 tile hand + 42 chains (6 features each) + 1 myCash + 4 oppCash + 1 bagCount
+const INPUT_DIM        = 272;  // 108 board + 108 tile hand + 49 chains (7 features each) + 1 myCash/total + 4 oppCash/total + 1 bagCount + 1 reserved
 const POLICY_DIM       = 108; // 9×12 board
 const VALUE_DIM        = 5;   // one per player
 const BAG_TOTAL        = 102;
@@ -36,13 +36,13 @@ function loadWeights() {
   try {
     const raw = fs.readFileSync(WEIGHTS_PATH, 'utf8');
     const w   = JSON.parse(raw);
-    if (!w.version || w.version < 4) {
-      _loadError = 'Old weight format (pre-v4, INPUT_DIM=258) — retraining in progress';
+    if (!w.version || w.version < 5) {
+      _loadError = 'Old weight format (pre-v5, INPUT_DIM=265) — retraining in progress';
       console.warn('[masterBot]', _loadError);
       return null;
     }
     _weights = w;
-    console.log('[masterBot] v4 weights loaded from disk.');
+    console.log('[masterBot] v5 weights loaded from disk.');
     return _weights;
   } catch (err) {
     _loadError = 'master_weights.json not found — train first';
@@ -57,11 +57,11 @@ function tryReloadFromS3() {
     try {
       const raw       = fs.readFileSync(TMP_PATH, 'utf8');
       const candidate = JSON.parse(raw);
-      if (!candidate.version || candidate.version < 4) return;
+      if (!candidate.version || candidate.version < 5) return;
       if (!candidate.body || !candidate.policyHead || !candidate.valueHead) return;
       _weights   = candidate;
       _loadError = null;
-      console.log(`[masterBot] Hot-reloaded v4 weights from S3 (${new Date().toISOString()})`);
+      console.log(`[masterBot] Hot-reloaded v5 weights from S3 (${new Date().toISOString()})`);
     } catch {}
   });
 }
@@ -106,13 +106,15 @@ function forward(weights, input) {
 }
 
 /* ── State encoder ────────────────────────────────────────────── */
-// Input layout (265 total):
-//   [0..107]   board state (108): board[r][c] value / 7.0
-//   [108..215] tile hand (108):   1 if player holds that tile, else 0
-//   [216..257] chain features (42): 7 chains × 6 features each (added: adjacentEmpty)
-//   [258]      myCash
-//   [259..262] oppCash (4)
-//   [263]      bagCount
+// Input layout (272 total):
+//   [0..107]   board state (108)
+//   [108..215] tile hand (108)
+//   [216..264] chain features (49): 7 chains × 7 features each
+//              per chain: [active, size/41, myShares/25, maxOppShares/25, price/1000, adjEmpty/50, myShareFraction]
+//   [265]      myCash / totalGameCash
+//   [266..269] oppCash[k] / totalGameCash (4)
+//   [270]      bagCount / 102
+//   [271]      reserved
 function encodeState(game, playerIdx) {
   const player    = game.players[playerIdx];
   const CHAIN_IDX = {};
@@ -140,7 +142,7 @@ function encodeState(game, playerIdx) {
     }
   }
 
-  // 3. Chain features: 7 × 6 = 42
+  // 3. Chain features: 7 × 7 = 49
   for (const ch of engine.HOTEL_CHAINS) {
     const info = game.chains[ch];
     const size = info.tiles.length;
@@ -162,14 +164,18 @@ function encodeState(game, playerIdx) {
       }
     }
     vec[vi++] = adjEmpty / 50.0;
+    // myShareFraction: my shares as fraction of all issued shares for this chain
+    const totalIssued = game.players.reduce((s, p) => s + (p.stocks[ch] || 0), 0);
+    vec[vi++] = totalIssued > 0 ? (player.stocks[ch] || 0) / totalIssued : 0;
   }
 
-  // 4. myCash: 1
-  vec[vi++] = player.cash / 6000.0;
+  // 4. myCash relative to total cash in play: 1
+  const totalGameCash = game.players.reduce((s, p) => s + p.cash, 0) || 1;
+  vec[vi++] = player.cash / totalGameCash;
 
-  // 5. oppCash: 4
+  // 5. oppCash relative to total: 4
   const opps = game.players.filter((_, i) => i !== playerIdx);
-  for (let k = 0; k < 4; k++) vec[vi++] = (opps[k] ? opps[k].cash / 6000.0 : 0);
+  for (let k = 0; k < 4; k++) vec[vi++] = (opps[k] ? opps[k].cash / totalGameCash : 0);
 
   // 6. bagCount: 1
   vec[vi++] = (game.tileBag ? game.tileBag.length : 0) / BAG_TOTAL;
