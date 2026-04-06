@@ -414,10 +414,39 @@
       </div>
     </div>
 
+    <!-- Training Loss -->
+    <div class="card" id="card-loss">
+      <div class="card-header" onclick="toggleCard('loss')">
+        <span class="card-title">Training Loss</span>
+        <div class="card-header-right">
+          <span class="card-preview" id="lossPreview">—</span>
+          <span class="chevron">▾</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:24px;padding-top:16px;flex-wrap:wrap">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:500;color:#818cf8;letter-spacing:-0.02em" id="lossTotal">—</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:3px">total loss</div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:500;color:#60a5fa;letter-spacing:-0.02em" id="lossPol">—</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:3px">policy loss</div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:24px;font-weight:500;color:#f87171;letter-spacing:-0.02em" id="lossVal">—</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:3px">value loss</div>
+          </div>
+        </div>
+        <div class="chart-wrap" style="margin-top:12px"><canvas id="lossCanvas"></canvas></div>
+        <div style="font-size:11px;color:var(--text-muted);margin-top:6px">each point = 100 games · total loss · downward trend = learning</div>
+      </div>
+    </div>
+
     <!-- Errors -->
     <div class="card" id="card-errors">
       <div class="card-header" onclick="toggleCard('errors')">
-        <span class="card-title">Errors</span>
+        <span class="card-title">Errors &amp; Game Health</span>
         <div class="card-header-right">
           <span class="card-preview" id="errorsPreview">—</span>
           <span class="chevron">▾</span>
@@ -426,6 +455,20 @@
       <div class="card-body">
         <div id="errorDisplay" class="error-zero">0</div>
         <div class="big-number-sub">game errors in current run</div>
+        <div style="display:flex;gap:24px;margin-top:18px;flex-wrap:wrap">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500;color:var(--text-dim)" id="avgTurnsDisplay">—</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:3px">avg turns / game</div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500;color:var(--text-dim)" id="gamesPerSecDisplay">—</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:3px">games / sec</div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:20px;font-weight:500;color:var(--text-dim)" id="errorRateDisplay">—</div>
+            <div style="font-size:10px;color:var(--text-muted);margin-top:3px">error rate</div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -440,7 +483,7 @@
       </div>
       <div class="card-body">
         <div id="leaderboardTable" style="padding-top:14px"></div>
-        <div style="font-size:10px;color:var(--text-muted);margin-top:10px">ELO starts at 1500 · K=32 pairwise</div>
+        <div style="font-size:10px;color:var(--text-muted);margin-top:10px">ELO starts at 1500 · K=32 pairwise · non-master slots use historical weight snapshots in v5+</div>
       </div>
     </div>
 
@@ -458,23 +501,6 @@
         <div class="chart-wrap" style="margin-top:12px"><canvas id="mergerbonusCanvas"></canvas></div>
         <div id="mergerbonusLegend" class="chart-legend"></div>
         <div class="chart-sub" style="margin-top:6px">each point = 10 games · majority + minority bonuses per game · measures positional dominance</div>
-      </div>
-    </div>
-
-    <!-- Chains Founded -->
-    <div class="card collapsed" id="card-chainsfounded">
-      <div class="card-header" onclick="toggleCard('chainsfounded')">
-        <span class="card-title">Chains Founded / Game</span>
-        <div class="card-header-right">
-          <span class="card-preview" id="chainsfoundedPreview">—</span>
-          <span class="chevron">▾</span>
-        </div>
-      </div>
-      <div class="card-body">
-        <div id="chainsfoundedCurrent" style="display:flex;gap:24px;padding-top:16px;flex-wrap:wrap"></div>
-        <div class="chart-wrap" style="margin-top:12px"><canvas id="chainsfoundedCanvas"></canvas></div>
-        <div id="chainsfoundedLegend" class="chart-legend"></div>
-        <div class="chart-sub" style="margin-top:6px">each point = 10 games · free share + first-mover advantage on each founding</div>
       </div>
     </div>
 
@@ -509,6 +535,23 @@
         <div class="chart-wrap" style="margin-top:12px"><canvas id="defunctCanvas"></canvas></div>
         <div id="defunctLegend" class="chart-legend"></div>
         <div class="chart-sub" style="margin-top:6px">each point = 1,000 games · avg worthless shares held per player at game end · lower is better</div>
+      </div>
+    </div>
+
+    <!-- Cash Lead (Master vs Opponents) -->
+    <div class="card collapsed" id="card-cashlead">
+      <div class="card-header" onclick="toggleCard('cashlead')">
+        <span class="card-title">Master Cash Lead vs Opponents</span>
+        <div class="card-header-right">
+          <span class="card-preview" id="cashleadPreview">—</span>
+          <span class="chevron">▾</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <div id="cashleadCurrent" style="display:flex;gap:24px;padding-top:16px;flex-wrap:wrap"></div>
+        <div class="chart-wrap" style="margin-top:12px"><canvas id="cashleadCanvas"></canvas></div>
+        <div id="cashleadLegend" class="chart-legend"></div>
+        <div class="chart-sub" style="margin-top:6px">each point = 1,000 games · master bot cash minus avg opponent cash · upward trend = improving dominance</div>
       </div>
     </div>
 
@@ -768,10 +811,13 @@ function drawBotMetricChart(canvasId, legendId, currentId, previewId, history, f
   if (!hist.length) return;
 
   const latest = hist[hist.length - 1];
-  document.getElementById(previewId).textContent = fmtFn(latest);
-  document.getElementById(currentId).innerHTML =
+  const previewEl = previewId ? document.getElementById(previewId) : null;
+  if (previewEl) previewEl.textContent = fmtFn(latest);
+  const currentEl = currentId ? document.getElementById(currentId) : null;
+  if (currentEl) currentEl.innerHTML =
     `<div style="font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:500;color:var(--gold);">${fmtFn(latest)}</div>`;
-  document.getElementById(legendId).innerHTML = '';
+  const legendEl = legendId ? document.getElementById(legendId) : null;
+  if (legendEl) legendEl.innerHTML = '';
 
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
@@ -920,22 +966,39 @@ async function refresh() {
       document.getElementById('gameCashPreview').textContent = fmtCash(data.gameCashAvg);
     }
 
-    // Errors
+    // Training loss
+    const lossHist = (data.lossHistory || []).filter(v => v != null);
+    if (lossHist.length) {
+      const latest = lossHist[lossHist.length - 1];
+      document.getElementById('lossPreview').textContent = latest.toFixed(4);
+      document.getElementById('lossTotal').textContent   = latest.toFixed(4);
+      drawBotMetricChart('lossCanvas', null, null, null,
+        { totalLoss: lossHist }, 'totalLoss', v => (+v||0).toFixed(4));
+    }
+    if (data.policyLoss != null && !isNaN(data.policyLoss)) document.getElementById('lossPol').textContent = (+data.policyLoss).toFixed(4);
+    if (data.valueLoss  != null && !isNaN(data.valueLoss))  document.getElementById('lossVal').textContent = (+data.valueLoss).toFixed(4);
+
+    // Errors + game health
     const errs = data.errors || 0;
     const errEl = document.getElementById('errorDisplay');
     errEl.textContent = fmtNum(errs);
     errEl.className   = errs === 0 ? 'error-zero' : 'error-nonzero';
-    document.getElementById('errorsPreview').textContent = errs === 0 ? 'none' : fmtNum(errs);
+    const played = data.gamesPlayed || data.gamesTotal || 0;
+    const errPct = played > 0 ? ((errs / (played + errs)) * 100).toFixed(1) + '%' : '—';
+    document.getElementById('errorsPreview').textContent  = errs === 0 ? 'none' : fmtNum(errs);
+    document.getElementById('avgTurnsDisplay').textContent   = data.avgTurns != null ? data.avgTurns : '—';
+    document.getElementById('gamesPerSecDisplay').textContent = data.gamesPerSec != null ? data.gamesPerSec + '/s' : '—';
+    document.getElementById('errorRateDisplay').textContent   = errPct;
 
     // Bot leaderboard + metric cards
     if (data.bots && data.bots.length) {
       renderLeaderboard(data.bots);
     }
     if (data.botMetricHistory) {
-      drawBotMetricChart('mergerbonusCanvas',   'mergerbonusLegend',   'mergerbonusCurrent',   'mergerbonusPreview',   data.botMetricHistory, 'mergerBonus',   fmtCash);
-      drawBotMetricChart('chainsfoundedCanvas', 'chainsfoundedLegend', 'chainsfoundedCurrent', 'chainsfoundedPreview', data.botMetricHistory, 'chainsFound',   v => (+v||0).toFixed(2)+'/g');
-      drawBotMetricChart('majoritiesCanvas',    'majoritiesLegend',    'majoritiesCurrent',    'majoritiesPreview',    data.botMetricHistory, 'majorities',    v => (+v||0).toFixed(2));
-      drawBotMetricChart('defunctCanvas',       'defunctLegend',       'defunctCurrent',       'defunctPreview',       data.botMetricHistory, 'defunctStocks', v => (+v||0).toFixed(2));
+      drawBotMetricChart('mergerbonusCanvas', 'mergerbonusLegend', 'mergerbonusCurrent', 'mergerbonusPreview', data.botMetricHistory, 'mergerBonus',   fmtCash);
+      drawBotMetricChart('majoritiesCanvas',  'majoritiesLegend',  'majoritiesCurrent',  'majoritiesPreview',  data.botMetricHistory, 'majorities',    v => (+v||0).toFixed(2));
+      drawBotMetricChart('defunctCanvas',     'defunctLegend',     'defunctCurrent',     'defunctPreview',     data.botMetricHistory, 'defunctStocks', v => (+v||0).toFixed(2));
+      drawBotMetricChart('cashleadCanvas',    'cashleadLegend',    'cashleadCurrent',    'cashleadPreview',    data.botMetricHistory, 'cashLead',      fmtCash);
     }
 
     // Instance log
