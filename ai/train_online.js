@@ -82,14 +82,14 @@ function rankScore(standings, myName) {
     const avgOppCash = sorted.filter((_, i) => i !== rank)
                              .reduce((s, p) => s + p.cash, 0) / (sorted.length - 1);
     const lead = (myEntry.cash - avgOppCash) / (avgOppCash + 1);
-    const rankComponent = Math.max(0.02, Math.min(0.95, base + 0.08 * Math.tanh(lead)));
+    const rankComponent = Math.max(0.02, Math.min(0.95, base + 0.18 * Math.tanh(lead)));
     // Cash-relative component: rewards dominant cash positions, not just rank.
     // cashFraction = my share of total pot; fairShare = random baseline (1/n).
     const totalCash = sorted.reduce((s, p) => s + p.cash, 0) || 1;
     const cashFraction = myEntry.cash / totalCash;
     const fairShare    = 1 / sorted.length;
     const cashComponent = Math.max(0.02, Math.min(0.95, 0.5 + 2.5 * (cashFraction - fairShare)));
-    return 0.70 * rankComponent + 0.30 * cashComponent;
+    return 0.50 * rankComponent + 0.50 * cashComponent;
   }
   return base;
 }
