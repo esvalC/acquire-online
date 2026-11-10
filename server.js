@@ -413,9 +413,28 @@ function broadcastState(code) {
     io.to(s.socketId).emit('gameState', spectatorState);
   }
 
-  // Schedule next bot move if this is a solo room
-  if (room.isSolo && room.game.phase !== 'gameOver') {
+  // Schedule the next bot move (solo rooms, or multiplayer rooms with bots)
+  if (roomHasBots(room) && room.game.phase !== 'gameOver') {
     scheduleBotTurn(code);
+  }
+}
+
+/* ── Bots in any room (solo, or added to a multiplayer lobby) ── */
+function roomHasBots(room) { return !!room && room.players.some(p => p.isBot); }
+function roomHost(room) { return room.players.find(p => !p.isBot) || null; }
+
+// Bots go along with ending the game only once every human has voted yes,
+// so one person can't end a multiplayer game by out-voting the others with bots.
+function botsJoinConcede(room) {
+  const g = room.game;
+  if (!g || !g.concedeActive) return;
+  const humans = room.players.filter(p => !p.isBot);
+  if (!humans.every(h => g.concedeVotes[h.idx] === true)) return;
+  for (const bp of room.players) {
+    if (bp.isBot && g.concedeVotes[bp.idx] === undefined) {
+      engine.submitConcedeVote(g, bp.idx, true);
+      if (!g.concedeActive) break;
+    }
   }
 }
 
@@ -424,9 +443,10 @@ function broadcastLobby(code) {
   if (!room) return;
   const lobbyData = {
     code,
-    players: room.players.map(p => ({ name: p.name, ready: p.ready, isBot: p.isBot || false })),
+    players: room.players.map(p => ({ name: p.name, ready: p.ready, isBot: p.isBot || false, difficulty: p.isBot ? p.difficulty : undefined })),
     spectators: room.spectators.map(s => ({ name: s.name })),
     maxPlayers: room.config.maxPlayers,
+    host: (roomHost(room) || {}).name || null,
     gameInProgress: !!room.game,
   };
   io.to(code).emit('lobbyUpdate', lobbyData);
@@ -570,7 +590,7 @@ function scheduleAbandonedRoomCleanup(code) {
 /* ── Bot scheduling ─────────────────────────────────────────── */
 function scheduleBotTurn(code) {
   const room = rooms[code];
-  if (!room || !room.game || !room.isSolo) return;
+  if (!room || !room.game || !roomHasBots(room)) return;
   if (room.botScheduled) return;
   if (room.game.phase === 'gameOver') return;
 
@@ -845,6 +865,35 @@ io.on('connection', (socket) => {
     }
   });
 
+  /* ── Multiplayer lobby: host adds / removes bots ── */
+  socket.on('addBot', ({ difficulty } = {}, cb = () => {}) => {
+    const room = rooms[currentRoom];
+    if (!room || room.isSolo || room.game) return cb({ error: 'Bots can only be added in the lobby' });
+    const me = room.players.find(p => p.socketId === socket.id);
+    if (!me || me !== roomHost(room)) return cb({ error: 'Only the host can add bots' });
+    if (room.players.length >= room.config.maxPlayers) return cb({ error: 'The table is full' });
+    const taken = new Set(room.players.map(p => p.name.toLowerCase()));
+    const pick = BOT_ROSTER.find(b => !b.difficulty && !taken.has(b.name.toLowerCase()));
+    if (!pick) return cb({ error: 'No more bots available' });
+    room.players.push({
+      name: pick.name, socketId: null, ready: true, idx: room.players.length, token: null, isBot: true,
+      personality: pick.personality || 'balanced',
+      difficulty: PLAYABLE_DIFFICULTIES.includes(difficulty) ? difficulty : 'expert',
+    });
+    broadcastLobby(currentRoom);
+    cb({ ok: true });
+  });
+
+  socket.on('removeBot', ({ name } = {}) => {
+    const room = rooms[currentRoom];
+    if (!room || room.isSolo || room.game) return;
+    const me = room.players.find(p => p.socketId === socket.id);
+    if (!me || me !== roomHost(room)) return;
+    room.players = room.players.filter(p => !(p.isBot && p.name === name));
+    room.players.forEach((p, i) => { p.idx = i; });
+    broadcastLobby(currentRoom);
+  });
+
   socket.on('toggleReady', () => {
     const room = rooms[currentRoom];
     if (!room) return;
@@ -930,15 +979,7 @@ io.on('connection', (socket) => {
     if (!p) return;
     const result = engine.initiateConcedeVote(room.game, p.idx);
     if (result.error) return socket.emit('actionError', result.error);
-    // In solo games, bots automatically vote yes
-    if (room.isSolo && room.game.concedeActive) {
-      for (const bp of room.players) {
-        if (bp.isBot && room.game.concedeVotes[bp.idx] === undefined) {
-          engine.submitConcedeVote(room.game, bp.idx, true);
-          if (!room.game.concedeActive) break; // vote passed, stop
-        }
-      }
-    }
+    botsJoinConcede(room);
     broadcastState(currentRoom);
   });
 
@@ -949,6 +990,7 @@ io.on('connection', (socket) => {
     if (!p) return;
     const result = engine.submitConcedeVote(room.game, p.idx, vote);
     if (result.error) return socket.emit('actionError', result.error);
+    botsJoinConcede(room);
     broadcastState(currentRoom);
   });
 
@@ -978,7 +1020,7 @@ io.on('connection', (socket) => {
     }
 
     room.game = null;
-    room.players.forEach(p => { p.ready = false; });
+    room.players.forEach(p => { p.ready = !!p.isBot; }); // bots are always ready
 
     while (room.spectators.length > 0 && room.players.length < room.config.maxPlayers) {
       const s = room.spectators.shift();
@@ -1037,7 +1079,7 @@ io.on('connection', (socket) => {
     } else {
       room.players = room.players.filter(p => p.socketId !== socket.id);
       room.players.forEach((p, i) => { p.idx = i; });
-      if (room.players.length === 0 && room.spectators.length === 0) {
+      if (!roomHost(room) && room.spectators.length === 0) {
         delete rooms[currentRoom];
       } else {
         broadcastLobby(currentRoom);

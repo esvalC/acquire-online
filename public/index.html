@@ -990,6 +990,12 @@
 
   .game-over-reason { font-size: 13px; color: var(--text-dim); margin: -4px 0 14px; text-align: center; line-height: 1.4; }
 
+  .lobby-add-bot { margin-top: 12px; gap: 8px; align-items: center; justify-content: center; }
+  .lobby-add-bot select { background: var(--bg-dark); color: var(--text); border: 1px solid var(--border-light); border-radius: 8px; padding: 6px 8px; font: inherit; font-size: 13px; }
+  .lobby-host { font-size: 10px; color: var(--gold); text-transform: uppercase; letter-spacing: 0.8px; margin-left: 4px; }
+  .lobby-remove-bot { background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 13px; padding: 2px 4px; }
+  .lobby-remove-bot:hover { color: var(--red); }
+
   /* ── Hamburger button ─────────────────────────────── */
   .menu-btn {
     position: fixed; top: 16px; right: 16px; z-index: 200;
@@ -1547,6 +1553,15 @@
     <div class="room-code" id="lobbyCode">----</div>
     <div class="panel-title">Players</div>
     <ul class="player-list" id="lobbyPlayers"></ul>
+    <div id="lobbyAddBot" class="lobby-add-bot" style="display:none;">
+      <select id="lobbyBotDifficulty" aria-label="Bot difficulty">
+        <option value="hard">Easy bot</option>
+        <option value="expert" selected>Medium bot</option>
+        <option value="mcts">Hard bot</option>
+        <option value="master">Master bot</option>
+      </select>
+      <button class="btn btn-sm btn-secondary" onclick="addLobbyBot()">+ Add bot</button>
+    </div>
     <div style="margin-top:16px;">
       <button class="btn" onclick="toggleReady()">Toggle Ready</button>
     </div>
@@ -1880,7 +1895,7 @@ let prevCurrentPlayerIdx = -1;
 let logEntryCount = 0;
 let isSoloGame = false;
 let selectedBotCount = 2;
-let botSettings = []; // per-bot state: { difficulty, useCustomDiv, divVal }
+let botSettings = []; // per-bot state: { difficulty }
 let currentFinanceRoadTier  = null; // null = not in Finance Road, 0–4 = tier index
 let currentFinanceRoadLevel = null; // 0–2 = level within tier
 let prevBoard = null;
@@ -2149,12 +2164,6 @@ function _launchQuickMaster(name) {
   });
 }
 
-function sliderToPersonality(val) {
-  if (val <= 3) return 'focused';
-  if (val <= 7) return 'balanced';
-  return 'diversified';
-}
-
 const chainColors = {
   Tower: '#e11d48', Luxor: '#f97316', American: '#3b82f6',
   Worldwide: '#8b5cf6', Festival: '#06b6d4', Imperial: '#10b981', Continental: '#eab308',
@@ -2279,7 +2288,7 @@ function adjustBotCount(delta) {
 
 function ensureBotSettings() {
   while (botSettings.length < 5) {
-    botSettings.push({ difficulty: 'hard', useCustomDiv: false, divVal: 5 });
+    botSettings.push({ difficulty: 'expert' });   // new bots default to Medium
   }
 }
 
@@ -2288,18 +2297,6 @@ function setBotDifficulty(idx, diff) {
   renderBotRoster();
 }
 
-function toggleBotDiv(idx) {
-  botSettings[idx].useCustomDiv = !botSettings[idx].useCustomDiv;
-  renderBotRoster();
-}
-
-function updateBotDivSlider(idx, val) {
-  botSettings[idx].divVal = parseInt(val);
-  const v = parseInt(val);
-  const label = v <= 3 ? 'Concentrated' : v <= 7 ? 'Balanced' : 'Diversified';
-  const el = document.getElementById('botDivLabel_' + idx);
-  if (el) el.textContent = label;
-}
 
 function renderBotRoster() {
   ensureBotSettings();
@@ -2307,25 +2304,11 @@ function renderBotRoster() {
   const el = document.getElementById('botRoster');
   el.innerHTML = roster.map((b, i) => {
     const s = botSettings[i];
-    const divLabel = s.divVal <= 3 ? 'Concentrated' : s.divVal <= 7 ? 'Balanced' : 'Diversified';
     const DIFF_MAP = { Easy: 'hard', Medium: 'expert', Hard: 'mcts' };
     const diffBtns = ['Easy','Medium','Hard'].map(d =>
       `<button class="bot-diff-btn${s.difficulty === DIFF_MAP[d] ? ' active' : ''}"
         onclick="setBotDifficulty(${i},'${DIFF_MAP[d]}')">${d}</button>`
     ).join('') + `<button class="bot-diff-btn${s.difficulty === 'master' ? ' active' : ''}" onclick="setBotDifficulty(${i},'master')" title="Strongest bot — plays out thousands of possible futures before every move" style="font-size:10px;${s.difficulty !== 'master' ? 'background:linear-gradient(135deg,#4c1d95,#78350f);border-color:#7c3aed;' : ''}">⚡ Master</button>`;
-    const divSlider = s.useCustomDiv ? `
-      <div style="margin-top:6px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-          <span style="font-size:10px;color:var(--text-muted)">Style</span>
-          <span id="botDivLabel_${i}" style="font-size:11px;color:var(--gold);">${divLabel}</span>
-        </div>
-        <input type="range" min="0" max="10" value="${s.divVal}"
-          oninput="updateBotDivSlider(${i},this.value)"
-          style="width:100%;accent-color:var(--gold);" />
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--text-muted);margin-top:2px;">
-          <span>Concentrated</span><span>Diversified</span>
-        </div>
-      </div>` : '';
     return `
       <div class="bot-roster-item" style="flex-direction:column;align-items:stretch;gap:8px;">
         <div style="display:flex;align-items:center;gap:12px;">
@@ -2337,11 +2320,6 @@ function renderBotRoster() {
         </div>
         <div class="bot-controls">
           <div class="bot-diff-btns">${diffBtns}</div>
-          <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-dim);cursor:pointer;margin-top:8px;">
-            <input type="checkbox" ${s.useCustomDiv ? 'checked' : ''} onchange="toggleBotDiv(${i})" />
-            Custom diversification
-          </label>
-          ${divSlider}
         </div>
       </div>`;
   }).join('');
@@ -2357,8 +2335,7 @@ function startSoloGame() {
   const botConfigs = BOT_ROSTER_CLIENT.slice(0, selectedBotCount).map((_, i) => {
     const s = botSettings[i];
     return {
-      personality: s.useCustomDiv ? sliderToPersonality(s.divVal) : 'balanced',
-      difficulty: s.difficulty,
+      difficulty: s.difficulty,   // each bot keeps its own built-in playing style
     };
   });
   socket.emit('createSoloGame', { name, botCount: selectedBotCount, quickstart, botConfigs, authToken }, (res) => {
@@ -2545,16 +2522,28 @@ function attemptReconnect(code, name, token) {
 function toggleReady() { socket.emit('toggleReady'); }
 
 /* ── Lobby Updates ─────────────────────────────── */
+const LOBBY_DIFF_LABEL = { hard: 'Easy', expert: 'Medium', mcts: 'Hard', master: 'Master' };
 socket.on('lobbyUpdate', (data) => {
   document.getElementById('lobbyCode').textContent = data.code;
+  const isHost = !!data.host && data.host === myName;
   const list = document.getElementById('lobbyPlayers');
   list.innerHTML = data.players.map(p => `
     <li class="player-item">
-      <span>${escapeHtml(p.name)}</span>
-      <span class="ready-badge ${p.ready ? 'ready' : 'waiting'}">${p.ready ? 'Ready' : 'Waiting'}</span>
+      <span>${escapeHtml(p.name)}${p.isBot ? ` <span class="player-badge player-badge-bot">Bot · ${LOBBY_DIFF_LABEL[p.difficulty] || 'Medium'}</span>` : ''}${p.name === data.host ? ' <span class="lobby-host">host</span>' : ''}</span>
+      <span style="display:flex;align-items:center;gap:6px;">
+        <span class="ready-badge ${p.ready ? 'ready' : 'waiting'}">${p.ready ? 'Ready' : 'Waiting'}</span>
+        ${p.isBot && isHost && !data.gameInProgress ? `<button class="lobby-remove-bot" title="Remove bot" onclick='removeLobbyBot(${JSON.stringify(p.name)})'>✕</button>` : ''}
+      </span>
     </li>
   `).join('');
+  document.getElementById('lobbyAddBot').style.display =
+    isHost && !data.gameInProgress && data.players.length < data.maxPlayers ? 'flex' : 'none';
 });
+function addLobbyBot() {
+  const difficulty = document.getElementById('lobbyBotDifficulty').value;
+  socket.emit('addBot', { difficulty }, (res) => { if (res && res.error) showToast(res.error); });
+}
+function removeLobbyBot(name) { socket.emit('removeBot', { name }); }
 
 socket.on('gameStarted', () => {
   document.getElementById('gameOverOverlay').style.display = 'none';
@@ -4010,7 +3999,7 @@ async function loadGamesCounter() {
 let newsPosts = [];
 const newsOpen = new Set();       // post ids whose replies are expanded
 let newsShowOlder = false;
-const NEWS_VISIBLE = 1;           // only the newest post shows until "See more"
+const NEWS_VISIBLE = 3;           // newest 3 posts show until "See more"
 const isAdminUser = () => !!(currentUser && currentUser.role === 'admin');
 
 async function loadNews() {
@@ -4023,7 +4012,9 @@ async function loadNews() {
 }
 
 function newsDate(ts) {
-  return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const d = new Date(ts * 1000);
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    + ' at ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 function renderNews() {
