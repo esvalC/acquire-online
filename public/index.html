@@ -609,11 +609,20 @@
     .hand-actions { flex-wrap: wrap; height: auto; flex-basis: auto; }
     .hand-panel, .action-panel, .stock-panel { flex: 1 1 100%; }
     .action-row { flex-wrap: wrap; height: auto; }
-    /* Phones: let the page scroll instead of squeezing the board flat */
-    .game-main { display: flex; flex-direction: column; overflow-y: auto; }
-    .game-left, .game-right { height: auto; min-height: max-content; }
-    .game-left > * { flex-shrink: 0; }
+    /* Phones: the whole page scrolls (no inner scroll areas, nothing clipped
+       behind the browser toolbar), and every section keeps its full height. */
+    #game { height: auto; min-height: 100dvh; overflow: visible; }
+    .game-main { display: flex; flex-direction: column; overflow: visible; flex: none; }
+    .game-left, .game-right, .sidebar-content, .tab-panel { height: auto; min-height: 0; flex: none; overflow: visible; }
+    .game-left > *, .game-right > * { flex-shrink: 0; }
     .board-container { flex: 0 0 auto; height: calc((100vw - 40px) / 1.733 + 16px); }
+    /* Stocks: cards stack in a grid instead of scrolling sideways */
+    .stock-panel { overflow: visible; }
+    .stock-panel .buy-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; }
+    .stock-panel .buy-card { max-width: none; min-width: 0; }
+    /* Market scoreboard: a bit bigger and fully visible */
+    .smatrix-row { min-height: 40px; }
+    .smatrix-player-name { font-size: 13px; }
   }
 
   ::-webkit-scrollbar { width: 6px; }
