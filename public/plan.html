@@ -101,6 +101,10 @@
   /* ── User Management ── */
   .user-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .user-row:last-child { border-bottom:none; }
+  .btn-reset-pw { margin-left:auto; font-size:11px; padding:3px 8px; border-radius:6px; border:1px solid var(--border); background:transparent; color:var(--dim); cursor:pointer; }
+  .btn-reset-pw:hover { color:var(--text); border-color:var(--gold); }
+  .temp-pw { margin-left:auto; font-size:12px; color:var(--gold); }
+  .temp-pw code { user-select:all; background:rgba(0,0,0,.3); padding:2px 6px; border-radius:4px; }
   .user-name { font-weight:500; min-width:120px; }
   .user-elo { font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--gold); min-width:60px; }
   .user-meta { font-size:11px; color:var(--muted); flex:1; }
@@ -200,7 +204,7 @@ const API_BASE = window.location.pathname.startsWith('/beta') ? '/beta' : '';
 
 /* ── Auth ───────────────────────────────────────── */
 // Reads the same token stored by the main app — no separate login needed
-let token = localStorage.getItem('acquire_auth_token') || '';
+let token = (() => { try { return localStorage.getItem('acquire_auth_token') || sessionStorage.getItem('acquire_auth_token') || ''; } catch { return ''; } })();
 let allFeedback = [];
 let currentFilter = 'all';
 let allUsers = [];
@@ -460,9 +464,27 @@ function renderUserList() {
     return `<div class="user-row">
       <span class="user-name">${escHtml(u.username)}${u.is_admin ? ' <span class="admin-badge">admin</span>' : ''}</span>
       <span class="user-elo">${u.elo} ELO</span>
-      <span class="user-meta">${u.games_played} games · joined ${since}</span>
+      <span class="user-meta">${u.games_played} games · joined ${since}${u.has_password ? '' : ' · <span style="color:var(--gold)">no password yet</span>'}</span>
+      <button class="btn-reset-pw" onclick="resetUserPassword(${Number(u.id)}, this)" title="Give this player a temporary password">Reset password</button>
     </div>`;
   }).join('');
+}
+
+async function resetUserPassword(id, btn) {
+  const u = allUsers.find(x => x.id === id);
+  if (!u || !confirm(`Give ${u.username} a new temporary password? Their old password stops working and they're signed out everywhere.`)) return;
+  btn.disabled = true;
+  try {
+    const res = await fetch(API_BASE + `/api/plan/users/${id}/reset-password`, {
+      method: 'POST', headers: { Authorization: 'Bearer ' + token },
+    });
+    const data = await res.json();
+    if (data.error) { alert(data.error); btn.disabled = false; return; }
+    u.has_password = 1;
+    const row = btn.closest('.user-row');
+    btn.outerHTML = `<span class="temp-pw" title="Shown once — send it to them privately">Temp password: <code>${escHtml(data.tempPassword)}</code></span>`;
+    row.querySelector('.user-meta').innerHTML = row.querySelector('.user-meta').innerHTML.replace(/ · <span[^>]*>no password yet<\/span>/, '');
+  } catch { alert('Request failed'); btn.disabled = false; }
 }
 
 async function promoteUser(makeAdmin) {

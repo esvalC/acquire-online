@@ -9,14 +9,15 @@ require('dotenv').config();
 const express    = require('express');
 const http       = require('http');
 const path       = require('path');
-const { randomUUID } = require('crypto');
+const crypto = require('crypto');
+const { randomUUID } = crypto;
 const { Server } = require('socket.io');
 const rateLimit  = require('express-rate-limit');
 const engine     = require('./gameEngine');
 const { decideBotAction, BOT_ROSTER, maybeDeclareEnd } = require('./botAI');
 const { applySearchAction, SEARCH_LEVELS } = require('./ai/searchBot');
 const db         = require('./db');
-const { signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone } = require('./auth');
+const { SMS_ENABLED, hashPassword, verifyPassword, passwordProblem, signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone } = require('./auth');
 
 const app    = express();
 app.set('trust proxy', 1); // nginx sits in front — req.ip = the address nginx saw
@@ -101,6 +102,101 @@ function smsAllowed(e164) {
 
 /* ── Auth / Profile routes ───────────────────────────────────── */
 
+// Text-message sign-in is retired once Twilio is removed from .env.
+function smsOnly(_req, res, next) {
+  if (!SMS_ENABLED) return res.status(410).json({ error: 'Text-message sign-in has been retired. Sign in with your username and password.' });
+  next();
+}
+app.get('/api/auth-config', (_req, res) => res.json({ sms: SMS_ENABLED }));
+
+const USERNAME_RE = /^[a-zA-Z0-9_]{2,20}$/;
+const publicUser = u => ({ id: u.id, username: u.username, elo: u.elo, has_password: !!u.password_hash });
+
+const signupLimit = rateLimit({
+  windowMs: 60 * 60 * 1000, max: 5, keyGenerator: byVisitor,
+  message: { error: 'Too many new accounts from this connection. Try again in an hour.' },
+  standardHeaders: true, legacyHeaders: false,
+});
+const loginLimit = rateLimit({
+  windowMs: 15 * 60 * 1000, max: 30, keyGenerator: byVisitor,
+  message: { error: 'Too many sign-in attempts. Wait 15 minutes.' },
+  standardHeaders: true, legacyHeaders: false,
+});
+// Per-account lockout: 10 wrong passwords in 15 minutes locks that username
+// for 15 minutes, from any connection (stops slow guessing spread across IPs).
+const failedLogins = new Map(); // username(lower) → { count, until, first }
+function accountLocked(name) {
+  const f = failedLogins.get(name);
+  return f && f.until && f.until > Date.now();
+}
+function noteFailedLogin(name) {
+  const now = Date.now();
+  let f = failedLogins.get(name);
+  if (!f || now - f.first > 15 * 60 * 1000) f = { count: 0, first: now, until: 0 };
+  f.count++;
+  if (f.count >= 10) f.until = now + 15 * 60 * 1000;
+  failedLogins.set(name, f);
+  if (failedLogins.size > 50000) failedLogins.clear();   // memory guard
+}
+
+// Create an account: username + password
+app.post('/api/signup', signupLimit, async (req, res) => {
+  const { username, password, remember } = req.body || {};
+  if (typeof username !== 'string' || !USERNAME_RE.test(username)) {
+    return res.status(400).json({ error: 'Username must be 2–20 letters, numbers or underscores' });
+  }
+  const bad = passwordProblem(password);
+  if (bad) return res.status(400).json({ error: bad });
+  if (password.toLowerCase() === username.toLowerCase()) return res.status(400).json({ error: 'Password can\'t be your username' });
+  if (db.findByUsername(username)) return res.status(409).json({ error: 'Username already taken' });
+  try {
+    const user = db.createPasswordUser(username, await hashPassword(password));
+    res.json({ ok: true, token: signToken(user.id, { remember: remember !== false }), user: publicUser(user) });
+  } catch (err) {
+    if (/UNIQUE/.test(err.message)) return res.status(409).json({ error: 'Username already taken' });
+    console.error('signup error:', err.message);
+    res.status(500).json({ error: 'Could not create account' });
+  }
+});
+
+// Sign in: username + password
+app.post('/api/login-password', loginLimit, async (req, res) => {
+  const { username, password, remember } = req.body || {};
+  if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
+    return res.status(400).json({ error: 'Enter your username and password' });
+  }
+  const key = username.toLowerCase().slice(0, 40);
+  if (accountLocked(key)) return res.status(429).json({ error: 'Too many wrong passwords for this account. Try again in 15 minutes.' });
+  const user = USERNAME_RE.test(username) ? db.findByUsername(username) : null;
+  const ok = await verifyPassword(password, user && user.password_hash);   // same timing either way
+  if (!ok) {
+    noteFailedLogin(key);
+    if (user && !user.password_hash) {
+      return res.status(400).json({ error: SMS_ENABLED
+        ? 'This account doesn\'t have a password yet — use "Sign in with a text code" below, then set one in your profile.'
+        : 'This account doesn\'t have a password yet. Ask the site admin for a temporary password.' });
+    }
+    return res.status(401).json({ error: 'Wrong username or password' });
+  }
+  failedLogins.delete(key);
+  res.json({ ok: true, token: signToken(user.id, { remember: remember !== false }), user: publicUser(user) });
+});
+
+// Set or change your password (signed in). Signs out every other device.
+app.post('/api/me/password', loginLimit, requireAuth, async (req, res) => {
+  const { currentPassword, newPassword, remember } = req.body || {};
+  const user = db.findByUsername(db.findById(req.userId)?.username || '');
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  if (user.password_hash && !(await verifyPassword(currentPassword, user.password_hash))) {
+    return res.status(401).json({ error: 'Current password is wrong' });
+  }
+  const bad = passwordProblem(newPassword);
+  if (bad) return res.status(400).json({ error: bad });
+  if (newPassword.toLowerCase() === user.username.toLowerCase()) return res.status(400).json({ error: 'Password can\'t be your username' });
+  db.setPassword(user.id, await hashPassword(newPassword));
+  res.json({ ok: true, token: signToken(user.id, { remember: remember !== false }) });
+});
+
 // Check if a username is available
 app.get('/api/username-available', (req, res) => {
   const { username } = req.query;
@@ -115,7 +211,7 @@ app.get('/api/username-available', (req, res) => {
 });
 
 // Send OTP — rate limited
-app.post('/api/send-otp', smslimit, async (req, res) => {
+app.post('/api/send-otp', smslimit, smsOnly, async (req, res) => {
   const { phone } = req.body;
   if (!phone) return res.status(400).json({ error: 'Phone number required' });
   const e164 = normalisePhone(String(phone));
@@ -127,7 +223,7 @@ app.post('/api/send-otp', smslimit, async (req, res) => {
 });
 
 // Register: verify OTP + create account → return JWT
-app.post('/api/register', verifyLimit, async (req, res) => {
+app.post('/api/register', verifyLimit, smsOnly, async (req, res) => {
   const { username, phone, code } = req.body;
   if (!username || !phone || !code) return res.status(400).json({ error: 'Missing fields' });
 
@@ -154,7 +250,7 @@ app.post('/api/register', verifyLimit, async (req, res) => {
 
 // Account recovery: look up by phone hash → send OTP (rate limited)
 // Used when someone forgets their username.
-app.post('/api/login-by-phone', smslimit, async (req, res) => {
+app.post('/api/login-by-phone', smslimit, smsOnly, async (req, res) => {
   const { phone } = req.body;
   if (!phone) return res.status(400).json({ error: 'Phone number required' });
 
@@ -173,7 +269,7 @@ app.post('/api/login-by-phone', smslimit, async (req, res) => {
 });
 
 // Verify OTP sent via login-by-phone → return JWT
-app.post('/api/login-by-phone/verify', verifyLimit, async (req, res) => {
+app.post('/api/login-by-phone/verify', verifyLimit, smsOnly, async (req, res) => {
   const { phone, code } = req.body;
   if (!phone || !code) return res.status(400).json({ error: 'Missing fields' });
 
@@ -190,7 +286,7 @@ app.post('/api/login-by-phone/verify', verifyLimit, async (req, res) => {
 });
 
 // Login step 1: look up username → decrypt phone → send OTP (rate limited)
-app.post('/api/login-by-username', smslimit, async (req, res) => {
+app.post('/api/login-by-username', smslimit, smsOnly, async (req, res) => {
   const { username } = req.body;
   if (!username) return res.status(400).json({ error: 'Username required' });
 
@@ -213,7 +309,7 @@ app.post('/api/login-by-username', smslimit, async (req, res) => {
 
 // Login step 2: verify OTP → return JWT
 // Accepts { username, code } (username-based login)
-app.post('/api/login', verifyLimit, async (req, res) => {
+app.post('/api/login', verifyLimit, smsOnly, async (req, res) => {
   const { username, code } = req.body;
   if (!username || !code) return res.status(400).json({ error: 'Missing fields' });
 
@@ -238,7 +334,8 @@ app.post('/api/login', verifyLimit, async (req, res) => {
 app.get('/api/me', requireAuth, (req, res) => {
   const raw = db.findById(req.userId);
   if (!raw) return res.status(404).json({ error: 'User not found' });
-  const { is_admin, ...user } = raw;
+  const { is_admin, token_version, ...user } = raw;
+  user.has_password = !!user.has_password;
   user.role = is_admin ? 'admin' : 'member';
   // Add masked phone for display — never expose raw or encrypted value
   if (user.phone_encrypted) {
@@ -354,6 +451,21 @@ app.post('/api/plan/users/promote', requireAdmin, (req, res) => {
   if (user.id === req.userId) return res.status(400).json({ error: 'Cannot change your own admin status' });
   db.setAdmin(user.id, isAdmin !== false);
   res.json({ ok: true, username: user.username, isAdmin: isAdmin !== false });
+});
+
+// Admin: give a user a temporary password (shown once) — for people who
+// forgot theirs or had a text-message-only account. Signs them out everywhere.
+app.post('/api/plan/users/:id/reset-password', requireAdmin, async (req, res) => {
+  const id = Number(req.params.id);
+  const target = Number.isInteger(id) ? db.findById(id) : null;
+  if (!target) return res.status(404).json({ error: 'User not found' });
+  if (target.id === req.userId) return res.status(400).json({ error: 'Change your own password from your profile' });
+  const alphabet = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const temp = Array.from(crypto.randomBytes(12), b => alphabet[b % alphabet.length]).join('')
+    .replace(/(.{4})(?=.)/g, '$1-');
+  db.setPassword(target.id, await hashPassword(temp));
+  console.log(`[admin] ${req.userId} reset the password of user ${target.id}`);
+  res.json({ ok: true, username: target.username, tempPassword: temp });
 });
 
 // List users (admin only)

@@ -1088,6 +1088,10 @@
     font-family: 'DM Sans', sans-serif; font-size: 14px;
   }
   .auth-step input:focus { border-color: var(--gold); outline: none; }
+  .auth-remember { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-dim); cursor: pointer; }
+  .auth-remember input { width: auto; margin: 0; accent-color: var(--gold); }
+  .pw-box { margin-top: 12px; padding: 10px; border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column; gap: 8px; }
+  .pw-box.needs { border-color: var(--gold); background: rgba(245,158,11,.06); }
   .auth-hint { font-size: 11px; color: var(--text-muted); overflow-wrap: break-word; word-break: break-word; line-height: 1.5; }
   .auth-label { font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: -4px; }
   .phone-input-row { display: flex; align-items: stretch; gap: 0; }
@@ -1789,55 +1793,60 @@
 
       <!-- Login flow -->
       <div id="loginFlow" class="auth-step">
-        <!-- Step 1a: username -->
-        <div id="loginStep1" class="auth-step">
-          <p class="auth-hint">Enter your username and we'll text a code to your registered number.</p>
-          <input type="text" id="loginUsername" placeholder="your_username" maxlength="20" autocomplete="username" />
-          <button class="btn" onclick="loginSendCode()">Send Code</button>
-          <button class="btn btn-secondary" style="margin-top:4px;font-size:11px" onclick="switchLoginMode('phone')">Forgot username? Use phone number</button>
-        </div>
-        <!-- Step 1b: phone (account recovery) -->
-        <div id="loginStep1Phone" class="auth-step" style="display:none;">
-          <p class="auth-hint">Enter your registered phone number and we'll text a code.</p>
-          <span class="auth-label">Phone Number</span>
-          <div class="phone-input-row">
-            <span class="phone-prefix">+1</span>
-            <input type="tel" id="loginPhone" placeholder="5551234567" maxlength="10" inputmode="numeric" autocomplete="tel-national" />
+        <form id="loginPwForm" class="auth-step" onsubmit="event.preventDefault(); loginWithPassword()">
+          <span class="auth-label">Username</span>
+          <input type="text" id="loginUsername" placeholder="your_username" maxlength="20" autocomplete="username" autocapitalize="none" spellcheck="false" />
+          <span class="auth-label">Password</span>
+          <input type="password" id="loginPassword" placeholder="••••••••" maxlength="128" autocomplete="current-password" />
+          <label class="auth-remember"><input type="checkbox" id="loginRemember" checked /> Stay signed in on this device</label>
+          <button class="btn" type="submit" id="loginPwBtn">Sign In</button>
+          <p class="auth-hint">Forgot your password? Send feedback from the menu with your username and the admin can give you a temporary one.</p>
+          <button class="btn btn-secondary" type="button" id="smsLoginLink" style="display:none;margin-top:2px;font-size:11px" onclick="showSmsLogin(true)">Older account without a password? Sign in with a text code</button>
+        </form>
+
+        <!-- Legacy: text-message sign-in (only while the server still has Twilio) -->
+        <div id="smsLogin" class="auth-step" style="display:none;">
+          <div id="loginStep1" class="auth-step">
+            <p class="auth-hint">Enter your username and we'll text a code to your registered number. Then set a password in your profile.</p>
+            <input type="text" id="smsUsername" placeholder="your_username" maxlength="20" autocomplete="username" />
+            <button class="btn" onclick="loginSendCode()">Send Code</button>
+            <button class="btn btn-secondary" style="margin-top:4px;font-size:11px" onclick="switchLoginMode('phone')">Forgot username? Use phone number</button>
+            <button class="btn btn-secondary" style="font-size:11px" onclick="showSmsLogin(false)">← Back to password sign-in</button>
           </div>
-          <button class="btn" onclick="loginSendCodeByPhone()">Send Code</button>
-          <button class="btn btn-secondary" style="margin-top:4px;font-size:11px" onclick="switchLoginMode('username')">← Back to username</button>
-        </div>
-        <!-- Step 2: enter code -->
-        <div id="loginStep2" class="auth-step" style="display:none;">
-          <p class="auth-hint" id="loginStep2Hint">Check your registered number for the 6-digit code.</p>
-          <input type="text" id="loginCode" placeholder="000000" maxlength="6" inputmode="numeric" />
-          <button class="btn" onclick="loginVerify()">Log In</button>
-          <button class="btn btn-secondary" onclick="resetLoginFlow()">← Back</button>
+          <div id="loginStep1Phone" class="auth-step" style="display:none;">
+            <p class="auth-hint">Enter your registered phone number and we'll text a code.</p>
+            <span class="auth-label">Phone Number</span>
+            <div class="phone-input-row">
+              <span class="phone-prefix">+1</span>
+              <input type="tel" id="loginPhone" placeholder="5551234567" maxlength="10" inputmode="numeric" autocomplete="tel-national" />
+            </div>
+            <button class="btn" onclick="loginSendCodeByPhone()">Send Code</button>
+            <button class="btn btn-secondary" style="margin-top:4px;font-size:11px" onclick="switchLoginMode('username')">← Back to username</button>
+          </div>
+          <div id="loginStep2" class="auth-step" style="display:none;">
+            <p class="auth-hint" id="loginStep2Hint">Check your registered number for the 6-digit code.</p>
+            <input type="text" id="loginCode" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
+            <button class="btn" onclick="loginVerify()">Sign In</button>
+            <button class="btn btn-secondary" onclick="resetLoginFlow()">← Back</button>
+          </div>
         </div>
       </div>
 
       <!-- Register flow -->
       <div id="registerFlow" class="auth-step" style="display:none;">
-        <div id="registerStep1" class="auth-step">
+        <form class="auth-step" onsubmit="event.preventDefault(); registerWithPassword()">
           <span class="auth-label">Username</span>
           <input type="text" id="regUsername" placeholder="your_username" maxlength="20"
-            oninput="checkUsernameAvail()" autocomplete="username" />
+            oninput="checkUsernameAvail()" autocomplete="username" autocapitalize="none" spellcheck="false" />
           <div id="usernameStatus" class="auth-hint"></div>
-          <span class="auth-label">Phone Number</span>
-          <div class="phone-input-row">
-            <span class="phone-prefix">+1</span>
-            <input type="tel" id="regPhone" placeholder="5551234567" maxlength="10" inputmode="numeric" autocomplete="tel-national" />
-          </div>
-          <p class="auth-hint">Used to verify your account. We never share your number.</p>
-          <button class="btn" onclick="registerSendCode()">Send Code →</button>
-        </div>
-        <div id="registerStep2" class="auth-step" style="display:none;">
-          <p class="auth-hint">Enter the 6-digit code sent to your phone.</p>
-          <div class="auth-hint" id="otpCountdown" style="color:var(--gold);font-weight:600;"></div>
-          <input type="text" id="regCode" placeholder="000000" maxlength="6" inputmode="numeric" autocomplete="one-time-code" />
-          <button class="btn" onclick="registerVerify()">Create Profile</button>
-          <button class="btn btn-secondary" onclick="resetRegisterFlow()">← Back</button>
-        </div>
+          <span class="auth-label">Password</span>
+          <input type="password" id="regPassword" placeholder="At least 8 characters" maxlength="128" autocomplete="new-password" />
+          <span class="auth-label">Confirm Password</span>
+          <input type="password" id="regPassword2" placeholder="Type it again" maxlength="128" autocomplete="new-password" />
+          <label class="auth-remember"><input type="checkbox" id="regRemember" checked /> Stay signed in on this device</label>
+          <button class="btn" type="submit" id="regBtn">Create Account</button>
+          <p class="auth-hint">No email or phone needed. Pick a password you don't use anywhere else — there's no automatic reset, so a password manager helps.</p>
+        </form>
       </div>
 
       <div id="drawerError" class="drawer-error" style="display:none;"></div>
@@ -1890,9 +1899,17 @@
               <span class="toggle-slider"></span>
             </label>
           </div>
-          <div style="margin-top:10px;">
-            <div style="font-size:13px;">Registered Phone</div>
-            <div style="font-size:12px;color:var(--text-muted);margin-top:2px;" id="profilePhone">—</div>
+          <div id="pwBox" class="pw-box">
+            <div style="font-size:13px;" id="pwBoxTitle">Password</div>
+            <div class="auth-hint" id="pwBoxHint"></div>
+            <form id="pwForm" class="auth-step" style="gap:6px" onsubmit="event.preventDefault(); savePassword()">
+              <input type="text" autocomplete="username" id="pwFormUser" style="display:none" />
+              <input type="password" id="pwCurrent" placeholder="Current password" maxlength="128" autocomplete="current-password" />
+              <input type="password" id="pwNew" placeholder="New password (8+ characters)" maxlength="128" autocomplete="new-password" />
+              <input type="password" id="pwNew2" placeholder="Confirm new password" maxlength="128" autocomplete="new-password" />
+              <button class="btn btn-sm" type="submit" id="pwSaveBtn">Save Password</button>
+              <div class="auth-hint" id="pwMsg"></div>
+            </form>
           </div>
         </div>
       </div>
@@ -3685,7 +3702,20 @@ function askRuleFromInput() {
    PROFILE / AUTH
    ══════════════════════════════════════════════════════════════ */
 
-let authToken    = localStorage.getItem('acquire_auth_token') || null;
+// "Stay signed in" keeps the token in localStorage (90-day token); otherwise
+// sessionStorage, so it's gone when the tab closes (12-hour token).
+function readStoredToken() {
+  try { return localStorage.getItem('acquire_auth_token') || sessionStorage.getItem('acquire_auth_token') || null; }
+  catch { return null; }
+}
+function storeAuthToken(token, remember) {
+  try {
+    localStorage.removeItem('acquire_auth_token'); sessionStorage.removeItem('acquire_auth_token');
+    if (token) (remember ? localStorage : sessionStorage).setItem('acquire_auth_token', token);
+  } catch {}
+}
+function tokenIsRemembered() { try { return !!localStorage.getItem('acquire_auth_token'); } catch { return false; } }
+let authToken    = readStoredToken();
 let currentUser  = null; // { id, username, elo, games_played, games_won }
 // Route API calls through /beta/api when running under the /beta Nginx proxy
 const API_BASE   = window.location.pathname.startsWith('/beta') ? '/beta/api' : '/api';
@@ -3789,9 +3819,7 @@ function renderDrawerLoggedIn(user, history, sessions = []) {
   // Visibility toggle — default true if field not present
   const toggle = document.getElementById('visibilityToggle');
   if (toggle) toggle.checked = user.public_profile !== false && user.public_profile !== 0;
-  // Masked phone
-  const phoneEl = document.getElementById('profilePhone');
-  if (phoneEl) phoneEl.textContent = user.phone_masked || '—';
+  renderPasswordBox(user);
   // Pre-fill & hide name inputs on game screens — use username automatically
   updateNameInputs(user.username);
   // Game history — sessions (with replay) + ELO entries
@@ -3858,7 +3886,7 @@ async function loadProfile() {
       fetch(`${API_BASE}/me`, { headers: { Authorization: 'Bearer ' + authToken } }),
       fetch(`${API_BASE}/me/sessions`, { headers: { Authorization: 'Bearer ' + authToken } }),
     ]);
-    if (meRes.status === 401) { authToken = null; localStorage.removeItem('acquire_auth_token'); document.querySelector('.menu-btn')?.classList.remove('logged-in'); renderDrawerLoggedOut(); return; }
+    if (meRes.status === 401) { authToken = null; storeAuthToken(null); document.querySelector('.menu-btn')?.classList.remove('logged-in'); renderDrawerLoggedOut(); return; }
     const data = await meRes.json();
     const sessData = sessRes.ok ? await sessRes.json() : {};
     renderDrawerLoggedIn(data.user, data.history || [], sessData.sessions || []);
@@ -3883,13 +3911,16 @@ function resetLoginFlow() {
   document.getElementById('loginStep1Phone').style.display  = 'none';
   document.getElementById('loginStep2').style.display       = 'none';
   document.getElementById('loginUsername').value = '';
+  document.getElementById('loginPassword').value = '';
+  document.getElementById('smsUsername').value = '';
+  showSmsLogin(false);
   document.getElementById('loginPhone').value    = '';
   document.getElementById('loginCode').value     = '';
   clearDrawerError();
 }
 
 async function loginSendCode() {
-  const username = document.getElementById('loginUsername').value.trim();
+  const username = document.getElementById('smsUsername').value.trim();
   if (!username) return showDrawerError('Enter your username');
   clearDrawerError();
   const btn = event.target;
@@ -3938,17 +3969,17 @@ async function loginVerify() {
       const phone = document.getElementById('loginPhone').value.trim();
       res  = await fetch(`${API_BASE}/login-by-phone/verify`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone, code }) });
     } else {
-      const username = document.getElementById('loginUsername').value.trim();
+      const username = document.getElementById('smsUsername').value.trim();
       res  = await fetch(`${API_BASE}/login`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, code }) });
     }
     data = await res.json();
-    if (data.error) { showDrawerError(data.error); btn.textContent = 'Log In'; btn.disabled = false; return; }
+    if (data.error) { showDrawerError(data.error); btn.textContent = 'Sign In'; btn.disabled = false; return; }
     authToken = data.token;
-    localStorage.setItem('acquire_auth_token', authToken);
+    storeAuthToken(authToken, true);
     renderDrawerLoggedIn(data.user, []);
     loadProfile(); // load full profile with history in background
   } catch { showDrawerError('Network error'); }
-  btn.textContent = 'Log In'; btn.disabled = false;
+  btn.textContent = 'Sign In'; btn.disabled = false;
 }
 
 /* ── Register flow ───────────────────────────────────────────── */
@@ -3974,14 +4005,7 @@ function startOtpCountdown(seconds, onExpire) {
 }
 
 function resetRegisterFlow() {
-  clearInterval(otpCountdownTimer);
-  const cd = document.getElementById('otpCountdown');
-  if (cd) cd.textContent = '';
-  document.getElementById('registerStep1').style.display = 'flex';
-  document.getElementById('registerStep2').style.display = 'none';
-  document.getElementById('regUsername').value = '';
-  document.getElementById('regPhone').value    = '';
-  document.getElementById('regCode').value     = '';
+  ['regUsername', 'regPassword', 'regPassword2'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
   document.getElementById('usernameStatus').textContent = '';
   clearDrawerError();
 }
@@ -3999,58 +4023,113 @@ function checkUsernameAvail() {
   }, 400);
 }
 
-async function registerSendCode() {
-  const username = document.getElementById('regUsername').value.trim();
-  const phone    = document.getElementById('regPhone').value.trim();
-  if (!username) return showDrawerError('Choose a username');
-  if (!phone)    return showDrawerError('Enter your phone number');
-  clearDrawerError();
-  const btn = event.target;
-  btn.textContent = 'Sending...'; btn.disabled = true;
-  try {
-    // Check availability one more time before sending
-    const avRes  = await fetch(`${API_BASE}/username-available?username=` + encodeURIComponent(username));
-    const avData = await avRes.json();
-    if (!avData.available) { showDrawerError(avData.error || 'Username already taken'); btn.textContent = 'Send Code'; btn.disabled = false; return; }
-
-    const res  = await fetch(`${API_BASE}/send-otp`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone }) });
-    const data = await res.json();
-    if (data.error) { showDrawerError(data.error); btn.textContent = 'Send Code →'; btn.disabled = false; return; }
-    if (data.dev) showDrawerError('DEV MODE: Check server console for code');
-    document.getElementById('registerStep1').style.display = 'none';
-    document.getElementById('registerStep2').style.display = 'flex';
-    document.getElementById('regCode').focus();
-    startOtpCountdown(120, () => { showDrawerError('Code expired — press Back and resend.'); });
-  } catch { showDrawerError('Network error'); }
-  btn.textContent = 'Send Code →'; btn.disabled = false;
+async function postJson(path, body, auth) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (auth) headers.Authorization = 'Bearer ' + authToken;
+  const res = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: JSON.stringify(body) });
+  let data = {};
+  try { data = await res.json(); } catch {}
+  if (!res.ok && !data.error) data.error = 'Something went wrong — try again';
+  return data;
 }
 
-async function registerVerify() {
-  const username = document.getElementById('regUsername').value.trim();
-  const phone    = document.getElementById('regPhone').value.trim();
-  const code     = document.getElementById('regCode').value.trim();
-  if (!code) return showDrawerError('Enter the code');
+function finishSignIn(data, remember) {
+  authToken = data.token;
+  storeAuthToken(authToken, remember);
+  renderDrawerLoggedIn(data.user, []);
+  loadProfile();
+}
+
+async function loginWithPassword() {
+  const username = document.getElementById('loginUsername').value.trim();
+  const password = document.getElementById('loginPassword').value;
+  const remember = document.getElementById('loginRemember').checked;
+  if (!username || !password) return showDrawerError('Enter your username and password');
   clearDrawerError();
-  const btn = event.target;
+  const btn = document.getElementById('loginPwBtn');
+  btn.textContent = 'Signing in...'; btn.disabled = true;
+  try {
+    const data = await postJson('/login-password', { username, password, remember });
+    if (data.error) showDrawerError(data.error);
+    else { document.getElementById('loginPassword').value = ''; finishSignIn(data, remember); }
+  } catch { showDrawerError('Network error'); }
+  btn.textContent = 'Sign In'; btn.disabled = false;
+}
+
+async function registerWithPassword() {
+  const username = document.getElementById('regUsername').value.trim();
+  const password = document.getElementById('regPassword').value;
+  const confirm  = document.getElementById('regPassword2').value;
+  const remember = document.getElementById('regRemember').checked;
+  if (!username) return showDrawerError('Choose a username');
+  if (password.length < 8) return showDrawerError('Password must be at least 8 characters');
+  if (password !== confirm) return showDrawerError("Passwords don't match");
+  clearDrawerError();
+  const btn = document.getElementById('regBtn');
   btn.textContent = 'Creating...'; btn.disabled = true;
   try {
-    const res  = await fetch(`${API_BASE}/register`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username, phone, code }) });
-    const data = await res.json();
-    if (data.error) { showDrawerError(data.error); btn.textContent = 'Create Profile'; btn.disabled = false; return; }
-    authToken = data.token;
-    localStorage.setItem('acquire_auth_token', authToken);
-    clearInterval(otpCountdownTimer);
-    renderDrawerLoggedIn(data.user, []);
-    loadProfile(); // load full profile with history in background
+    const data = await postJson('/signup', { username, password, remember });
+    if (data.error) showDrawerError(data.error);
+    else { resetRegisterFlow(); finishSignIn(data, remember); }
   } catch { showDrawerError('Network error'); }
-  btn.textContent = 'Create Profile'; btn.disabled = false;
+  btn.textContent = 'Create Account'; btn.disabled = false;
+}
+
+/* Legacy text-code sign-in: offered only while the server still has Twilio */
+let smsAvailable = false;
+fetch(`${API_BASE}/auth-config`).then(r => r.json()).then(c => {
+  smsAvailable = !!c.sms;
+  const link = document.getElementById('smsLoginLink');
+  if (link) link.style.display = smsAvailable ? '' : 'none';
+}).catch(() => {});
+function showSmsLogin(on) {
+  document.getElementById('loginPwForm').style.display = on ? 'none' : 'flex';
+  document.getElementById('smsLogin').style.display = on ? 'flex' : 'none';
+  clearDrawerError();
+}
+
+/* Profile: set / change password */
+function renderPasswordBox(user) {
+  const has = !!user.has_password;
+  document.getElementById('pwBox').classList.toggle('needs', !has);
+  document.getElementById('pwBoxTitle').textContent = has ? 'Change Password' : 'Set a Password';
+  document.getElementById('pwBoxHint').textContent = has
+    ? 'Changing it signs you out on every other device.'
+    : 'Text-message sign-in is going away. Set a password now so you can keep signing in.';
+  document.getElementById('pwCurrent').style.display = has ? '' : 'none';
+  document.getElementById('pwFormUser').value = user.username;
+  ['pwCurrent', 'pwNew', 'pwNew2'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('pwMsg').textContent = '';
+}
+async function savePassword() {
+  const msg = document.getElementById('pwMsg');
+  const cur = document.getElementById('pwCurrent').value;
+  const pw  = document.getElementById('pwNew').value;
+  const pw2 = document.getElementById('pwNew2').value;
+  msg.style.color = 'var(--red)';
+  if (pw.length < 8) { msg.textContent = 'At least 8 characters'; return; }
+  if (pw !== pw2) { msg.textContent = "Passwords don't match"; return; }
+  const btn = document.getElementById('pwSaveBtn');
+  btn.disabled = true;
+  try {
+    const remember = tokenIsRemembered();
+    const data = await postJson('/me/password', { currentPassword: cur, newPassword: pw, remember }, true);
+    if (data.error) { msg.textContent = data.error; }
+    else {
+      authToken = data.token; storeAuthToken(authToken, remember);
+      if (currentUser) currentUser.has_password = true;
+      renderPasswordBox({ ...(currentUser || {}), has_password: true });
+      msg.style.color = 'var(--green)'; msg.textContent = '✓ Password saved';
+    }
+  } catch { msg.textContent = 'Network error'; }
+  btn.disabled = false;
 }
 
 /* ── Log out ─────────────────────────────────────────────────── */
 function logOut() {
   authToken = null;
   currentUser = null;
-  localStorage.removeItem('acquire_auth_token');
+  storeAuthToken(null);
   document.querySelector('.menu-btn')?.classList.remove('logged-in');
   updateNameInputs(null);
   renderDrawerLoggedOut();

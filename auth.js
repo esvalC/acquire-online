@@ -10,7 +10,47 @@ const jwt    = require('jsonwebtoken');
 const crypto = require('crypto');
 
 const JWT_SECRET  = process.env.JWT_SECRET  || 'dev-jwt-secret-change-in-production';
-const JWT_EXPIRES = '30d';
+if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
+  console.error('[auth] WARNING: JWT_SECRET is not set — sessions are signed with a public default key');
+}
+// "Stay signed in" → 90 days; otherwise the session ends after 12 hours
+// (and the browser keeps it only for the tab's lifetime).
+const JWT_EXPIRES_REMEMBER = '90d';
+const JWT_EXPIRES_SESSION  = '12h';
+
+/* ── Passwords (scrypt, built into Node — no extra dependency) ── */
+const SCRYPT = { N: 16384, r: 8, p: 1, maxmem: 64 * 1024 * 1024 };
+const PASSWORD_MIN = 8, PASSWORD_MAX = 128;
+
+function passwordProblem(pw) {
+  if (typeof pw !== 'string') return 'Password required';
+  if (pw.length < PASSWORD_MIN) return `Password must be at least ${PASSWORD_MIN} characters`;
+  if (pw.length > PASSWORD_MAX) return `Password must be at most ${PASSWORD_MAX} characters`;
+  return null;
+}
+function hashPassword(pw) {
+  return new Promise((resolve, reject) => {
+    const salt = crypto.randomBytes(16);
+    crypto.scrypt(pw.normalize('NFKC'), salt, 64, SCRYPT, (err, key) => {
+      if (err) return reject(err);
+      resolve(`scrypt$${salt.toString('base64')}$${key.toString('base64')}`);
+    });
+  });
+}
+// Compares in constant time. With no stored hash it still does the work, so
+// "no such user" and "wrong password" take the same time.
+const DUMMY_HASH = `scrypt$${Buffer.alloc(16).toString('base64')}$${Buffer.alloc(64).toString('base64')}`;
+function verifyPassword(pw, stored) {
+  return new Promise((resolve) => {
+    const [kind, saltB64, keyB64] = String(stored || DUMMY_HASH).split('$');
+    if (kind !== 'scrypt' || typeof pw !== 'string' || pw.length > PASSWORD_MAX) return resolve(false);
+    const expected = Buffer.from(keyB64, 'base64');
+    crypto.scrypt(pw.normalize('NFKC'), Buffer.from(saltB64, 'base64'), expected.length, SCRYPT, (err, key) => {
+      if (err) return resolve(false);
+      resolve(!!stored && crypto.timingSafeEqual(key, expected));
+    });
+  });
+}
 
 /* ── Phone encryption (AES-256-GCM) ─────────────────────────── */
 // Stores a reversible encrypted copy of the phone number so we can
@@ -39,13 +79,26 @@ function decryptPhone(b64) {
 }
 
 /* ── JWT ─────────────────────────────────────────────────────── */
-function signToken(userId) {
-  return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+// v = the account's token_version: changing or resetting the password bumps
+// it, which invalidates every token issued before.
+function signToken(userId, { remember = true } = {}) {
+  const db = require('./db');
+  const v  = db.tokenVersion(userId) || 0;
+  return jwt.sign({ sub: userId, v }, JWT_SECRET, {
+    expiresIn: remember ? JWT_EXPIRES_REMEMBER : JWT_EXPIRES_SESSION,
+    algorithm: 'HS256',
+  });
 }
 
 function verifyToken(token) {
-  try { return jwt.verify(token, JWT_SECRET); }
+  let payload;
+  try { payload = jwt.verify(String(token), JWT_SECRET, { algorithms: ['HS256'] }); }
   catch { return null; }
+  const db = require('./db');
+  const current = db.tokenVersion(payload.sub);
+  if (current === null) return null;                 // account gone
+  if ((payload.v || 0) !== current) return null;     // signed out by a password change
+  return payload;
 }
 
 // Express middleware — attaches req.userId if a valid token is present
@@ -54,7 +107,7 @@ function requireAuth(req, res, next) {
   const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
   if (!token) return res.status(401).json({ error: 'Not authenticated' });
   const payload = verifyToken(token);
-  if (!payload) return res.status(401).json({ error: 'Invalid or expired session' });
+  if (!payload) return res.status(401).json({ error: 'Your session has ended — please sign in again' });
   req.userId = payload.sub;
   next();
 }
@@ -91,6 +144,10 @@ function generateOtp() {
 let twilioClient  = null;
 let verifyService = null;
 const DEV_MODE    = !process.env.TWILIO_ACCOUNT_SID;
+// Text-message sign-in is being retired. It only runs with a real Twilio
+// account configured (or ALLOW_DEV_OTP=1 for local testing), so removing the
+// TWILIO_* settings switches it off completely.
+const SMS_ENABLED = !DEV_MODE || process.env.ALLOW_DEV_OTP === '1';
 
 if (!DEV_MODE) {
   const twilio = require('twilio');
@@ -171,4 +228,5 @@ function maskPhone(e164) {
   return `${cc} •••-•••-${last4}`;
 }
 
-module.exports = { signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone };
+module.exports = {
+  SMS_ENABLED, hashPassword, verifyPassword, passwordProblem, signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone };

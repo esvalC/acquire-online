@@ -35,8 +35,10 @@ Open `http://localhost:3000`. Share your local IP (e.g. `http://192.168.1.x:3000
 - Reconnect support — rejoin a game in progress if you lose connection
 
 ### Accounts & Stats
-- Phone-verified accounts (Twilio OTP) — one account per phone number
-- Phone numbers are never stored — only a salted HMAC-SHA256 hash
+- Username + password accounts (scrypt-hashed, no email or phone needed), optional "stay signed in" (90 days; otherwise 12 hours)
+- Changing a password signs the account out everywhere; 10 wrong passwords lock an account for 15 minutes
+- Admins can issue a one-time temporary password from `/plan` → Users
+- Older phone-verified accounts keep working; text-code sign-in switches off automatically once `TWILIO_*` is removed from `.env`
 - JWT authentication (stored in localStorage)
 - ELO rating — pairwise K=32, normalized across opponents; solo games compare vs 1000 baseline
 - Full game history in your profile with rank, opponents, ELO delta, and date
@@ -77,7 +79,7 @@ acquire-online/
 ├── server.js              # Express + Socket.IO — routes, game rooms, ELO
 ├── gameEngine.js          # Pure game logic (stateless, no I/O)
 ├── botAI.js               # Bot personalities and decision logic
-├── auth.js                # JWT helpers, Twilio OTP, phone encryption
+├── auth.js                # JWT sessions, password hashing, legacy Twilio OTP
 ├── db.js                  # SQLite via better-sqlite3 — all DB access
 ├── data/
 │   └── acquire.db         # SQLite database (gitignored)
@@ -140,7 +142,8 @@ PHONE_HASH_SALT=
 # AES-256 key for phone encryption (32-byte hex)
 PHONE_ENCRYPT_KEY=
 
-# Twilio Verify (for OTP SMS — leave blank to use console dev mode)
+# Twilio Verify — LEGACY text-code sign-in. Leave blank to switch it off
+# (set ALLOW_DEV_OTP=1 locally to print codes to the console instead).
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_VERIFY_SID=
@@ -149,7 +152,7 @@ TWILIO_VERIFY_SID=
 DB_PATH=
 ```
 
-For local dev without Twilio, the server falls back to printing OTP codes in the console.
+New accounts use username + password. Text-code sign-in only runs while Twilio is configured (or with `ALLOW_DEV_OTP=1` for local testing).
 
 ---
 

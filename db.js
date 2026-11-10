@@ -83,6 +83,10 @@ const cols = db.prepare(`PRAGMA table_info(users)`).all().map(r => r.name);
 if (!cols.includes('is_admin'))        db.exec(`ALTER TABLE users ADD COLUMN is_admin        INTEGER NOT NULL DEFAULT 0`);
 if (!cols.includes('public_profile'))  db.exec(`ALTER TABLE users ADD COLUMN public_profile  INTEGER NOT NULL DEFAULT 1`);
 if (!cols.includes('phone_encrypted')) db.exec(`ALTER TABLE users ADD COLUMN phone_encrypted TEXT`);
+// Username + password sign-in. token_version bumps on password change / reset,
+// which signs the account out everywhere else.
+if (!cols.includes('password_hash'))   db.exec(`ALTER TABLE users ADD COLUMN password_hash   TEXT`);
+if (!cols.includes('token_version'))   db.exec(`ALTER TABLE users ADD COLUMN token_version   INTEGER NOT NULL DEFAULT 0`);
 
 const sessionCols = db.prepare(`PRAGMA table_info(game_sessions)`).all().map(r => r.name);
 if (!sessionCols.includes('standings'))    db.exec(`ALTER TABLE game_sessions ADD COLUMN standings TEXT NOT NULL DEFAULT '[]'`);
@@ -129,7 +133,10 @@ function hashPhone(e164) {
 const stmts = {
   findByUsername:  db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE'),
   findByPhoneHash: db.prepare('SELECT * FROM users WHERE phone_hash = ?'),
-  findById:           db.prepare('SELECT id, username, created_at, elo, games_played, games_won, is_admin, public_profile FROM users WHERE id = ?'),
+  findById:           db.prepare('SELECT id, username, created_at, elo, games_played, games_won, is_admin, public_profile, token_version, (password_hash IS NOT NULL) AS has_password FROM users WHERE id = ?'),
+  tokenVersion:       db.prepare('SELECT token_version FROM users WHERE id = ?'),
+  setPassword:        db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?'),
+  createPwUser:       db.prepare('INSERT INTO users (username, phone_hash, password_hash) VALUES (?, ?, ?)'),
   setAdmin:           db.prepare('UPDATE users SET is_admin = ? WHERE id = ?'),
   setPublicProfile:   db.prepare('UPDATE users SET public_profile = ? WHERE id = ?'),
   createUser:      db.prepare('INSERT INTO users (username, phone_hash, phone_encrypted) VALUES (?, ?, ?)'),
@@ -239,6 +246,15 @@ module.exports = {
     return stmts.findByUsername.get(username);
   },
 
+  // Password accounts have no phone; phone_hash is NOT NULL UNIQUE in the
+  // original schema, so it gets a random placeholder that can never match a real hash.
+  createPasswordUser(username, passwordHash) {
+    stmts.createPwUser.run(username, 'nophone:' + crypto.randomUUID(), passwordHash);
+    return stmts.findByUsername.get(username);
+  },
+  setPassword(userId, passwordHash) { stmts.setPassword.run(passwordHash, userId); },
+  tokenVersion(userId) { const r = stmts.tokenVersion.get(userId); return r ? r.token_version : null; },
+
   phoneHashExists(e164Phone) {
     const hash = hashPhone(e164Phone);
     return !!stmts.findByPhoneHash.get(hash);
@@ -254,7 +270,7 @@ module.exports = {
 
   setAdmin(userId, isAdmin) { stmts.setAdmin.run(isAdmin ? 1 : 0, userId); },
   getAllUsers(limit = 200) {
-    return db.prepare('SELECT id, username, created_at, elo, games_played, games_won, is_admin FROM users ORDER BY created_at DESC LIMIT ?').all(limit);
+    return db.prepare('SELECT id, username, created_at, elo, games_played, games_won, is_admin, (password_hash IS NOT NULL) AS has_password FROM users ORDER BY created_at DESC LIMIT ?').all(limit);
   },
   setPublicProfile(userId, isPublic) { stmts.setPublicProfile.run(isPublic ? 1 : 0, userId); },
 
