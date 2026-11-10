@@ -819,6 +819,13 @@
   .news-reply { padding: 6px 0; }
   .news-reply .news-body { font-size: 13px; margin: 2px 0 0; }
   .news-reply-form { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  /* Phones: name, message and button stacked full-width so they're readable */
+  @media (max-width: 600px) {
+    .news-reply-form { flex-direction: column; align-items: stretch; }
+    .news-reply-form input, .news-reply-form textarea { flex: none; width: 100%; font-size: 16px; }
+    .news-reply-form textarea { min-height: 72px; }
+    .news-reply-form .news-btn { align-self: flex-end; padding: 8px 18px; font-size: 14px; }
+  }
   .news-btn { border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: #fff;
     border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 12px; cursor: pointer; }
   .news-btn:hover { background: rgba(255,255,255,0.2); }
