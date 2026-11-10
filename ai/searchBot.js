@@ -238,16 +238,20 @@ function decideSearchAction(game, me, opts = {}) {
 //   'expert' → Medium button — light search
 //   'mcts'   → Hard button   — solid search
 //   'master' → Master button — as much search as fits in the time budget
-// Measured on a 2.3 GHz Xeon: 150 playouts beat 12 playouts 27/30 games;
-// 100 playouts beat the plain heuristic 52/60; 400 beat 40 9/12.
+//
+// Benchmarks (GitHub runners, 4-player games, 25% = no better than opponents):
+//   Medium vs 3x Easy   56% (200 games)    Hard vs 3x Medium  56% (200)
+//   1.5s Master vs 3x Hard 35% (200)        Master vs 3x Easy  94% (200)
+//   3s vs 1.5s Master   31% (160)  → Master uses 3s
+//   searching chain naming / tied survivor: 24% vs Master (160) → no gain, off
+//   stronger 'expert' heuristic for playouts: 24% vs Hard (240) → no gain, off
 const SEARCH_LEVELS = {
   expert: { budgetMs: 150,  maxPlayouts: 40 },
   mcts:   { budgetMs: 400,  maxPlayouts: 200 },
-  master: { budgetMs: 1500, maxPlayouts: 8000 },
+  master: { budgetMs: 3000, maxPlayouts: 16000 },
   // Experiments for ai/benchmark.js only (not selectable in the UI):
-  'lab-xp':   { budgetMs: 400,  maxPlayouts: 200, policy: 'expert' }, // result: no gain (24% vs Hard)
-  'lab-full': { budgetMs: 1500, maxPlayouts: 8000, full: true },      // Master + search chain naming/survivor
-  'lab-3s':   { budgetMs: 3000, maxPlayouts: 16000 },                  // Master with 2× time
+  'lab-xp':   { budgetMs: 400,  maxPlayouts: 200, policy: 'expert' },
+  'lab-full': { budgetMs: 3000, maxPlayouts: 16000, full: true },
 };
 
 module.exports = { decideSearchAction, applySearchAction: apply, SEARCH_LEVELS };

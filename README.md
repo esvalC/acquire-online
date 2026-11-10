@@ -52,11 +52,19 @@ Open `http://localhost:3000`. Share your local IP (e.g. `http://192.168.1.x:3000
 - Feedback system — bug reports and suggestions submitted in-app
 
 ### Bot AI
-| Personality | Bot Names | Behaviour |
+| Difficulty | How it plays | vs the level below |
 |---|---|---|
-| Focused | Rex, Colt | All purchases in one chain |
-| Balanced | Aria, Vera | Split purchases across two chains |
-| Diversified | Nova | One share each in multiple chains |
+| Easy | Hand-tuned heuristic | — |
+| Medium | Monte Carlo search, ~40 playouts per move | wins 56% of 4-player games (25% = even) |
+| Hard | Monte Carlo search, ~200 playouts per move | 56% |
+| Master | Monte Carlo search, 3 s of thinking (thousands of playouts) | 35%; 94% vs Easy |
+
+The search bots (`ai/searchBot.js`) re-deal every tile they can't see before each
+simulated game, so they never peek at opponents' hands or the bag. They run in a
+worker thread (`ai/botWorker.js`) during the normal bot "thinking" pause.
+
+Benchmark on your own machine: `node ai/benchmark.js` (writes `ai/benchmark-report.md`).
+Benchmark on 20 GitHub runners: push any branch named `bench/<name>` (see `.github/workflows/bench.yml`).
 
 All bots run server-side using the same validated game engine as human players.
 
