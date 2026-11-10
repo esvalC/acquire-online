@@ -88,14 +88,17 @@ acquire-online/
 ├── package.json
 └── .github/
     └── workflows/
-        └── deploy.yml     # CI/CD — auto-deploy both servers on push to main
+        ├── deploy.yml     # CI/CD — push to main deploys production
+        ├── bench.yml      # bot benchmarks on GitHub runners (bench/** branches)
+        └── ops.yml        # run ops/commands.sh on the server (ops/** branches)
 ```
 
 ### Design Principles
 
 - **Server owns all game state.** Clients send actions; server validates and broadcasts new state to the room. Clients cannot cheat.
 - **SQLite, single file.** No external database to manage. WAL mode handles concurrent reads from two server processes.
-- **Two servers, one database.** Production (port 3000) and beta (port 3001) both symlink to the same `acquire.db` file.
+- **Games survive restarts.** In-progress games are saved to SQLite as they're played and reloaded on startup; browsers rejoin automatically.
+- **Replays expire.** Replays are stored gzip-compressed and deleted after 5 days.
 - **Phone privacy by design.** Raw phone numbers are never written to disk. Only a salted HMAC hash (for uniqueness enforcement) and an AES-256-GCM encrypted value (for masked display) are stored.
 
 ### Database Schema
@@ -118,7 +121,6 @@ acquire-online/
 | `/multiplayer/1234` | Join a specific room (auto-reconnects if session exists) |
 | `/rules` | Full standalone rules page |
 | `/plan` | Admin dashboard (requires `is_admin` flag) |
-| `/beta/*` | Nginx-proxied beta server (same routes, port 3001) |
 
 ---
 
@@ -167,15 +169,13 @@ git push origin main
       ▼
  EC2 Instance (Ubuntu 22.04, t3.micro)
       │
-      ├── Nginx (port 80/443) ← public internet
-      │     ├── /beta/* → strip prefix → port 3001 (beta server)
-      │     └── /* → port 3000 (production server)
+      ├── Nginx (port 80/443) ← public internet → port 3000
       │
-      ├── PM2: acquire-main  (port 3000, production)
-      └── PM2: acquire-online (port 3001, beta)
+      └── PM2 (user ubuntu): acquire-main (port 3000)
 ```
 
-Both servers share a single SQLite database at `/home/ubuntu/acquire-data/acquire.db` via symlinks.
+The SQLite database lives at `/home/ubuntu/acquire-data/acquire.db`. PM2 runs as the
+`ubuntu` user only (`pm2-ubuntu` systemd unit); never run `pm2` as root on the server.
 
 ### AWS Resources
 
@@ -253,12 +253,10 @@ aws ssm send-command \
   --instance-ids i-0bbc6c13fd3dfe6ab \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=[
-    "sudo -u ubuntu GIT_SSH_COMMAND=\"ssh -i /home/ubuntu/.ssh/deploy_key\" git -C /home/ubuntu/acquire-online pull origin main",
-    "sudo -u ubuntu npm --prefix /home/ubuntu/acquire-online install --omit=dev",
-    "sudo -u ubuntu pm2 restart acquire-online",
     "git -C /home/ubuntu/acquire-main -c safe.directory=/home/ubuntu/acquire-main pull origin main",
-    "npm --prefix /home/ubuntu/acquire-main install --omit=dev",
-    "pm2 restart acquire-main"
+    "chown -R ubuntu:ubuntu /home/ubuntu/acquire-main",
+    "sudo -u ubuntu npm --prefix /home/ubuntu/acquire-main install --omit=dev",
+    "sudo -u ubuntu pm2 restart acquire-main"
   ]'
 ```
 

@@ -317,7 +317,7 @@ function renderFeedbackList(items, containerId, showActions) {
           <div class="fb-msg">${escHtml(f.message)}</div>
           <div class="fb-meta">
             <span>${date}</span>
-            ${f.contact ? `<span>Contact: ${escHtml(f.contact)}</span>` : ''}
+            ${f.contact ? `<span>From: ${escHtml(f.contact)}</span>` : ''}
             ${f.page    ? `<span>Page: ${escHtml(f.page)}</span>` : ''}
             <span>Status: <strong>${f.status}</strong></span>
             ${ghLink}

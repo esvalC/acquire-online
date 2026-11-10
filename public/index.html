@@ -22,13 +22,13 @@
     --green: #4a9e60;
     --red: #c44040;
     --blue: #4477bb;
-    --tower: #c43333;
-    --luxor: #d4720a;
-    --american: #2255aa;
-    --worldwide: #7744cc;
-    --festival: #0e8ea8;
-    --imperial: #2a9650;
-    --continental: #c8a010;
+    --tower: #e8c21a;
+    --luxor: #d63a33;
+    --american: #2f5bd3;
+    --worldwide: #9a6634;
+    --festival: #2f9e4a;
+    --imperial: #ee7d1f;
+    --continental: #22c1bb;
     --radius: 8px;
     --transition: all 0.2s ease;
   }
@@ -252,12 +252,6 @@
     transition: width 0.3s ease;
   }
 
-  /* buyStock: board fills space, hand-actions takes only what it needs */
-  .game-left.buystock-mode { flex-direction: row; align-items: stretch; }
-  .game-left.buystock-mode .board-container { flex: 1; min-width: 0; }
-  .game-left.buystock-mode .board { width: 100%; }
-  .game-left.buystock-mode .hand-actions { flex: 0 0 auto; flex-direction: column; min-width: 260px; max-width: 360px; }
-  .game-left.buystock-mode .hand-actions .action-panel { flex: 0 0 auto; max-width: none; max-height: none; }
 
   .board-cell {
     aspect-ratio: 1.3; display: flex; align-items: center; justify-content: center;
@@ -275,7 +269,7 @@
     color: #2a1c0a;
     box-shadow: inset 0 1px 0 rgba(255,255,220,0.3), 0 2px 4px rgba(0,0,0,0.5);
   }
-  .board-cell.chain-Tower       { background: var(--tower); border-top-color: color-mix(in srgb,var(--tower) 60%,#fff); border-left-color: color-mix(in srgb,var(--tower) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--tower) 60%,#000); border-right-color: color-mix(in srgb,var(--tower) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
+  .board-cell.chain-Tower       { background: var(--tower); border-top-color: color-mix(in srgb,var(--tower) 60%,#fff); border-left-color: color-mix(in srgb,var(--tower) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--tower) 60%,#000); border-right-color: color-mix(in srgb,var(--tower) 60%,#000); color: #1a1a1a; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
   .board-cell.chain-Luxor       { background: var(--luxor); border-top-color: color-mix(in srgb,var(--luxor) 60%,#fff); border-left-color: color-mix(in srgb,var(--luxor) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--luxor) 60%,#000); border-right-color: color-mix(in srgb,var(--luxor) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
   .board-cell.chain-American    { background: var(--american); border-top-color: color-mix(in srgb,var(--american) 60%,#fff); border-left-color: color-mix(in srgb,var(--american) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--american) 60%,#000); border-right-color: color-mix(in srgb,var(--american) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
   .board-cell.chain-Worldwide   { background: var(--worldwide); border-top-color: color-mix(in srgb,var(--worldwide) 60%,#fff); border-left-color: color-mix(in srgb,var(--worldwide) 60%,#fff); border-bottom-color: color-mix(in srgb,var(--worldwide) 60%,#000); border-right-color: color-mix(in srgb,var(--worldwide) 60%,#000); color: #fff; box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 4px rgba(0,0,0,0.35); }
@@ -317,16 +311,31 @@
   }
 
   /* ── Hand & Action Panel ──────────────────────── */
-  .hand-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; flex-shrink: 0; overflow-y: auto; }
+  /* Fixed-height bar under the board: the board never moves or resizes when
+     it's your turn, and buy / sell / trade controls are always fully visible. */
+  .hand-actions { display: flex; gap: 8px; flex-wrap: nowrap; align-items: stretch; flex: 0 0 164px; height: 164px; }
   .hand-panel {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 10px; flex: 1; min-width: 180px;
+    border-radius: var(--radius); padding: 10px; flex: 0 0 210px; min-width: 0; overflow: hidden;
   }
   .action-panel {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 10px; flex: 0 0 auto;
-    min-width: 220px; max-width: 340px; overflow-y: auto; max-height: 340px;
+    border-radius: var(--radius); padding: 10px 12px; flex: 1 1 auto;
+    min-width: 0; overflow-x: auto; overflow-y: hidden;
   }
+  .action-row { display: flex; gap: 10px; align-items: stretch; height: 100%; }
+  .buy-strip { display: flex; gap: 8px; flex: 1 1 auto; min-width: 0; }
+  .buy-card {
+    flex: 1 1 0; min-width: 96px; max-width: 150px; display: flex; flex-direction: column; gap: 4px;
+    background: var(--bg-dark); border: 1px solid var(--border); border-top: 3px solid var(--card-color, var(--border));
+    border-radius: 8px; padding: 6px 8px; font-size: 12px;
+  }
+  .buy-card.picked { border-color: var(--card-color); box-shadow: 0 0 0 1px var(--card-color) inset; }
+  .buy-card .buy-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .buy-card .buy-meta { font-size: 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+  .buy-card .buy-counter { justify-content: space-between; margin-top: auto; }
+  .action-side { flex: 0 0 170px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--text-muted); }
+  .merger-col { flex: 1 1 0; min-width: 150px; display: flex; flex-direction: column; justify-content: center; }
   .tile-hand { display: flex; gap: 6px; flex-wrap: wrap; }
   .hand-tile {
     font-family: 'JetBrains Mono', monospace; font-size: 12px;
@@ -500,7 +509,7 @@
   }
 
   /* ── Action panel specifics ───────────────────── */
-  .chain-choice-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+  .chain-choice-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 6px; }
   .chain-choice-btn {
     padding: 10px; border-radius: var(--radius); border: 2px solid var(--border);
     background: var(--bg-dark); color: var(--text); cursor: pointer;
@@ -582,6 +591,9 @@
   @media (max-width: 900px) {
     .game-main { grid-template-columns: 1fr; }
     .board-cell { font-size: 8px; min-height: 22px; }
+    .hand-actions { flex-wrap: wrap; height: auto; flex-basis: auto; }
+    .hand-panel { flex: 1 1 100%; }
+    .action-row { flex-wrap: wrap; height: auto; }
   }
 
   ::-webkit-scrollbar { width: 6px; }
@@ -1336,11 +1348,6 @@
       <div class="mode-card-title">Feedback</div>
       <div class="mode-card-desc">Still in beta — report bugs or share suggestions</div>
     </div>
-    <div id="adminBetaCard" class="mode-card" style="display:none;border-color:rgba(168,85,247,0.4);background:linear-gradient(135deg,var(--bg-card) 0%,rgba(168,85,247,0.06) 100%)" onclick="window.open('/beta','_blank')">
-      <div class="mode-card-icon">🛠️</div>
-      <div class="mode-card-title" style="color:#c084fc">Beta Site</div>
-      <div class="mode-card-desc">Preview the latest changes before they go live</div>
-    </div>
   </div>
 
   <div class="recent-games-section">
@@ -1393,8 +1400,11 @@
     </div>
     <textarea id="fbMessage" placeholder="Describe the bug or suggestion (max 300 words)…" maxlength="2000"
       style="background:var(--bg-dark);border:1px solid var(--border-light);border-radius:var(--radius);color:var(--text);padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:13px;resize:vertical;min-height:110px;"></textarea>
-    <input type="text" id="fbContact" placeholder="Email or @handle (optional — so we can follow up)" maxlength="100"
-      style="background:var(--bg-dark);border:1px solid var(--border-light);border-radius:var(--radius);color:var(--text);padding:10px 14px;font-family:'DM Sans',sans-serif;font-size:13px;" />
+    <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--text-dim);cursor:pointer;">
+      <input type="checkbox" id="fbIncludeName" onchange="updateFbName()" />
+      Include my name <span id="fbNamePreview" style="color:var(--text-muted)"></span>
+    </label>
+    <input type="text" id="fbName" placeholder="Your name" maxlength="40" style="display:none;background:var(--bg-dark);border:1px solid var(--border-light);border-radius:var(--radius);color:var(--text);padding:8px 12px;font-family:'DM Sans',sans-serif;font-size:13px;" />
     <div id="fbError" style="display:none;font-size:12px;color:var(--red);"></div>
     <div id="fbSuccess" style="display:none;font-size:13px;color:var(--green);padding:8px 0;">Thanks! Your feedback has been recorded. 🙌</div>
     <button class="btn" id="fbSubmitBtn" onclick="submitFeedback()">Send Feedback</button>
@@ -1450,13 +1460,13 @@
     <p>Each player draws a tile to determine turn order — the player whose tile is closest to space 1A goes first. All drawn tiles stay on the board (Quick-start mode). Each player receives 6 tiles and $6,000 starting cash.</p>
     <h3>Hotel Chains & Prices</h3>
     <div class="chain-legend">
-      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#e11d48"></div>Tower — Cheap ($)</div>
-      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#f97316"></div>Luxor — Cheap ($)</div>
-      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#3b82f6"></div>American — Mid ($$)</div>
-      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#8b5cf6"></div>Worldwide — Mid ($$)</div>
-      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#06b6d4"></div>Festival — Mid ($$)</div>
-      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#10b981"></div>Imperial — Expensive ($$$)</div>
-      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#eab308"></div>Continental — Expensive ($$$)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#e8c21a"></div>Tower — Cheap ($)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#d63a33"></div>Luxor — Cheap ($)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#2f5bd3"></div>American — Mid ($$)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#9a6634"></div>Worldwide — Mid ($$)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#2f9e4a"></div>Festival — Mid ($$)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#ee7d1f"></div>Imperial — Expensive ($$$)</div>
+      <div class="chain-legend-item"><div class="chain-legend-dot" style="background:#22c1bb"></div>Continental — Expensive ($$$)</div>
     </div>
     <p>Stock prices rise as chains grow. Prices range from $200 (small cheap chain) to $1,000 (large expensive chain). There are 25 shares per chain.</p>
     <h3>Your Turn</h3>
@@ -2096,6 +2106,7 @@ function _launchFinanceRoadLevel(tierIdx, levelIdx, name) {
     botCount: 3,
     quickstart: true,
     botConfigs: level.bots,
+    mode: `Finance Road — ${tier.name} L${levelIdx + 1}: ${level.name}`,
     authToken,
   }, (res) => {
     if (res.error) { showError(res.error); return; }
@@ -2146,6 +2157,7 @@ function _launchQuickMaster(name) {
   history.pushState({}, '', qmPath);
   socket.emit('createSoloGame', {
     name,
+    mode: 'Quick Master',
     botCount: 3,
     quickstart: true,
     botConfigs: [
@@ -2165,8 +2177,9 @@ function _launchQuickMaster(name) {
 }
 
 const chainColors = {
-  Tower: '#e11d48', Luxor: '#f97316', American: '#3b82f6',
-  Worldwide: '#8b5cf6', Festival: '#06b6d4', Imperial: '#10b981', Continental: '#eab308',
+  // Same colors as the physical board game (one palette site-wide)
+  Tower: '#e8c21a', Luxor: '#d63a33', American: '#2f5bd3',
+  Worldwide: '#9a6634', Festival: '#2f9e4a', Imperial: '#ee7d1f', Continental: '#22c1bb',
 };
 
 /* ── Screen Management ─────────────────────────── */
@@ -2338,7 +2351,7 @@ function startSoloGame() {
       difficulty: s.difficulty,   // each bot keeps its own built-in playing style
     };
   });
-  socket.emit('createSoloGame', { name, botCount: selectedBotCount, quickstart, botConfigs, authToken }, (res) => {
+  socket.emit('createSoloGame', { name, botCount: selectedBotCount, quickstart, botConfigs, mode: 'Solo', authToken }, (res) => {
     if (res.error) return showError(res.error);
     saveSession(res.code, name, res.token);
     // Give the game its own URL so a refresh / reopened tab can rejoin it
@@ -2578,6 +2591,24 @@ socket.on('disconnect', () => {
     showToast('Connection lost — reconnecting…');
   }
 });
+// The server says it can't match this browser to a live game (it restarted,
+// or the connection was swapped). Rejoin with our saved seat; if the game is
+// really gone, say so instead of leaving a frozen board.
+let _sessionLostAt = 0;
+socket.on('sessionLost', () => {
+  if (!activeSession || Date.now() - _sessionLostAt < 3000) return;
+  _sessionLostAt = Date.now();
+  const { code, name, token } = activeSession;
+  socket.emit('rejoinRoom', { code, token, name }, (res) => {
+    if (res && !res.error) { showToast('Reconnected to your game — try that move again.'); return; }
+    activeSession = null;
+    clearSession(code);
+    showToast('That game is no longer on the server. Sorry!');
+    const home = window.location.pathname.startsWith('/beta') ? '/beta' : '/';
+    setTimeout(() => { window.location.href = home; }, 2500);
+  });
+});
+
 socket.on('connect', () => {
   if (!lostConnection) return;          // first connect on page load
   lostConnection = false;
@@ -2932,8 +2963,6 @@ function renderBoard() {
   const isMyPlaceTurn = st.phase === 'placeTile' && st.currentPlayerIdx === myIdx;
   const isMyBuyTurn   = st.phase === 'buyStock'   && st.currentPlayerIdx === myIdx;
   board.classList.remove('compact');
-  const gameLeft = document.querySelector('.game-left');
-  if (gameLeft) gameLeft.classList.toggle('buystock-mode', isMyBuyTurn);
   const matrix = document.getElementById('stockMatrix');
   if (matrix) matrix.classList.remove('smatrix-expanded');
   const myTiles = st.players[myIdx]?.tiles || [];
@@ -3089,25 +3118,24 @@ function renderActionPanel() {
       const held = st.players[myIdx].stocks[dc] || 0;
       const dcPrice = st.chains[dc]?.price || 0;
       const survivorPrice = st.chains[pm.survivor]?.price || 0;
-      title.textContent = `${dc} → ${pm.survivor}`;
-      let h = renderMiniBoard(dc, pm.survivor);
-      h += `<div class="merger-context">
+      title.textContent = `Merger: ${dc} → ${pm.survivor} — sell, trade or keep your ${held} ${dc} shares`;
+      let h = `<div class="action-row"><div class="merger-col"><div class="merger-context">
         <div class="merger-context-row"><span class="merger-ctx-label">You hold</span><span class="merger-ctx-val" style="color:${chainColors[dc]}">${held} ${dc}</span></div>
         <div class="merger-context-row"><span class="merger-ctx-label">Sell price</span><span class="merger-ctx-val">$${dcPrice} / share</span></div>
         <div class="merger-context-row"><span class="merger-ctx-label">Survivor</span><span class="merger-ctx-val" style="color:${chainColors[pm.survivor]}">${pm.survivor} · $${survivorPrice}</span></div>
         <div class="merger-context-row"><span class="merger-ctx-label">Trade rate</span><span class="merger-ctx-val">2 ${dc} → 1 ${pm.survivor}</span></div>
-      </div>`;
+      </div></div>`;
       const survivorIssued = st.players.reduce((s, p) => s + (p.stocks[pm.survivor] || 0), 0);
       const survivorRoom = 25 - survivorIssued;
-      h += `<div class="merger-sliders"><label>Sell: <span id="sellVal">0</span></label><input type="range" id="sellSlider" min="0" max="${held}" value="0" oninput="updateMergerSliders()"/>`;
+      h += `<div class="merger-col merger-sliders"><label>Sell: <span id="sellVal">0</span></label><input type="range" id="sellSlider" min="0" max="${held}" value="0" oninput="updateMergerSliders()"/>`;
       if (survivorRoom > 0) {
         const maxTrade = Math.min(Math.floor(held / 2) * 2, survivorRoom * 2);
         h += `<label>Trade (2→1): <span id="tradeVal">0</span></label><input type="range" id="tradeSlider" min="0" max="${maxTrade}" value="0" step="2" oninput="updateMergerSliders()"/>`;
       } else {
         h += `<div style="font-size:11px;color:var(--text-muted);padding:4px 0;">Trade unavailable — ${pm.survivor} has no shares left</div><input type="hidden" id="tradeSlider" value="0"/>`;
       }
-      h += `<div class="merger-preview" id="mergerSummary">Keep all ${held}</div></div>`;
-      h += `<button class="btn" style="margin-top:8px;width:100%" onclick="submitMergerDecision(${held})">Confirm</button>`;
+      h += `</div><div class="action-side"><div class="merger-preview" id="mergerSummary">Keep all ${held}</div>`;
+      h += `<button class="btn" style="width:100%" onclick="submitMergerDecision(${held})">Confirm</button></div></div>`;
       content.innerHTML = h;
       return;
     } else {
@@ -3133,24 +3161,25 @@ function renderActionPanel() {
       const totalIssued = st.players.reduce((s, p) => s + (p.stocks[ch] || 0), 0);
       const remaining = 25 - totalIssued;
       if (remaining <= 0) continue;
-      h += `<div class="buy-row">
-        <div class="chain-dot" style="background:${chainColors[ch]}"></div>
-        <div class="buy-name">${ch}</div>
-        <div class="buy-price">$${info.price}</div>
-        <div class="buy-shares-left">${remaining} left</div>
+      h += `<div class="buy-card" id="buycard-${ch}" style="--card-color:${chainColors[ch]}">
+        <div class="buy-name" style="color:${chainColors[ch]}">${ch}</div>
+        <div class="buy-meta">$${info.price} · ${remaining} left</div>
         <div class="buy-counter">
-          <button onclick="adjustBuy('${ch}',-1,${info.price},${cash})">−</button>
+          <button onclick="adjustBuy('${ch}',-1,${info.price},${cash})" aria-label="One less ${ch}">−</button>
           <span id="buy-${ch}">0</span>
-          <button onclick="adjustBuy('${ch}',1,${info.price},${cash})">+</button>
+          <button onclick="adjustBuy('${ch}',1,${info.price},${cash})" aria-label="One more ${ch}">+</button>
         </div>
       </div>`;
     }
     const canBuy = h !== '';
-    if (canBuy) h += `<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Total: <span id="buyTotal" style="color:var(--text)">$0</span> / <span id="buyCount" style="color:var(--text)">0</span> of 3 · $${cash.toLocaleString()} cash</div>`;
-    h += `<div style="display:flex;gap:6px;margin-top:8px;align-items:center">`;
-    if (canBuy) h += `<button class="btn" style="flex:1" onclick="confirmBuy()">Buy Stock</button>`;
-    h += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="confirmBuy(true)">Skip</button></div>`;
-    content.innerHTML = h;
+    let side = `<div class="action-side">`;
+    side += canBuy
+      ? `<div>Buying <span id="buyCount" style="color:var(--text)">0</span> of 3 · <span id="buyTotal" style="color:var(--text)">$0</span><br>Cash $${cash.toLocaleString()}</div>`
+      : `<div>No shares you can buy right now.</div>`;
+    side += `<div style="display:flex;gap:6px">`;
+    if (canBuy) side += `<button class="btn" style="flex:1" onclick="confirmBuy()">Buy</button>`;
+    side += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="confirmBuy(true)">${canBuy ? 'Skip' : 'Continue'}</button></div></div>`;
+    content.innerHTML = `<div class="action-row"><div class="buy-strip">${h}</div>${side}</div>`;
     return;
   }
   if (st.phase === 'buyStock' && st.currentPlayerIdx !== myIdx) {
@@ -3177,6 +3206,7 @@ function adjustBuy(chain, delta, price, cash) {
   if (totalCost > cash) return;
   buySelections[chain] = newVal;
   document.getElementById(`buy-${chain}`).textContent = newVal;
+  document.getElementById(`buycard-${chain}`)?.classList.toggle('picked', newVal > 0);
   document.getElementById('buyTotal').textContent = '$' + totalCost;
   document.getElementById('buyCount').textContent = Object.values(buySelections).reduce((s, v) => s + v, 0);
 }
@@ -3675,7 +3705,6 @@ function switchAuthTab(tab) {
 }
 
 function renderDrawerLoggedOut() {
-  document.getElementById('adminBetaCard').style.display = 'none';
   document.getElementById('drawerLoggedOut').style.display = 'flex';
   document.getElementById('drawerLoggedIn').style.display  = 'none';
   document.getElementById('drawerTitle').textContent = 'Account';
@@ -3692,7 +3721,6 @@ function renderDrawerLoggedIn(user, history, sessions = []) {
   document.getElementById('drawerTitle').textContent = 'Profile';
   document.getElementById('profileAvatar').textContent   = user.username[0].toUpperCase();
   document.getElementById('profileUsername').textContent  = user.username;
-  document.getElementById('adminBetaCard').style.display = user.role === 'admin' ? '' : 'none';
   renderNews();
   const roleBadge = document.getElementById('profileRoleBadge');
   const role = user.role || 'member';
@@ -4154,7 +4182,9 @@ function renderRecentGames(sessions) {
       <span class="session-mode">${modeLabel}</span>
       <div class="session-players-inline">${chips}</div>
       <span class="session-date">${date}</span>
-      <button class="session-replay-btn" onclick="openReplay(${s.id}, event)">▶ Replay</button>
+      ${replayExpired(s.played_at)
+        ? '<span class="session-replay-btn" style="opacity:.5;cursor:default" title="Replays are kept for 5 days">Replay expired</span>'
+        : `<button class="session-replay-btn" onclick="openReplay(${s.id}, event)">▶ Replay</button>`}
     </div>`;
   }).join('');
 }
@@ -4184,11 +4214,15 @@ let replaySnapshots = [];
 let replayIdx = 0;
 
 const REPLAY_CHAIN_COLORS = {
-  Tower: '#e11d48', Luxor: '#f97316', American: '#3b82f6',
-  Worldwide: '#8b5cf6', Festival: '#06b6d4', Imperial: '#10b981', Continental: '#eab308',
+  // Same colors as the physical board game (one palette site-wide)
+  Tower: '#e8c21a', Luxor: '#d63a33', American: '#2f5bd3',
+  Worldwide: '#9a6634', Festival: '#2f9e4a', Imperial: '#ee7d1f', Continental: '#22c1bb',
 };
 
 let currentReplaySessionId = null;
+
+const REPLAY_DAYS = 5;   // server deletes replays after this many days
+function replayExpired(playedAt) { return playedAt && (Date.now() / 1000 - playedAt) > REPLAY_DAYS * 86400; }
 
 async function openReplay(sessionId, event) {
   if (event) event.stopPropagation();
@@ -4218,6 +4252,10 @@ async function openReplay(sessionId, event) {
     // Restore step from URL hash if present (e.g. /replay/45#23)
     const hashStep = parseInt(location.hash.replace('#', ''), 10);
     replayIdx = (hashStep >= 1 && hashStep <= replaySnapshots.length) ? hashStep - 1 : 0;
+    if (data.expired) {
+      document.getElementById('replayStepLabel').textContent = `Replay expired — replays are kept for ${data.replayDays || REPLAY_DAYS} days.`;
+      return;
+    }
     if (!replaySnapshots.length) {
       document.getElementById('replayStepLabel').textContent = 'No replay data for this game.';
       return;
@@ -4274,8 +4312,9 @@ function renderReplayFrame() {
 
   const phaseNames = { placeTile: 'Place Tile', chooseChain: 'Found Chain', buyStock: 'Buy Stock', mergerDecision: 'Merger', gameOver: 'Game Over' };
   const curName = snap.players[snap.currentPlayerIdx]?.name || '';
+  const modeLabel = snap.mode ? `${snap.mode} · ` : '';
   document.getElementById('replayPhaseLabel').textContent =
-    snap.phase === 'gameOver' ? 'Game Over' : `${curName} — ${phaseNames[snap.phase] || snap.phase}`;
+    modeLabel + (snap.phase === 'gameOver' ? 'Game Over' : `${curName} — ${phaseNames[snap.phase] || snap.phase}`);
 
   renderReplayBoard(snap);
   renderReplayScore(snap);
@@ -4307,6 +4346,15 @@ function renderReplayBoard(snap) {
   el.innerHTML = html;
 }
 
+// "Bot · Hard" for bots (difficulty recorded since Nov 2026), "Player" for humans
+function replayPlayerBadge(snap, name) {
+  const meta = (snap.playerList || []).find(x => x.name === name);
+  if (!meta) return '';
+  const DIFF = { hard: 'Easy', expert: 'Medium', mcts: 'Hard', master: 'Master' };
+  const text = meta.isBot ? `Bot${meta.difficulty ? ' · ' + (DIFF[meta.difficulty] || meta.difficulty) : ''}` : 'Player';
+  return ` <span class="player-badge ${meta.isBot ? 'player-badge-bot' : 'player-badge-member'}" style="margin-left:4px">${text}</span>`;
+}
+
 function renderReplayScore(snap) {
   const el = document.getElementById('replayScoreboard');
   el.innerHTML = snap.players.map((p, i) => {
@@ -4315,7 +4363,7 @@ function renderReplayScore(snap) {
       .map(([ch, v]) => `<span class="stock-badge" style="background:${REPLAY_CHAIN_COLORS[ch]}22;color:${REPLAY_CHAIN_COLORS[ch]}">${ch.slice(0,3)} ${v}</span>`).join('');
     return `<div class="score-player" style="margin-bottom:6px">
       <div class="score-player-header">
-        <span class="score-player-name${cur ? ' current' : ''}">${cur ? '▸ ' : ''}${escapeHtml(p.name)}</span>
+        <span class="score-player-name${cur ? ' current' : ''}">${cur ? '▸ ' : ''}${escapeHtml(p.name)}${replayPlayerBadge(snap, p.name)}</span>
         <span class="score-cash">$${p.cash.toLocaleString()}</span>
       </div>
       <div class="score-stocks">${badges || '<span style="color:var(--text-muted);font-size:10px">No stock</span>'}</div>
@@ -4345,7 +4393,9 @@ let fbType = 'bug';
 function openFeedbackModal() {
   document.getElementById('feedbackOverlay').style.display = 'flex';
   document.getElementById('fbMessage').value  = '';
-  document.getElementById('fbContact').value  = '';
+  document.getElementById('fbIncludeName').checked = false;
+  document.getElementById('fbName').value = myName || '';
+  updateFbName();
   document.getElementById('fbError').style.display   = 'none';
   document.getElementById('fbSuccess').style.display = 'none';
   document.getElementById('fbSubmitBtn').style.display = 'block';
@@ -4363,6 +4413,14 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// Signed in → your username is attached; otherwise type a name.
+function updateFbName() {
+  const on = document.getElementById('fbIncludeName').checked;
+  const signedIn = !!(currentUser && currentUser.username);
+  document.getElementById('fbNamePreview').textContent = on && signedIn ? `(as ${currentUser.username})` : '';
+  document.getElementById('fbName').style.display = on && !signedIn ? '' : 'none';
+}
+
 function setFbType(t) {
   fbType = t;
   document.getElementById('fbTypeBug').classList.toggle('active', t === 'bug');
@@ -4371,7 +4429,8 @@ function setFbType(t) {
 
 async function submitFeedback() {
   const message = document.getElementById('fbMessage').value.trim();
-  const contact = document.getElementById('fbContact').value.trim();
+  const includeName = document.getElementById('fbIncludeName').checked;
+  const name = includeName ? ((currentUser && currentUser.username) || document.getElementById('fbName').value.trim()) : '';
   const errEl   = document.getElementById('fbError');
   errEl.style.display = 'none';
   if (message.length < 5) { errEl.textContent = 'Please write a bit more.'; errEl.style.display = 'block'; return; }
@@ -4382,8 +4441,8 @@ async function submitFeedback() {
   try {
     const res  = await fetch(`${API_BASE}/feedback`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: fbType, message, contact, page: document.title }),
+      headers: { 'Content-Type': 'application/json', ...(includeName && authToken ? { Authorization: 'Bearer ' + authToken } : {}) },
+      body: JSON.stringify({ type: fbType, message, name, page: document.title }),
     });
     const data = await res.json();
     if (data.error) { errEl.textContent = data.error; errEl.style.display = 'block'; btn.textContent = 'Send Feedback'; btn.disabled = false; return; }

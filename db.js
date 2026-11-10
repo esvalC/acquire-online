@@ -87,6 +87,16 @@ if (!cols.includes('phone_encrypted')) db.exec(`ALTER TABLE users ADD COLUMN pho
 const sessionCols = db.prepare(`PRAGMA table_info(game_sessions)`).all().map(r => r.name);
 if (!sessionCols.includes('standings'))    db.exec(`ALTER TABLE game_sessions ADD COLUMN standings TEXT NOT NULL DEFAULT '[]'`);
 if (!sessionCols.includes('replay_data')) db.exec(`ALTER TABLE game_sessions ADD COLUMN replay_data TEXT`);
+if (!sessionCols.includes('replay_gz'))   db.exec(`ALTER TABLE game_sessions ADD COLUMN replay_gz BLOB`);
+
+// In-progress games, saved as they're played so a restart/deploy doesn't lose them
+db.exec(`
+  CREATE TABLE IF NOT EXISTS active_rooms (
+    code       TEXT PRIMARY KEY,
+    data       BLOB    NOT NULL,
+    updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+  );
+`);
 
 // News banner: admin posts + replies (guests may reply, only admins post)
 db.exec(`
@@ -127,6 +137,38 @@ const stmts = {
   addGameHistory:  db.prepare('INSERT INTO game_history (user_id, result, elo_change, opponents) VALUES (?, ?, ?, ?)'),
   getHistory:      db.prepare('SELECT * FROM game_history WHERE user_id = ? ORDER BY played_at DESC LIMIT 20'),
 };
+
+const zlib = require('zlib');
+
+/* ── Replays: gzip-compressed, kept REPLAY_DAYS days ─────────── */
+const REPLAY_DAYS = 5;
+function replayCutoff() { return Math.floor(Date.now() / 1000) - REPLAY_DAYS * 86400; }
+function pruneReplays() {
+  const r = db.prepare(`UPDATE game_sessions SET replay_data = NULL, replay_gz = NULL
+    WHERE played_at < ? AND (replay_data IS NOT NULL OR replay_gz IS NOT NULL)`).run(replayCutoff());
+  // Give freed pages back to the OS (no-op unless auto_vacuum=INCREMENTAL was enabled)
+  if (r.changes > 0) { try { db.pragma('incremental_vacuum'); } catch {} }
+  return r.changes;
+}
+
+/* ── In-progress games ───────────────────────────────────────── */
+function saveActiveRoom(code, obj) {
+  const gz = zlib.gzipSync(Buffer.from(JSON.stringify(obj)));
+  db.prepare(`INSERT INTO active_rooms (code, data, updated_at) VALUES (?, ?, strftime('%s','now'))
+    ON CONFLICT(code) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at`).run(code, gz);
+}
+function deleteActiveRoom(code) { db.prepare('DELETE FROM active_rooms WHERE code = ?').run(code); }
+function loadActiveRooms(maxAgeSeconds = 86400) {
+  const rows = db.prepare('SELECT code, data, updated_at FROM active_rooms').all();
+  const out = [];
+  const now = Math.floor(Date.now() / 1000);
+  for (const r of rows) {
+    if (now - r.updated_at > maxAgeSeconds) { deleteActiveRoom(r.code); continue; }
+    try { out.push({ code: r.code, room: JSON.parse(zlib.gunzipSync(r.data).toString()) }); }
+    catch { deleteActiveRoom(r.code); }
+  }
+  return out;
+}
 
 /* ── Total games played (with backfill) ──────────────────────────
  * game_sessions records every finished game, but only since it was added.
@@ -183,6 +225,7 @@ function deleteNewsReply(id) {
 }
 
 module.exports = {
+  REPLAY_DAYS, pruneReplays, saveActiveRoom, deleteActiveRoom, loadActiveRooms,
   getTotalGames, listNews, createNewsPost, deleteNewsPost, newsPostExists, createNewsReply, deleteNewsReply,
   hashPhone,
 
@@ -230,7 +273,7 @@ module.exports = {
   },
   recordSession(isSolo, playerCount, humanCount, durationSeconds, turnCount, standings, replaySnapshots) {
     const insertSession = db.prepare(
-      'INSERT INTO game_sessions (is_solo, player_count, human_count, duration_seconds, turn_count, standings, replay_data) VALUES (?,?,?,?,?,?,?)'
+      'INSERT INTO game_sessions (is_solo, player_count, human_count, duration_seconds, turn_count, standings, replay_gz) VALUES (?,?,?,?,?,?,?)'
     );
     const insertParticipant = db.prepare(
       'INSERT OR IGNORE INTO game_participants (session_id, user_id, rank, cash) VALUES (?,?,?,?)'
@@ -239,7 +282,7 @@ module.exports = {
       const r = insertSession.run(
         isSolo ? 1 : 0, playerCount, humanCount, durationSeconds ?? null, turnCount ?? null,
         JSON.stringify(standings || []),
-        replaySnapshots && replaySnapshots.length ? JSON.stringify(replaySnapshots) : null
+        replaySnapshots && replaySnapshots.length ? zlib.gzipSync(Buffer.from(JSON.stringify(replaySnapshots))) : null
       );
       const sessionId = r.lastInsertRowid;
       (standings || []).forEach((p, rank) => {
@@ -266,8 +309,17 @@ module.exports = {
     `).all(userId, limit);
   },
 
+  // Returns { id, played_at, expired, snapshots }
   getSessionReplay(id) {
-    return db.prepare('SELECT id, replay_data FROM game_sessions WHERE id = ?').get(id);
+    const row = db.prepare('SELECT id, played_at, replay_data, replay_gz FROM game_sessions WHERE id = ?').get(id);
+    if (!row) return null;
+    let snapshots = [];
+    try {
+      if (row.replay_gz) snapshots = JSON.parse(zlib.gunzipSync(row.replay_gz).toString());
+      else if (row.replay_data) snapshots = JSON.parse(row.replay_data);
+    } catch {}
+    const expired = !snapshots.length && row.played_at < replayCutoff();
+    return { id: row.id, played_at: row.played_at, expired, snapshots };
   },
 
   getStats() {

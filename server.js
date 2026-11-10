@@ -207,10 +207,16 @@ app.post('/api/admin/promote', (req, res) => {
 // Submit user feedback (public — no auth required)
 const feedbackLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, message: { error: 'Too many submissions. Try again later.' } });
 app.post('/api/feedback', feedbackLimit, async (req, res) => {
-  const { type, message, contact, page } = req.body;
+  const { type, message, name, page } = req.body;
   if (!message || message.trim().length < 5) return res.status(400).json({ error: 'Message too short' });
   if (!['bug', 'suggestion'].includes(type)) return res.status(400).json({ error: 'Invalid type' });
-  const result = db.addFeedback(type, message.trim().slice(0, 2000), contact?.slice(0, 100), page?.slice(0, 100));
+  // Optional name: a signed-in user's real username (verified), else what they typed.
+  const header = req.headers.authorization || '';
+  const payload = header.startsWith('Bearer ') ? verifyToken(header.slice(7)) : null;
+  const user = payload ? db.findById(payload.sub) : null;
+  const typed = typeof name === 'string' ? name.trim().slice(0, 40) : '';
+  const contact = user ? `${user.username} (account)` : (typed ? `${typed} (guest)` : null);
+  const result = db.addFeedback(type, message.trim().slice(0, 2000), contact, page?.slice(0, 100));
 
   // Auto-create GitHub issue for bugs (if GITHUB_TOKEN is set)
   let ghIssue = null;
@@ -247,9 +253,7 @@ app.get('/api/recent-games', (req, res) => {
 app.get('/api/sessions/:id/replay', (req, res) => {
   const row = db.getSessionReplay(Number(req.params.id));
   if (!row) return res.status(404).json({ error: 'Session not found' });
-  let snapshots = [];
-  try { snapshots = JSON.parse(row.replay_data || '[]'); } catch {}
-  res.json({ sessionId: row.id, snapshots });
+  res.json({ sessionId: row.id, snapshots: row.snapshots, expired: row.expired, replayDays: db.REPLAY_DAYS });
 });
 
 // Plan dashboard data (admin only)
@@ -387,11 +391,12 @@ function broadcastState(code) {
   const room = rooms[code];
   if (!room || !room.game) return;
 
-  const playerList = room.players.map(p => ({ name: p.name, isBot: p.isBot || false }));
+  const playerList = room.players.map(p => ({ name: p.name, isBot: p.isBot || false, difficulty: p.isBot ? p.difficulty : undefined }));
 
   // Capture spectator snapshot for replay before recording game end
   const spectatorState = engine.getClientState(room.game, -1);
   spectatorState.playerList = playerList;
+  spectatorState.mode = room.mode || (room.isSolo ? 'Solo' : 'Multiplayer');
   room.replaySnapshots = room.replaySnapshots || [];
   room.replaySnapshots.push(JSON.parse(JSON.stringify(spectatorState)));
 
@@ -417,7 +422,71 @@ function broadcastState(code) {
   if (roomHasBots(room) && room.game.phase !== 'gameOver') {
     scheduleBotTurn(code);
   }
+  persistRoom(code);
 }
+
+/* ── Saving in-progress games (survive restarts and deploys) ─────
+ * Every game in progress is written to SQLite (gzip, at most once per second
+ * per room) whenever its state changes, flushed on shutdown, and reloaded on
+ * startup. Players' browsers reconnect and rejoin on their own. */
+const SAVE_THROTTLE_MS = 1000;
+
+function serializeRoom(room) {
+  const { cleanupTimer, _saveTimer, botScheduled, spectators, ...rest } = room;
+  return {
+    ...rest,
+    spectators: [],
+    players: room.players.map(p => ({ ...p, socketId: null })),
+  };
+}
+
+function saveRoomNow(code) {
+  const room = rooms[code];
+  if (room) { clearTimeout(room._saveTimer); room._saveTimer = null; }
+  try {
+    if (room && room.game && room.game.phase !== 'gameOver') db.saveActiveRoom(code, serializeRoom(room));
+    else db.deleteActiveRoom(code);
+  } catch (e) { console.error(`[persist] save ${code} failed:`, e.message); }
+}
+
+function persistRoom(code) {
+  const room = rooms[code];
+  if (!room) return;
+  if (!room.game || room.game.phase === 'gameOver') return saveRoomNow(code);
+  if (room._saveTimer) return;                     // a save is already queued
+  room._saveTimer = setTimeout(() => saveRoomNow(code), SAVE_THROTTLE_MS);
+}
+
+function deleteRoom(code) {
+  const room = rooms[code];
+  if (room) { clearTimeout(room.cleanupTimer); clearTimeout(room._saveTimer); }
+  delete rooms[code];
+  try { db.deleteActiveRoom(code); } catch {}
+}
+
+function restoreRooms() {
+  let restored = [];
+  try { restored = db.loadActiveRooms(24 * 3600); }
+  catch (e) { console.error('[persist] restore failed:', e.message); return; }
+  for (const { code, room } of restored) {
+    if (!room.game || room.game.phase === 'gameOver' || rooms[code]) continue;
+    room.players.forEach(p => { if (!p.isBot) p.disconnected = true; });
+    room.spectators = [];
+    room.botScheduled = false;
+    rooms[code] = room;
+    scheduleAbandonedRoomCleanup(code);   // deleted if nobody rejoins in time
+    scheduleBotTurn(code);                // resume if a bot was mid-turn
+  }
+  if (restored.length) console.log(`[persist] restored ${restored.length} game(s) in progress`);
+}
+
+function flushAllRoomsAndExit(signal) {
+  console.log(`[persist] ${signal}: saving ${Object.keys(rooms).length} room(s) before exit`);
+  for (const code of Object.keys(rooms)) saveRoomNow(code);
+  process.exit(0);
+}
+process.on('SIGINT',  () => flushAllRoomsAndExit('SIGINT'));
+process.on('SIGTERM', () => flushAllRoomsAndExit('SIGTERM'));
 
 /* ── Bots in any room (solo, or added to a multiplayer lobby) ── */
 function roomHasBots(room) { return !!room && room.players.some(p => p.isBot); }
@@ -582,7 +651,7 @@ function scheduleAbandonedRoomCleanup(code) {
     const humansGone = r.players.every(p => p.isBot || p.disconnected || !p.socketId);
     if (humansGone && r.spectators.length === 0) {
       console.log(`Room ${code} abandoned for ${RECONNECT_GRACE_MS / 60000} min — deleting`);
-      delete rooms[code];
+      deleteRoom(code);
     }
   }, RECONNECT_GRACE_MS);
 }
@@ -741,6 +810,16 @@ io.on('connection', (socket) => {
   let currentRoom = null;
   let playerName = null;
 
+  // Game actions from a browser the server can't match to a live game used to
+  // be ignored silently — the board then looked frozen (the "turn 73" reports).
+  // Now the browser is told, so it can rejoin or say the game was lost.
+  function actorFor(sock, code) {
+    const room = rooms[code];
+    const p = room && room.game ? room.players.find(x => x.socketId === sock.id) : null;
+    if (!p) sock.emit('sessionLost', { reason: room ? 'not-in-room' : 'no-game' });
+    return { room, p };
+  }
+
   /* ── Multiplayer: create room ── */
   socket.on('createRoom', ({ name, maxPlayers, quickstart, authToken }, cb) => {
     const code = generateCode();
@@ -764,7 +843,7 @@ io.on('connection', (socket) => {
   });
 
   /* ── Solo: create & start a solo game ── */
-  socket.on('createSoloGame', ({ name, botCount, quickstart, botConfigs, authToken }, cb) => {
+  socket.on('createSoloGame', ({ name, botCount, quickstart, botConfigs, mode, authToken }, cb) => {
     const code = generateCode();
     currentRoom = code;
     playerName = name;
@@ -799,6 +878,7 @@ io.on('connection', (socket) => {
       spectators: [],
       game: null,
       isSolo: true,
+      mode: typeof mode === 'string' && mode.trim() ? mode.trim().slice(0, 60) : 'Solo',
       config: { maxPlayers: players.length, quickstart: quickstart !== false },
     };
 
@@ -911,9 +991,7 @@ io.on('connection', (socket) => {
   /* ── Game actions ─────────────────────────────── */
 
   socket.on('placeTile', ({ tile }) => {
-    const room = rooms[currentRoom];
-    if (!room || !room.game) return;
-    const p = room.players.find(p => p.socketId === socket.id);
+    const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
     const result = engine.placeTile(room.game, p.idx, tile);
     if (result.error) return socket.emit('actionError', result.error);
@@ -921,9 +999,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('chooseChain', ({ chain }) => {
-    const room = rooms[currentRoom];
-    if (!room || !room.game) return;
-    const p = room.players.find(p => p.socketId === socket.id);
+    const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
     const result = engine.chooseChain(room.game, p.idx, chain);
     if (result.error) return socket.emit('actionError', result.error);
@@ -931,9 +1007,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('chooseMergerSurvivor', ({ chain }) => {
-    const room = rooms[currentRoom];
-    if (!room || !room.game) return;
-    const p = room.players.find(p => p.socketId === socket.id);
+    const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
     const result = engine.chooseMergerSurvivor(room.game, p.idx, chain);
     if (result.error) return socket.emit('actionError', result.error);
@@ -941,9 +1015,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('mergerDecision', ({ sell, trade }) => {
-    const room = rooms[currentRoom];
-    if (!room || !room.game) return;
-    const p = room.players.find(p => p.socketId === socket.id);
+    const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
     const result = engine.mergerDecision(room.game, p.idx, { sell, trade });
     if (result.error) return socket.emit('actionError', result.error);
@@ -951,9 +1023,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('buyStock', ({ purchases }) => {
-    const room = rooms[currentRoom];
-    if (!room || !room.game) return;
-    const p = room.players.find(p => p.socketId === socket.id);
+    const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
     const result = engine.buyStock(room.game, p.idx, purchases || {});
     if (result.error) return socket.emit('actionError', result.error);
@@ -961,9 +1031,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('declareGameEnd', () => {
-    const room = rooms[currentRoom];
-    if (!room || !room.game) return;
-    const p = room.players.find(p => p.socketId === socket.id);
+    const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
     const result = engine.declareGameEnd(room.game, p.idx);
     if (result.error) return socket.emit('actionError', result.error);
@@ -973,9 +1041,7 @@ io.on('connection', (socket) => {
   /* ── Concede vote ─────────────────────────────── */
 
   socket.on('initiateConcedeVote', () => {
-    const room = rooms[currentRoom];
-    if (!room || !room.game) return;
-    const p = room.players.find(p => p.socketId === socket.id);
+    const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
     const result = engine.initiateConcedeVote(room.game, p.idx);
     if (result.error) return socket.emit('actionError', result.error);
@@ -984,9 +1050,7 @@ io.on('connection', (socket) => {
   });
 
   socket.on('submitConcedeVote', ({ vote }) => {
-    const room = rooms[currentRoom];
-    if (!room || !room.game) return;
-    const p = room.players.find(p => p.socketId === socket.id);
+    const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
     const result = engine.submitConcedeVote(room.game, p.idx, vote);
     if (result.error) return socket.emit('actionError', result.error);
@@ -1045,7 +1109,7 @@ io.on('connection', (socket) => {
   /* ── Leave room (e.g. solo player goes back to setup) ── */
   socket.on('leaveRoom', () => {
     if (currentRoom && rooms[currentRoom]) {
-      delete rooms[currentRoom];
+      deleteRoom(currentRoom);
     }
     currentRoom = null;
   });
@@ -1080,7 +1144,7 @@ io.on('connection', (socket) => {
       room.players = room.players.filter(p => p.socketId !== socket.id);
       room.players.forEach((p, i) => { p.idx = i; });
       if (!roomHost(room) && room.spectators.length === 0) {
-        delete rooms[currentRoom];
+        deleteRoom(currentRoom);
       } else {
         broadcastLobby(currentRoom);
       }
@@ -1091,4 +1155,9 @@ io.on('connection', (socket) => {
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`Acquire server running on http://localhost:${PORT}`);
+  restoreRooms();
+  // Replays are kept REPLAY_DAYS days, then deleted (checked at startup and every 6h)
+  const prune = () => { try { const n = db.pruneReplays(); if (n) console.log(`[replays] removed ${n} expired replay(s)`); } catch (e) { console.error('[replays]', e.message); } };
+  prune();
+  setInterval(prune, 6 * 3600 * 1000).unref();
 });
