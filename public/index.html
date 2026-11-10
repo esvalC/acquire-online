@@ -316,17 +316,32 @@
   .hand-actions { display: flex; gap: 8px; flex-wrap: nowrap; align-items: stretch; flex: 0 0 164px; height: 164px; }
   .hand-panel {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 10px; flex: 0 0 210px; min-width: 0; overflow: hidden;
+    border-radius: var(--radius); padding: 10px; flex: 0 0 190px; min-width: 0; overflow: hidden;
   }
+  /* Turn status + your decisions (found / merge / confirm purchase) */
   .action-panel {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 10px 12px; flex: 1 1 auto;
-    min-width: 0; overflow-x: auto; overflow-y: hidden;
+    border-radius: var(--radius); padding: 10px 12px; flex: 0 0 270px;
+    min-width: 0; overflow: hidden;
   }
+  /* Always-visible stock market: all 7 chains in a fixed order */
+  .stock-panel {
+    background: var(--bg-card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 10px 12px; flex: 1 1 auto;
+    min-width: 0; overflow-x: auto; overflow-y: hidden; display: flex; flex-direction: column;
+  }
+  .stock-panel.buying { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(245,158,11,.35); }
+  .stock-panel .buy-strip { flex: 1; }
+  .buy-card.off { opacity: .35; }
+  .buy-card .buy-own { font-size: 10px; color: var(--text-dim); }
+  .compact-merger label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin: 2px 0 0; }
+  .compact-merger input[type=range] { width: 100%; accent-color: var(--gold); margin: 0; padding: 0; height: 16px; border: none; background: none; box-shadow: none; }
+  .action-panel .chain-choice-grid { grid-template-columns: repeat(2, 1fr); gap: 4px; }
+  .action-panel .chain-choice-btn { padding: 3px 6px; }
   .action-row { display: flex; gap: 10px; align-items: stretch; height: 100%; }
   .buy-strip { display: flex; gap: 8px; flex: 1 1 auto; min-width: 0; }
   .buy-card {
-    flex: 1 1 0; min-width: 96px; max-width: 150px; display: flex; flex-direction: column; gap: 4px;
+    flex: 1 1 0; min-width: 78px; max-width: 150px; display: flex; flex-direction: column; gap: 4px;
     background: var(--bg-dark); border: 1px solid var(--border); border-top: 3px solid var(--card-color, var(--border));
     border-radius: 8px; padding: 6px 8px; font-size: 12px;
   }
@@ -592,8 +607,13 @@
     .game-main { grid-template-columns: 1fr; }
     .board-cell { font-size: 8px; min-height: 22px; }
     .hand-actions { flex-wrap: wrap; height: auto; flex-basis: auto; }
-    .hand-panel { flex: 1 1 100%; }
+    .hand-panel, .action-panel, .stock-panel { flex: 1 1 100%; }
     .action-row { flex-wrap: wrap; height: auto; }
+    /* Phones: let the page scroll instead of squeezing the board flat */
+    .game-main { display: flex; flex-direction: column; overflow-y: auto; }
+    .game-left, .game-right { height: auto; min-height: max-content; }
+    .game-left > * { flex-shrink: 0; }
+    .board-container { flex: 0 0 auto; height: calc((100vw - 40px) / 1.733 + 16px); }
   }
 
   ::-webkit-scrollbar { width: 6px; }
@@ -1625,6 +1645,10 @@
         <div class="action-panel" id="actionPanel">
           <div class="panel-title" id="actionTitle">Waiting...</div>
           <div id="actionContent"></div>
+        </div>
+        <div class="stock-panel" id="stockPanel">
+          <div class="panel-title" id="stockPanelTitle">Stocks</div>
+          <div class="buy-strip" id="stockStrip"></div>
         </div>
       </div>
     </div>
@@ -2702,6 +2726,7 @@ socket.on('gameState', (state) => {
 
   renderBoard();
   renderHand();
+  renderStockPanel();   // first: resets picks when a new buy turn starts
   renderActionPanel();
   renderStockMatrix();
   renderLog();
@@ -3118,24 +3143,21 @@ function renderActionPanel() {
       const held = st.players[myIdx].stocks[dc] || 0;
       const dcPrice = st.chains[dc]?.price || 0;
       const survivorPrice = st.chains[pm.survivor]?.price || 0;
-      title.textContent = `Merger: ${dc} → ${pm.survivor} — sell, trade or keep your ${held} ${dc} shares`;
-      let h = `<div class="action-row"><div class="merger-col"><div class="merger-context">
-        <div class="merger-context-row"><span class="merger-ctx-label">You hold</span><span class="merger-ctx-val" style="color:${chainColors[dc]}">${held} ${dc}</span></div>
-        <div class="merger-context-row"><span class="merger-ctx-label">Sell price</span><span class="merger-ctx-val">$${dcPrice} / share</span></div>
-        <div class="merger-context-row"><span class="merger-ctx-label">Survivor</span><span class="merger-ctx-val" style="color:${chainColors[pm.survivor]}">${pm.survivor} · $${survivorPrice}</span></div>
-        <div class="merger-context-row"><span class="merger-ctx-label">Trade rate</span><span class="merger-ctx-val">2 ${dc} → 1 ${pm.survivor}</span></div>
-      </div></div>`;
+      title.textContent = `Merger: ${dc} → ${pm.survivor}`;
       const survivorIssued = st.players.reduce((s, p) => s + (p.stocks[pm.survivor] || 0), 0);
       const survivorRoom = 25 - survivorIssued;
-      h += `<div class="merger-col merger-sliders"><label>Sell: <span id="sellVal">0</span></label><input type="range" id="sellSlider" min="0" max="${held}" value="0" oninput="updateMergerSliders()"/>`;
-      if (survivorRoom > 0) {
-        const maxTrade = Math.min(Math.floor(held / 2) * 2, survivorRoom * 2);
-        h += `<label>Trade (2→1): <span id="tradeVal">0</span></label><input type="range" id="tradeSlider" min="0" max="${maxTrade}" value="0" step="2" oninput="updateMergerSliders()"/>`;
-      } else {
-        h += `<div style="font-size:11px;color:var(--text-muted);padding:4px 0;">Trade unavailable — ${pm.survivor} has no shares left</div><input type="hidden" id="tradeSlider" value="0"/>`;
-      }
-      h += `</div><div class="action-side"><div class="merger-preview" id="mergerSummary">Keep all ${held}</div>`;
-      h += `<button class="btn" style="width:100%" onclick="submitMergerDecision(${held})">Confirm</button></div></div>`;
+      const maxTrade = survivorRoom > 0 ? Math.min(Math.floor(held / 2) * 2, survivorRoom * 2) : 0;
+      let h = `<div class="compact-merger">
+        <div style="font-size:11px;color:var(--text-muted)">You hold <b style="color:${chainColors[dc]}">${held} ${dc}</b> · sell $${dcPrice} · trade 2→1 <span style="color:${chainColors[pm.survivor]}">${pm.survivor}</span></div>
+        <label>Sell <span id="sellVal">0</span></label><input type="range" id="sellSlider" min="0" max="${held}" value="0" oninput="updateMergerSliders()"/>
+        ${maxTrade > 0
+          ? `<label>Trade <span id="tradeVal">0</span></label><input type="range" id="tradeSlider" min="0" max="${maxTrade}" value="0" step="2" oninput="updateMergerSliders()"/>`
+          : `<div style="font-size:10px;color:var(--text-muted)">No ${pm.survivor} shares left to trade for</div><input type="hidden" id="tradeSlider" value="0"/>`}
+        <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
+          <div class="merger-preview" id="mergerSummary" style="flex:1;margin:0;font-size:10px">Keep all ${held}</div>
+          <button class="btn btn-sm" style="width:auto" onclick="submitMergerDecision(${held})">Confirm</button>
+        </div>
+      </div>`;
       content.innerHTML = h;
       return;
     } else {
@@ -3152,34 +3174,18 @@ function renderActionPanel() {
   }
   if (st.phase === 'buyStock' && st.currentPlayerIdx === myIdx) {
     title.textContent = 'Buy Stock';
-    buySelections = {};
     const cash = st.players[myIdx].cash;
-    let h = '';
-    for (const ch of Object.keys(st.chains)) {
-      const info = st.chains[ch];
-      if (!info.active) continue;
-      const totalIssued = st.players.reduce((s, p) => s + (p.stocks[ch] || 0), 0);
-      const remaining = 25 - totalIssued;
-      if (remaining <= 0) continue;
-      h += `<div class="buy-card" id="buycard-${ch}" style="--card-color:${chainColors[ch]}">
-        <div class="buy-name" style="color:${chainColors[ch]}">${ch}</div>
-        <div class="buy-meta">$${info.price} · ${remaining} left</div>
-        <div class="buy-counter">
-          <button onclick="adjustBuy('${ch}',-1,${info.price},${cash})" aria-label="One less ${ch}">−</button>
-          <span id="buy-${ch}">0</span>
-          <button onclick="adjustBuy('${ch}',1,${info.price},${cash})" aria-label="One more ${ch}">+</button>
-        </div>
+    const canBuy = buyableChains(st).length > 0;
+    const n = Object.values(buySelections).reduce((s, v) => s + v, 0);
+    const cost = Object.entries(buySelections).reduce((s, [ch, c]) => s + c * (st.chains[ch]?.price || 0), 0);
+    content.innerHTML = `<div style="font-size:12px;color:var(--text-dim);line-height:1.5">
+        ${canBuy ? 'Pick up to 3 shares in the stock bar →' : 'No shares you can buy right now.'}
+        <div style="font-size:11px;color:var(--text-muted)">Buying <span id="buyCount" style="color:var(--text)">${n}</span> of 3 · <span id="buyTotal" style="color:var(--text)">$${cost}</span> · cash $${cash.toLocaleString()}</div>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:8px">
+        ${canBuy ? '<button class="btn" style="flex:1" onclick="confirmBuy()">Buy</button>' : ''}
+        <button class="btn btn-secondary btn-sm" style="width:auto" onclick="confirmBuy(true)">${canBuy ? 'Skip' : 'Continue'}</button>
       </div>`;
-    }
-    const canBuy = h !== '';
-    let side = `<div class="action-side">`;
-    side += canBuy
-      ? `<div>Buying <span id="buyCount" style="color:var(--text)">0</span> of 3 · <span id="buyTotal" style="color:var(--text)">$0</span><br>Cash $${cash.toLocaleString()}</div>`
-      : `<div>No shares you can buy right now.</div>`;
-    side += `<div style="display:flex;gap:6px">`;
-    if (canBuy) side += `<button class="btn" style="flex:1" onclick="confirmBuy()">Buy</button>`;
-    side += `<button class="btn btn-secondary btn-sm" style="width:auto" onclick="confirmBuy(true)">${canBuy ? 'Skip' : 'Continue'}</button></div></div>`;
-    content.innerHTML = `<div class="action-row"><div class="buy-strip">${h}</div>${side}</div>`;
     return;
   }
   if (st.phase === 'buyStock' && st.currentPlayerIdx !== myIdx) {
@@ -3195,6 +3201,48 @@ function renderActionPanel() {
   title.textContent = 'Waiting...'; content.innerHTML = '';
 }
 
+/* ── Always-visible stock panel ──────────────────
+ * All seven chains, fixed order, every turn. The +/− controls only appear
+ * when it's your turn to buy; picks survive re-renders during that turn. */
+let buyTurnKey = null;
+function buyableChains(st) {
+  return Object.keys(st.chains).filter(ch => {
+    const info = st.chains[ch];
+    const issued = st.players.reduce((s, p) => s + (p.stocks[ch] || 0), 0);
+    return info.active && info.price > 0 && issued < 25;
+  });
+}
+function renderStockPanel() {
+  const st = gameState; if (!st) return;
+  const strip = document.getElementById('stockStrip'); if (!strip) return;
+  const mine = st.phase === 'buyStock' && st.currentPlayerIdx === myIdx;
+  const key = mine ? `${st.turnNumber}-${st.currentPlayerIdx}` : null;
+  if (key !== buyTurnKey) { buySelections = {}; buyTurnKey = key; }   // new buy turn → fresh picks
+  document.getElementById('stockPanel').classList.toggle('buying', mine);
+  document.getElementById('stockPanelTitle').textContent = mine ? 'Buy Stock — choose up to 3' : 'Stocks';
+  const me = st.players[myIdx];
+  const cash = me ? me.cash : 0;
+  strip.innerHTML = Object.keys(st.chains).map(ch => {
+    const info = st.chains[ch];
+    const issued = st.players.reduce((s, p) => s + (p.stocks[ch] || 0), 0);
+    const left = 25 - issued;
+    const own = me ? (me.stocks[ch] || 0) : 0;
+    const picked = buySelections[ch] || 0;
+    const canPick = mine && info.active && info.price > 0 && left > 0;
+    const meta = info.active ? `$${info.price} · ${left} left` : 'not on board';
+    return `<div class="buy-card${info.active ? '' : ' off'}${picked ? ' picked' : ''}" id="buycard-${ch}" style="--card-color:${chainColors[ch]}">
+      <div class="buy-name" style="color:${chainColors[ch]}">${ch}</div>
+      <div class="buy-meta">${meta}</div>
+      <div class="buy-own">${myIdx >= 0 ? `you own ${own}` : ''}</div>
+      ${canPick ? `<div class="buy-counter">
+        <button onclick="adjustBuy('${ch}',-1,${info.price},${cash})" aria-label="One less ${ch}">−</button>
+        <span id="buy-${ch}">${picked}</span>
+        <button onclick="adjustBuy('${ch}',1,${info.price},${cash})" aria-label="One more ${ch}">+</button>
+      </div>` : ''}
+    </div>`;
+  }).join('');
+}
+
 /* ── Buy helpers ───────────────────────────────── */
 function adjustBuy(chain, delta, price, cash) {
   const current = buySelections[chain] || 0;
@@ -3207,8 +3255,9 @@ function adjustBuy(chain, delta, price, cash) {
   buySelections[chain] = newVal;
   document.getElementById(`buy-${chain}`).textContent = newVal;
   document.getElementById(`buycard-${chain}`)?.classList.toggle('picked', newVal > 0);
-  document.getElementById('buyTotal').textContent = '$' + totalCost;
-  document.getElementById('buyCount').textContent = Object.values(buySelections).reduce((s, v) => s + v, 0);
+  const tEl = document.getElementById('buyTotal'), cEl = document.getElementById('buyCount');
+  if (tEl) tEl.textContent = '$' + totalCost;
+  if (cEl) cEl.textContent = Object.values(buySelections).reduce((s, v) => s + v, 0);
 }
 
 function confirmBuy(skip) {
@@ -3230,8 +3279,8 @@ function updateMergerSliders() {
     document.getElementById('sellSlider').value = sell;
   }
   document.getElementById('sellVal').textContent = sell;
-  document.getElementById('tradeVal').textContent = trade;
-  document.getElementById('mergerSummary').textContent = `Sell: ${sell} | Trade: ${trade} → ${Math.floor(trade/2)} ${pm.survivor} | Keep: ${held - sell - trade}`;
+  const tv = document.getElementById('tradeVal'); if (tv) tv.textContent = trade;
+  document.getElementById('mergerSummary').textContent = `Sell ${sell} · Trade ${trade}→${Math.floor(trade/2)} · Keep ${held - sell - trade}`;
 }
 
 function submitMergerDecision(held) {
