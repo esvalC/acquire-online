@@ -736,6 +736,51 @@
   }
   #newLanding .mode-card-desc { font-size: 12px; color: rgba(255,255,255,0.65); line-height: 1.5; }
 
+  /* ── Games counter + News banner (home) ───────── */
+  #newLanding .games-counter {
+    margin-top: -20px; font-size: 13px; color: rgba(255,255,255,0.7);
+    letter-spacing: 0.5px; animation: fadeInUp 0.5s ease-out 0.15s both;
+  }
+  #newLanding .games-counter b {
+    font-family: 'JetBrains Mono', monospace; color: #fff; font-size: 15px;
+  }
+  .news-banner {
+    width: 100%; max-width: 720px; background: rgba(0,0,0,0.22);
+    border: 1px solid rgba(255,255,255,0.18); border-radius: 14px;
+    padding: 14px 18px; animation: fadeInUp 0.5s ease-out 0.15s both;
+    text-align: left;
+  }
+  .news-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+  .news-head-title { font-size: 12px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: #f5d27a; }
+  .news-composer { display: flex; gap: 8px; margin-bottom: 10px; }
+  .news-composer textarea, .news-reply-form textarea, .news-reply-form input {
+    flex: 1; background: rgba(0,0,0,0.3); color: #fff; border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 8px; padding: 8px 10px; font: inherit; font-size: 13px; resize: vertical;
+  }
+  .news-reply-form input { flex: 0 0 120px; }
+  .news-post { padding: 10px 0; border-top: 1px solid rgba(255,255,255,0.1); }
+  .news-post:first-child { border-top: none; }
+  .news-meta { font-size: 11px; color: rgba(255,255,255,0.55); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .news-author { color: #fff; font-weight: 600; font-size: 12px; }
+  .news-badge { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 1px 6px; border-radius: 99px; }
+  .news-badge-admin { background: rgba(245,210,122,0.2); color: #f5d27a; border: 1px solid rgba(245,210,122,0.4); }
+  .news-badge-guest { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.15); }
+  .news-body { font-size: 14px; color: #fff; line-height: 1.5; margin: 4px 0 6px; white-space: pre-wrap; word-wrap: break-word; }
+  .news-actions { display: flex; gap: 12px; align-items: center; }
+  .news-link { background: none; border: none; color: rgba(255,255,255,0.7); font: inherit; font-size: 12px; cursor: pointer; padding: 0; }
+  .news-link:hover { color: #fff; text-decoration: underline; }
+  .news-del { color: rgba(255,120,120,0.75); }
+  .news-replies { margin: 8px 0 0 14px; padding-left: 12px; border-left: 2px solid rgba(255,255,255,0.12); }
+  .news-reply { padding: 6px 0; }
+  .news-reply .news-body { font-size: 13px; margin: 2px 0 0; }
+  .news-reply-form { display: flex; gap: 6px; margin-top: 6px; flex-wrap: wrap; }
+  .news-btn { border: 1px solid rgba(255,255,255,0.3); background: rgba(255,255,255,0.1); color: #fff;
+    border-radius: 8px; padding: 6px 12px; font: inherit; font-size: 12px; cursor: pointer; }
+  .news-btn:hover { background: rgba(255,255,255,0.2); }
+  .news-btn-primary { background: #f5d27a; color: #1a2e20; border-color: #f5d27a; font-weight: 700; align-self: flex-start; }
+  .news-btn-primary:hover { background: #ffe39b; }
+  .news-older { margin-top: 6px; }
+
   /* ── Solo Setup ──────────────────────────────── */
   #soloSetup {
     flex-direction: column; align-items: center; justify-content: center;
@@ -1238,6 +1283,19 @@
 <div id="newLanding" class="screen active">
   <div class="home-title">ACQUIRE</div>
   <div class="home-subtitle">The classic board game, digitized</div>
+  <div id="gamesCounter" class="games-counter" style="display:none"></div>
+
+  <div id="newsBanner" class="news-banner" style="display:none">
+    <div class="news-head">
+      <span class="news-head-title">📣 News &amp; Updates</span>
+    </div>
+    <div id="newsComposer" class="news-composer" style="display:none">
+      <textarea id="newsComposerText" maxlength="2000" rows="2" placeholder="Post an update for everyone…"></textarea>
+      <button class="news-btn news-btn-primary" onclick="submitNewsPost()">Post</button>
+    </div>
+    <div id="newsList"></div>
+  </div>
+
   <div class="mode-cards">
     <div class="mode-card mode-card-featured" onclick="goFinanceRoad()">
       <div class="mode-card-icon">📈</div>
@@ -1247,7 +1305,7 @@
     <div class="mode-card mode-card-master" onclick="startQuickMaster()">
       <div class="mode-card-icon">🧠</div>
       <div class="mode-card-title">Quick Master</div>
-      <div class="mode-card-desc">You vs 3 MCTS bots — the hardest game available, no setup required</div>
+      <div class="mode-card-desc">You vs 3 Master bots — the hardest game available, no setup required</div>
     </div>
     <div class="mode-card" onclick="goSolo()">
       <div class="mode-card-icon">🤖</div>
@@ -3616,6 +3674,7 @@ function renderDrawerLoggedIn(user, history, sessions = []) {
   document.getElementById('profileAvatar').textContent   = user.username[0].toUpperCase();
   document.getElementById('profileUsername').textContent  = user.username;
   document.getElementById('adminBetaCard').style.display = user.role === 'admin' ? '' : 'none';
+  renderNews();
   const roleBadge = document.getElementById('profileRoleBadge');
   const role = user.role || 'member';
   roleBadge.textContent = role.charAt(0).toUpperCase() + role.slice(1);
@@ -3899,10 +3958,137 @@ function logOut() {
   document.querySelector('.menu-btn')?.classList.remove('logged-in');
   updateNameInputs(null);
   renderDrawerLoggedOut();
+  renderNews();
+}
+
+/* ── Total games counter (home page) ────────────────────────── */
+async function loadGamesCounter() {
+  try {
+    const res = await fetch(`${API_BASE}/stats/total-games`);
+    const d = await res.json();
+    if (!d || typeof d.total !== 'number') return;
+    const el = document.getElementById('gamesCounter');
+    const since = d.since ? ` since ${new Date(d.since * 1000).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}` : '';
+    el.innerHTML = `<b>${d.total.toLocaleString()}</b> games played${since}`;
+    el.style.display = '';
+  } catch {}
+}
+
+/* ── News banner (home page) ─────────────────────────────────────
+ * Admins post updates; anyone can reply. Replies stay collapsed until
+ * "Show replies" is clicked so the banner stays compact. */
+let newsPosts = [];
+const newsOpen = new Set();       // post ids whose replies are expanded
+let newsShowOlder = false;
+const NEWS_VISIBLE = 2;           // newest posts shown before "older updates"
+const isAdminUser = () => !!(currentUser && currentUser.role === 'admin');
+
+async function loadNews() {
+  try {
+    const res = await fetch(`${API_BASE}/news`);
+    const d = await res.json();
+    newsPosts = d.posts || [];
+  } catch { newsPosts = []; }
+  renderNews();
+}
+
+function newsDate(ts) {
+  return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function renderNews() {
+  const banner = document.getElementById('newsBanner');
+  if (!banner) return;
+  const admin = isAdminUser();
+  document.getElementById('newsComposer').style.display = admin ? 'flex' : 'none';
+  if (!newsPosts.length && !admin) { banner.style.display = 'none'; return; }
+  banner.style.display = '';
+
+  const shown = newsShowOlder ? newsPosts : newsPosts.slice(0, NEWS_VISIBLE);
+  let html = shown.map(p => {
+    const open = newsOpen.has(p.id);
+    const n = p.replies.length;
+    const replies = open ? `
+      <div class="news-replies">
+        ${p.replies.map(r => {
+          const name = r.username || r.guest_name || 'Guest';
+          const badge = r.username
+            ? (r.is_admin ? '<span class="news-badge news-badge-admin">Admin</span>' : '')
+            : '<span class="news-badge news-badge-guest">Guest</span>';
+          const del = admin ? `<button class="news-link news-del" onclick="deleteNewsReply(${r.id})">delete</button>` : '';
+          return `<div class="news-reply">
+            <div class="news-meta"><span class="news-author">${escapeHtml(name)}</span>${badge}<span>· ${newsDate(r.created_at)}</span>${del}</div>
+            <div class="news-body">${escapeHtml(r.body)}</div>
+          </div>`;
+        }).join('')}
+        <div class="news-reply-form">
+          ${currentUser ? '' : `<input id="newsName${p.id}" maxlength="24" placeholder="Your name">`}
+          <textarea id="newsReply${p.id}" maxlength="500" rows="1" placeholder="Write a reply…"></textarea>
+          <button class="news-btn" onclick="submitNewsReply(${p.id})">Reply</button>
+        </div>
+      </div>` : '';
+    return `<div class="news-post">
+      <div class="news-meta"><span class="news-author">${escapeHtml(p.author)}</span><span class="news-badge news-badge-admin">Admin</span><span>· ${newsDate(p.created_at)}</span></div>
+      <div class="news-body">${escapeHtml(p.body)}</div>
+      <div class="news-actions">
+        <button class="news-link" onclick="toggleNewsReplies(${p.id})">${open ? 'Hide replies' : (n ? `Show replies (${n})` : 'Reply')}</button>
+        ${admin ? `<button class="news-link news-del" onclick="deleteNewsPost(${p.id})">delete post</button>` : ''}
+      </div>
+      ${replies}
+    </div>`;
+  }).join('');
+  if (!newsPosts.length) html = '<div class="news-meta">No updates yet — post the first one above.</div>';
+  if (newsPosts.length > NEWS_VISIBLE) {
+    html += `<div class="news-older"><button class="news-link" onclick="newsShowOlder=!newsShowOlder;renderNews()">${newsShowOlder ? 'Show fewer' : `Older updates (${newsPosts.length - NEWS_VISIBLE})`}</button></div>`;
+  }
+  document.getElementById('newsList').innerHTML = html;
+}
+
+function toggleNewsReplies(id) {
+  newsOpen.has(id) ? newsOpen.delete(id) : newsOpen.add(id);
+  renderNews();
+}
+
+async function newsRequest(method, path, body) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (authToken) headers.Authorization = 'Bearer ' + authToken;
+  const res = await fetch(`${API_BASE}${path}`, { method, headers, body: body ? JSON.stringify(body) : undefined });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'Something went wrong');
+  return data;
+}
+
+async function submitNewsPost() {
+  const ta = document.getElementById('newsComposerText');
+  const body = ta.value.trim();
+  if (!body) return;
+  try { await newsRequest('POST', '/news', { body }); ta.value = ''; showToast('Update posted'); loadNews(); }
+  catch (e) { showToast(e.message); }
+}
+
+async function submitNewsReply(id) {
+  const ta = document.getElementById('newsReply' + id);
+  const nameEl = document.getElementById('newsName' + id);
+  const body = ta.value.trim();
+  if (!body) return;
+  try {
+    await newsRequest('POST', `/news/${id}/replies`, { body, name: nameEl ? nameEl.value.trim() : undefined });
+    newsOpen.add(id); loadNews();
+  } catch (e) { showToast(e.message); }
+}
+
+async function deleteNewsPost(id) {
+  try { await newsRequest('DELETE', `/news/${id}`); loadNews(); } catch (e) { showToast(e.message); }
+}
+async function deleteNewsReply(id) {
+  try { await newsRequest('DELETE', `/news/replies/${id}`); loadNews(); } catch (e) { showToast(e.message); }
 }
 
 /* ── Recent Games (home page) ────────────────────────────────── */
 async function loadRecentGames() {
+  // Deferred: on first page load this runs before the rest of the script
+  // (API_BASE, currentUser, news state) has been initialized.
+  setTimeout(() => { loadNews(); loadGamesCounter(); }, 0);
   try {
     const base = window.location.pathname.startsWith('/beta') ? '/beta/api' : '/api';
     const res  = await fetch(`${base}/recent-games`);

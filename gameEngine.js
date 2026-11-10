@@ -52,22 +52,35 @@ function majorityBonus(chain, size) { return stockPrice(chain, size) * 10; }
 function minorityBonus(chain, size) { return stockPrice(chain, size) * 5; }
 
 /* ── Coordinate helpers ────────────────────────────────────── */
+// Tiles are named like the real board: column number + row letter ("1A" … "12I").
+// All 108 names and neighbor lists are computed once — these lookups run
+// millions of times per minute inside the search bots' simulated games.
+const _COORD = new Map();
+const _NEIGHBORS = [];
+for (let r = 0; r < ROWS; r++) {
+  _NEIGHBORS.push([]);
+  for (let c = 0; c < COLS; c++) {
+    _COORD.set(`${c + 1}${String.fromCharCode(65 + r)}`, Object.freeze({ row: r, col: c }));
+    const n = [];
+    if (r > 0)        n.push([r - 1, c]);
+    if (r < ROWS - 1) n.push([r + 1, c]);
+    if (c > 0)        n.push([r, c - 1]);
+    if (c < COLS - 1) n.push([r, c + 1]);
+    _NEIGHBORS[r].push(n);
+  }
+}
 function tileToCoord(tile) {
-  // Tiles are named like the real board: column number + row letter ("1A" … "12I")
+  const hit = _COORD.get(tile);   // frozen, shared — callers only read it
+  if (hit) return hit;
   const num = parseInt(tile);
-  const letter = tile.replace(/[0-9]/g, '');
+  const letter = String(tile).replace(/[0-9]/g, '');
   return { row: letter.charCodeAt(0) - 65, col: num - 1 };
 }
 function coordToTile(row, col) {
   return `${col + 1}${String.fromCharCode(65 + row)}`;
 }
 function neighbors(row, col) {
-  const n = [];
-  if (row > 0)        n.push([row - 1, col]);
-  if (row < ROWS - 1) n.push([row + 1, col]);
-  if (col > 0)        n.push([row, col - 1]);
-  if (col < COLS - 1) n.push([row, col + 1]);
-  return n;
+  return _NEIGHBORS[row][col];
 }
 
 /* ── Create a fresh game state ─────────────────────────────── */
@@ -168,8 +181,9 @@ function analyzeTilePlacement(state, tile) {
     else if (cell && cell !== 'lone') adjacentChains.add(cell);
   }
 
-  const activeChains = HOTEL_CHAINS.filter(ch => state.chains[ch].active);
-  const allChainsActive = activeChains.length === 7;
+  let activeCount = 0;
+  for (const ch of HOTEL_CHAINS) if (state.chains[ch].active) activeCount++;
+  const allChainsActive = activeCount === 7;
 
   // Would this tile create a new chain?
   const wouldCreateChain = adjacentChains.size === 0 && adjacentLoneTiles > 0;
@@ -802,6 +816,7 @@ function getClientState(state, forPlayerIdx) {
 }
 
 module.exports = {
+  tileToCoord, coordToTile,
   createGame,
   placeTile,
   passTile,

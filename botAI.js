@@ -100,10 +100,7 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
       // room to grow in all 4 directions. Tiles on the outer rows/cols are
       // already constrained. Hard+ bots add up to +2 for a dead-center tile.
       if (difficulty !== 'easy') {
-        const num = parseInt(tile);
-        const letter = tile.replace(/[0-9]/g, '');
-        const row = letter.charCodeAt(0) - 65; // 0-8
-        const col = num - 1; // 0-11
+        const { row, col } = engine.tileToCoord(tile); // row 0-8, col 0-11
         const rowDist = Math.abs(row - 4) / 4;   // 0=center, 1=edge
         const colDist = Math.abs(col - 5.5) / 5.5;
         const edginess = (rowDist + colDist) / 2;
@@ -152,15 +149,12 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
       // Expert: prefer lone tiles that are furthest from any active chain
       // (tiles near chains could become expanders or founders — keep those).
       if (difficulty === 'expert') {
-        const tileNum = parseInt(tile);
-        const tileRow = tile.replace(/\d/g, '').charCodeAt(0) - 65;
-        const tileCol = tileNum - 1;
+        const { row: tileRow, col: tileCol } = engine.tileToCoord(tile);
         let minDist = Infinity;
         for (const ch of engine.HOTEL_CHAINS) {
           if (!game.chains[ch].active) continue;
           for (const ct of game.chains[ch].tiles) {
-            const ctCol = parseInt(ct) - 1;
-            const ctRow = ct.replace(/\d/g, '').charCodeAt(0) - 65;
+            const { row: ctRow, col: ctCol } = engine.tileToCoord(ct);
             minDist = Math.min(minDist, Math.abs(tileRow - ctRow) + Math.abs(tileCol - ctCol));
           }
         }
@@ -369,10 +363,7 @@ function edgePenalty(chain, game) {
   const ROWS = 9, COLS = 12;
   let edgeCount = 0;
   for (const tile of tiles) {
-    const num = parseInt(tile);
-    const letter = tile.replace(/[0-9]/g, '');
-    const row = letter.charCodeAt(0) - 65;
-    const col = num - 1;
+    const { row, col } = engine.tileToCoord(tile);
     if (row === 0 || row === ROWS - 1 || col === 0 || col === COLS - 1) edgeCount++;
   }
   return edgeCount / tiles.length;
@@ -637,7 +628,9 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
 /* End the game if allowed and this bot is currently in the lead. */
 function maybeDeclareEnd(game, botIdx) {
   const phase = game.phase;
-  if (game.currentPlayerIdx !== botIdx || (phase !== 'placeTile' && phase !== 'buyStock')) return false;
+  // Checked once per turn, at the start of it. (A tile placed this turn that
+  // makes the game endable is picked up at the start of the next turn.)
+  if (game.currentPlayerIdx !== botIdx || phase !== 'placeTile') return false;
   if (!engine.canDeclareGameEnd(game)) return false;
   // Exact check: end a copy of the game (pays every bonus, sells all stock)
   // and only end the real one if this bot would win outright.

@@ -315,6 +315,53 @@ app.get('/api/training-stats', (req, res) => {
 });
 
 // Serve index.html for all known routes (client-side routing)
+/* ── Total games counter ───────────────────────────────────── */
+app.get('/api/stats/total-games', (_req, res) => {
+  try { res.json(db.getTotalGames()); }
+  catch (e) { console.error('total-games', e.message); res.status(500).json({ error: 'unavailable' }); }
+});
+
+/* ── News banner ───────────────────────────────────────────────
+ * Admins post updates; anyone (guest or logged in) can reply. */
+const newsReplyLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, message: { error: 'Too many replies — try again later.' } });
+const newsPostLimit  = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, message: { error: 'Too many posts — try again later.' } });
+const cleanText = (v, max) => String(v == null ? '' : v).replace(/\r\n/g, '\n').trim().slice(0, max);
+
+app.get('/api/news', (_req, res) => {
+  try { res.json({ posts: db.listNews(10) }); }
+  catch (e) { console.error('news', e.message); res.status(500).json({ error: 'unavailable' }); }
+});
+
+app.post('/api/news', newsPostLimit, requireAdmin, (req, res) => {
+  const body = cleanText(req.body && req.body.body, 2000);
+  if (!body) return res.status(400).json({ error: 'Post is empty' });
+  const id = db.createNewsPost(req.userId, body);
+  res.json({ ok: true, id });
+});
+
+app.delete('/api/news/:id', requireAdmin, (req, res) => {
+  res.json({ ok: db.deleteNewsPost(Number(req.params.id)) > 0 });
+});
+
+app.post('/api/news/:id/replies', newsReplyLimit, (req, res) => {
+  const postId = Number(req.params.id);
+  if (!db.newsPostExists(postId)) return res.status(404).json({ error: 'Post not found' });
+  const body = cleanText(req.body && req.body.body, 500);
+  if (!body) return res.status(400).json({ error: 'Reply is empty' });
+
+  // Logged-in users reply as themselves; everyone else is a guest.
+  const header = req.headers.authorization || '';
+  const payload = header.startsWith('Bearer ') ? verifyToken(header.slice(7)) : null;
+  const user = payload ? db.findById(payload.sub) : null;
+  let guestName = cleanText(req.body && req.body.name, 24).replace(/[^\p{L}\p{N} _.'-]/gu, '') || 'Guest';
+  const id = db.createNewsReply(postId, user ? user.id : null, guestName, body);
+  res.json({ ok: true, id });
+});
+
+app.delete('/api/news/replies/:id', requireAdmin, (req, res) => {
+  res.json({ ok: db.deleteNewsReply(Number(req.params.id)) > 0 });
+});
+
 const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback', '/finance-road', '/finance-road/:tier/:level', '/quick-master', '/replay/:id', '/game/:code([0-9]{4})'];
 app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
 app.get('/training', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'training.html')));
@@ -579,6 +626,8 @@ function scheduleBotTurn(code) {
 
 // Thinking budgets per difficulty live in ai/searchBot.js (SEARCH_LEVELS).
 const SEARCH_BUDGETS = SEARCH_LEVELS;
+// Button → code: Easy='hard' (heuristic), Medium='expert', Hard='mcts', Master='master'
+const PLAYABLE_DIFFICULTIES = ['hard', 'expert', 'mcts', 'master'];
 
 function botFingerprint(game) {
   return JSON.stringify([game.phase, game.currentPlayerIdx, game.turnNumber, game.log.length,
@@ -715,7 +764,10 @@ io.on('connection', (socket) => {
           name: resolved.name, socketId: null, ready: true,
           idx: i + 1, token: null, isBot: true,
           personality: cfg.personality || resolved.personality || 'balanced',
-          difficulty: cfg.difficulty || 'medium',
+          // Only the four real levels; anything else (old codes like 'easy'/'medium',
+          // experimental 'lab-*' levels, missing values) becomes Medium.
+          difficulty: PLAYABLE_DIFFICULTIES.includes(cfg.difficulty) ? cfg.difficulty
+            : PLAYABLE_DIFFICULTIES.includes(resolved.difficulty) ? resolved.difficulty : 'expert',
         };
       }),
     ];

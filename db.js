@@ -88,6 +88,25 @@ const sessionCols = db.prepare(`PRAGMA table_info(game_sessions)`).all().map(r =
 if (!sessionCols.includes('standings'))    db.exec(`ALTER TABLE game_sessions ADD COLUMN standings TEXT NOT NULL DEFAULT '[]'`);
 if (!sessionCols.includes('replay_data')) db.exec(`ALTER TABLE game_sessions ADD COLUMN replay_data TEXT`);
 
+// News banner: admin posts + replies (guests may reply, only admins post)
+db.exec(`
+  CREATE TABLE IF NOT EXISTS news_posts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    author_id  INTEGER NOT NULL REFERENCES users(id),
+    body       TEXT    NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+  );
+  CREATE TABLE IF NOT EXISTS news_replies (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    post_id    INTEGER NOT NULL REFERENCES news_posts(id) ON DELETE CASCADE,
+    user_id    INTEGER REFERENCES users(id),
+    guest_name TEXT,
+    body       TEXT    NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_news_replies_post ON news_replies(post_id);
+`);
+
 /* ── Phone hashing ───────────────────────────────────────────── */
 // Salt prevents rainbow-table attacks on the hash.
 // PHONE_HASH_SALT must be set in .env — a random 32+ char string.
@@ -109,7 +128,62 @@ const stmts = {
   getHistory:      db.prepare('SELECT * FROM game_history WHERE user_id = ? ORDER BY played_at DESC LIMIT 20'),
 };
 
+/* ── Total games played (with backfill) ──────────────────────────
+ * game_sessions records every finished game, but only since it was added.
+ * Older games survive only as per-player rows in game_history; rows from the
+ * same game share a timestamp, so distinct timestamps before the first
+ * session ≈ one game each. Counted once, cached briefly. */
+let _totalCache = { at: 0, value: null };
+function getTotalGames() {
+  const now = Date.now();
+  if (_totalCache.value && now - _totalCache.at < 30000) return _totalCache.value;
+  const sessions = db.prepare('SELECT COUNT(*) AS n, MIN(played_at) AS first FROM game_sessions').get();
+  const cutoff = sessions.first || Number.MAX_SAFE_INTEGER;
+  const legacy = db.prepare('SELECT COUNT(DISTINCT played_at) AS n, MIN(played_at) AS first FROM game_history WHERE played_at < ?').get(cutoff);
+  const since = Math.min(legacy.first || Infinity, sessions.first || Infinity);
+  const value = {
+    total: sessions.n + legacy.n,
+    recorded: sessions.n,
+    backfilled: legacy.n,
+    since: Number.isFinite(since) ? since : null,
+  };
+  _totalCache = { at: now, value };
+  return value;
+}
+
+/* ── News ────────────────────────────────────────────────────── */
+function listNews(limit = 10) {
+  const posts = db.prepare(`
+    SELECT p.id, p.body, p.created_at, u.username AS author
+    FROM news_posts p JOIN users u ON u.id = p.author_id
+    ORDER BY p.created_at DESC, p.id DESC LIMIT ?`).all(limit);
+  const replyStmt = db.prepare(`
+    SELECT r.id, r.body, r.created_at, r.guest_name,
+           u.username AS username, COALESCE(u.is_admin, 0) AS is_admin
+    FROM news_replies r LEFT JOIN users u ON u.id = r.user_id
+    WHERE r.post_id = ? ORDER BY r.created_at ASC, r.id ASC LIMIT 200`);
+  return posts.map(p => ({ ...p, replies: replyStmt.all(p.id) }));
+}
+function createNewsPost(authorId, body) {
+  return db.prepare('INSERT INTO news_posts (author_id, body) VALUES (?, ?)').run(authorId, body).lastInsertRowid;
+}
+function deleteNewsPost(id) {
+  db.prepare('DELETE FROM news_replies WHERE post_id = ?').run(id);
+  return db.prepare('DELETE FROM news_posts WHERE id = ?').run(id).changes;
+}
+function newsPostExists(id) {
+  return !!db.prepare('SELECT 1 FROM news_posts WHERE id = ?').get(id);
+}
+function createNewsReply(postId, userId, guestName, body) {
+  return db.prepare('INSERT INTO news_replies (post_id, user_id, guest_name, body) VALUES (?, ?, ?, ?)')
+    .run(postId, userId || null, userId ? null : guestName, body).lastInsertRowid;
+}
+function deleteNewsReply(id) {
+  return db.prepare('DELETE FROM news_replies WHERE id = ?').run(id).changes;
+}
+
 module.exports = {
+  getTotalGames, listNews, createNewsPost, deleteNewsPost, newsPostExists, createNewsReply, deleteNewsReply,
   hashPhone,
 
   findByUsername(username)     { return stmts.findByUsername.get(username); },
