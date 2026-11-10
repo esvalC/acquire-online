@@ -1,0 +1,38 @@
+name: Server ops
+
+# Runs ops/commands.sh on the EC2 server via SSM and prints the output.
+# Trigger: push a branch named ops/<anything> containing ops/commands.sh.
+# Uses the same OIDC role as Deploy (it can only run commands on this one instance).
+
+on:
+  push:
+    branches: ['ops/**']
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::654654349405:role/acquire-online-github-actions-role
+          aws-region: us-east-1
+      - name: Run ops/commands.sh on the server
+        run: |
+          PARAMS=$(python3 -c 'import json,sys; print(json.dumps({"commands": [open("ops/commands.sh").read()]}))')
+          COMMAND_ID=$(aws ssm send-command \
+            --instance-ids i-0bbc6c13fd3dfe6ab \
+            --document-name "AWS-RunShellScript" \
+            --comment "ops ${{ github.ref_name }}" \
+            --parameters "$PARAMS" \
+            --query "Command.CommandId" --output text)
+          aws ssm wait command-executed --command-id "$COMMAND_ID" --instance-id i-0bbc6c13fd3dfe6ab || true
+          echo "===== STDOUT ====="
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id i-0bbc6c13fd3dfe6ab --query "StandardOutputContent" --output text
+          echo "===== STDERR ====="
+          aws ssm get-command-invocation --command-id "$COMMAND_ID" --instance-id i-0bbc6c13fd3dfe6ab --query "StandardErrorContent" --output text
