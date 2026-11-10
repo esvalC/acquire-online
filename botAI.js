@@ -639,9 +639,13 @@ function maybeDeclareEnd(game, botIdx) {
   const phase = game.phase;
   if (game.currentPlayerIdx !== botIdx || (phase !== 'placeTile' && phase !== 'buyStock')) return false;
   if (!engine.canDeclareGameEnd(game)) return false;
-  const mine = estimateWealth(game, botIdx);
-  const leading = game.players.every((_, i) => i === botIdx || estimateWealth(game, i) < mine);
-  if (!leading) return false;
+  // Exact check: end a copy of the game (pays every bonus, sells all stock)
+  // and only end the real one if this bot would win outright.
+  const sim = JSON.parse(JSON.stringify({ ...game, log: [] }));
+  if (engine.declareGameEnd(sim, botIdx).error) return false;
+  const st = sim.standings || [];
+  const me = game.players[botIdx].name;
+  if (!(st[0] && st[0].name === me && (!st[1] || st[1].cash < st[0].cash))) return false;
   return !engine.declareGameEnd(game, botIdx).error;
 }
 

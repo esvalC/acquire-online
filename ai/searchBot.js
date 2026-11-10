@@ -47,14 +47,14 @@ function determinize(sim, me) {
 }
 
 /* ── Play to the end with the hard heuristic ───────────────────── */
-function playout(sim) {
+function playout(sim, policy = 'hard') {
   const { decideBotAction } = botAI();
   for (let steps = 0; sim.phase !== 'gameOver' && steps < MAX_PLAYOUT_STEPS; steps++) {
     const actor = sim.phase === 'mergerDecision' && sim.pendingMerger
       ? sim.pendingMerger.decidingPlayer : sim.currentPlayerIdx;
     const name = sim.players[actor].name;
     const before = sim.log.length + '|' + sim.phase + '|' + sim.currentPlayerIdx + '|' + sim.turnNumber;
-    try { decideBotAction(sim, actor, PERSONALITY[name] || 'balanced', 'hard', name); } catch { return false; }
+    try { decideBotAction(sim, actor, PERSONALITY[name] || 'balanced', policy, name, { heuristicOnly: true }); } catch { return false; }
     if (before === sim.log.length + '|' + sim.phase + '|' + sim.currentPlayerIdx + '|' + sim.turnNumber
         && sim.phase !== 'mergerDecision') return false;
   }
@@ -140,7 +140,7 @@ function apply(game, me, a) {
 }
 
 /* ── Search: UCB1 over candidates, bounded by time ─────────────── */
-function search(game, me, candidates, budgetMs, maxPlayouts) {
+function search(game, me, candidates, budgetMs, maxPlayouts, policy) {
   if (candidates.length <= 1) return candidates[0] || null;
   const stats = candidates.map(() => ({ n: 0, total: 0 }));
   const deadline = Date.now() + budgetMs;
@@ -152,7 +152,7 @@ function search(game, me, candidates, budgetMs, maxPlayouts) {
     determinize(sim, me);
     const r = apply(sim, me, candidates[i]);
     if (r && r.error) { stats[i].n += 1000; stats[i].total -= 1000; return; } // illegal → never pick
-    const ok = playout(sim);
+    const ok = playout(sim, policy);
     stats[i].n++; total++;
     stats[i].total += ok ? score(sim, me) : 0.25;
   };
@@ -182,13 +182,14 @@ function search(game, me, candidates, budgetMs, maxPlayouts) {
 function decideSearchAction(game, me, opts = {}) {
   const budgetMs    = opts.budgetMs    ?? 800;
   const maxPlayouts = opts.maxPlayouts ?? 4000;
+  const policy      = opts.policy ?? 'hard';
   const name = game.players[me].name;
   const personality = PERSONALITY[name] || 'balanced';
 
   if (game.phase === 'placeTile' && game.currentPlayerIdx === me) {
     const c = tileCandidates(game);
     if (c.length === 0) return null; // let heuristic pass
-    return search(game, me, c, budgetMs, maxPlayouts);
+    return search(game, me, c, budgetMs, maxPlayouts, policy);
   }
 
   if (game.phase === 'buyStock' && game.currentPlayerIdx === me) {
@@ -199,13 +200,13 @@ function decideSearchAction(game, me, opts = {}) {
       const traits = { mergerSeeking: 0, riskAppetite: 0, chainLoyalty: 0 };
       heuristic = botAI().decideBotBuyStock(h, me, personality, 'hard', traits, 1.0) || {};
     } catch {}
-    return search(game, me, buyCandidates(game, me, heuristic), budgetMs, maxPlayouts);
+    return search(game, me, buyCandidates(game, me, heuristic), budgetMs, maxPlayouts, policy);
   }
 
   if (game.phase === 'mergerDecision' && game.pendingMerger && game.pendingMerger.decidingPlayer === me) {
     const held = game.players[me].stocks[game.pendingMerger.defunctChains[game.pendingMerger.currentDefunctIdx]] || 0;
     if (held === 0) return { type: 'mergerDecision', sell: 0, trade: 0 };
-    return search(game, me, mergerCandidates(game, me, null), budgetMs, maxPlayouts);
+    return search(game, me, mergerCandidates(game, me, null), budgetMs, maxPlayouts, policy);
   }
 
   return null;
@@ -223,6 +224,8 @@ const SEARCH_LEVELS = {
   expert: { budgetMs: 150,  maxPlayouts: 40 },
   mcts:   { budgetMs: 400,  maxPlayouts: 200 },
   master: { budgetMs: 1500, maxPlayouts: 8000 },
+  // Experiments for ai/benchmark.js only (not selectable in the UI):
+  'lab-xp':  { budgetMs: 400, maxPlayouts: 200, policy: 'expert' }, // Hard budget, stronger playouts
 };
 
 module.exports = { decideSearchAction, applySearchAction: apply, SEARCH_LEVELS };
