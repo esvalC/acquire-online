@@ -132,6 +132,8 @@ function mergerCandidates(game, me, heuristicChoice) {
 
 function apply(game, me, a) {
   switch (a.type) {
+    case 'chooseChain':          return engine.chooseChain(game, me, a.chain);
+    case 'chooseMergerSurvivor': return engine.chooseMergerSurvivor(game, me, a.chain);
     case 'placeTile':      return engine.placeTile(game, me, a.tile);
     case 'buyStock':       return engine.buyStock(game, me, a.purchases);
     case 'mergerDecision': return engine.mergerDecision(game, me, { sell: a.sell, trade: a.trade });
@@ -209,6 +211,24 @@ function decideSearchAction(game, me, opts = {}) {
     return search(game, me, mergerCandidates(game, me, null), budgetMs, maxPlayouts, policy);
   }
 
+  // Full search (Master): also search which chain to found and which chain
+  // survives a tied merger instead of leaving them to the heuristic.
+  if (opts.full && game.phase === 'chooseChain' && game.currentPlayerIdx === me) {
+    // Chains in the same price tier are interchangeable — one per tier is enough.
+    const seenTier = new Set(), c = [];
+    for (const ch of engine.HOTEL_CHAINS) {
+      if (game.chains[ch].active) continue;
+      const tier = engine.stockPrice(ch, 2) + '|' + engine.stockPrice(ch, 41);
+      if (seenTier.has(tier)) continue;
+      seenTier.add(tier); c.push({ type: 'chooseChain', chain: ch });
+    }
+    return search(game, me, c, budgetMs, maxPlayouts, policy);
+  }
+  if (opts.full && game.phase === 'chooseMergerSurvivor' && game.currentPlayerIdx === me) {
+    const c = (game.pendingMerger.tiedChains || []).map(ch => ({ type: 'chooseMergerSurvivor', chain: ch }));
+    return search(game, me, c, budgetMs, maxPlayouts, policy);
+  }
+
   return null;
 }
 
@@ -225,7 +245,9 @@ const SEARCH_LEVELS = {
   mcts:   { budgetMs: 400,  maxPlayouts: 200 },
   master: { budgetMs: 1500, maxPlayouts: 8000 },
   // Experiments for ai/benchmark.js only (not selectable in the UI):
-  'lab-xp':  { budgetMs: 400, maxPlayouts: 200, policy: 'expert' }, // Hard budget, stronger playouts
+  'lab-xp':   { budgetMs: 400,  maxPlayouts: 200, policy: 'expert' }, // result: no gain (24% vs Hard)
+  'lab-full': { budgetMs: 1500, maxPlayouts: 8000, full: true },      // Master + search chain naming/survivor
+  'lab-3s':   { budgetMs: 3000, maxPlayouts: 16000 },                  // Master with 2× time
 };
 
 module.exports = { decideSearchAction, applySearchAction: apply, SEARCH_LEVELS };

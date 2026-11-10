@@ -551,8 +551,10 @@ function scheduleBotTurn(code) {
 
   // Search bots (Hard / Master) think in a worker thread while the normal
   // "bot is thinking" delay runs, so they cost the player no extra waiting.
-  const wantsSearch = SEARCH_BUDGETS[botPlayer.difficulty]
-    && ['placeTile', 'buyStock', 'mergerDecision'].includes(game.phase)
+  const level = SEARCH_BUDGETS[botPlayer.difficulty];
+  const wantsSearch = level
+    && (['placeTile', 'buyStock', 'mergerDecision'].includes(game.phase)
+        || (level.full && ['chooseChain', 'chooseMergerSurvivor'].includes(game.phase)))
     && !(maybeBotDeclaresEnd(game, actingBotIdx)); // ends the game if it's leading
   if (game.phase === 'gameOver') { room.botScheduled = false; broadcastState(code); return; }
 
