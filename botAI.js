@@ -634,47 +634,42 @@ function decideBotBuyStock(game, botIdx, personality, difficulty, traits, mult) 
  * execute one action directly on the game object.
  * Returns true if an action was taken, false otherwise.
  */
-function decideBotAction(game, botIdx, personality, difficulty, botName) {
+/* End the game if allowed and this bot is currently in the lead. */
+function maybeDeclareEnd(game, botIdx) {
+  const phase = game.phase;
+  if (game.currentPlayerIdx !== botIdx || (phase !== 'placeTile' && phase !== 'buyStock')) return false;
+  if (!engine.canDeclareGameEnd(game)) return false;
+  const mine = estimateWealth(game, botIdx);
+  const leading = game.players.every((_, i) => i === botIdx || estimateWealth(game, i) < mine);
+  if (!leading) return false;
+  return !engine.declareGameEnd(game, botIdx).error;
+}
+
+function decideBotAction(game, botIdx, personality, difficulty, botName, opts = {}) {
   difficulty = difficulty || 'medium';
   const traits = BOT_TRAITS[botName] || { mergerSeeking: 0, riskAppetite: 0, chainLoyalty: 0 };
-  const mult   = DIFF_MULT[difficulty] || 1.0;
+  let mult     = DIFF_MULT[difficulty] || 1.0;
 
-  // Master mode: learned value network (sync, pure-JS, zero deps)
-  if (difficulty === 'master') {
-    const master = require('./ai/masterBot');
-    const action = master.decideMasterAction(game, botIdx);
-    if (action) {
-      const mcts = require('./ai/mcts');
-      mcts.applyAction(game, botIdx, action);
-      return true;
+  // Medium ('expert'), Hard ('mcts') and Master: determinized Monte Carlo
+  // search (ai/searchBot.js); strength is set by the playout budget. The live
+  // server runs this in a worker thread; this synchronous path is for scripts
+  // (benchmark, selfplay) and fallbacks. opts.heuristicOnly skips the search.
+  const search = require('./ai/searchBot');
+  if (search.SEARCH_LEVELS[difficulty]) {
+    if (!opts.heuristicOnly) {
+      if (maybeDeclareEnd(game, botIdx)) return true;
+      const action = search.decideSearchAction(game, botIdx, search.SEARCH_LEVELS[difficulty]);
+      if (action) {
+        const res = search.applySearchAction(game, botIdx, action);
+        if (!(res && res.error)) return true;
+      }
     }
-    // Model not trained yet or phase not handled — fall through to hard heuristic
-    difficulty = 'hard';
-  }
-
-  // MCTS mode: use Monte Carlo for tile/merger decisions; heuristic for the rest
-  if (difficulty === 'mcts') {
-    const mcts   = require('./ai/mcts');
-    const action = mcts.decideMctsAction(game, botIdx);
-    if (action !== null) {
-      // MCTS produced an action — apply and return
-      mcts.applyAction(game, botIdx, action);
-      return true;
-    }
-    // null = MCTS defers to heuristic for this phase
-    // Fall through to standard heuristic logic below, using 'hard' difficulty
-    difficulty = 'hard';
+    difficulty = 'expert'; mult = DIFF_MULT.expert; // strongest heuristic for phases search doesn't cover
   }
 
   const phase = game.phase;
 
-  // End the game if we're allowed to and currently in the lead.
-  if (game.currentPlayerIdx === botIdx && (phase === 'placeTile' || phase === 'buyStock')
-      && engine.canDeclareGameEnd(game)) {
-    const mine = estimateWealth(game, botIdx);
-    const leading = game.players.every((_, i) => i === botIdx || estimateWealth(game, i) < mine);
-    if (leading) { engine.declareGameEnd(game, botIdx); return true; }
-  }
+  if (maybeDeclareEnd(game, botIdx)) return true;
 
   if (phase === 'placeTile' && game.currentPlayerIdx === botIdx) {
     const tile = chooseBotTile(game, botIdx, difficulty, traits, mult);
@@ -714,4 +709,4 @@ function decideBotAction(game, botIdx, personality, difficulty, botName) {
   return false;
 }
 
-module.exports = { decideBotAction, BOT_ROSTER, BOT_TRAITS_EXPORT: BOT_TRAITS, decideBotBuyStock };
+module.exports = { decideBotAction, maybeDeclareEnd, BOT_ROSTER, BOT_TRAITS_EXPORT: BOT_TRAITS, decideBotBuyStock };

@@ -1,0 +1,2 @@
+GAMES=10
+MATCHUPS=expert:hard,mcts:expert,master:mcts,master:hard

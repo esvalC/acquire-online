@@ -1,0 +1,65 @@
+name: Bot benchmark
+
+# Runs bot-vs-bot games on GitHub's own machines (no AWS, nothing deployed).
+# Free for public repos. Trigger by pushing a branch named bench/<anything>,
+# or from the Actions tab → "Bot benchmark" → Run workflow.
+
+on:
+  push:
+    branches: ['bench/**']
+  workflow_dispatch:
+    inputs:
+      games:
+        description: 'Games per matchup per shard (x20 shards)'
+        default: '6'
+      matchups:
+        description: 'hero:opponent pairs (difficulty codes)'
+        default: 'expert:hard,mcts:expert,master:mcts,master:hard'
+
+permissions:
+  contents: read
+
+jobs:
+  shard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - run: npm ci --omit=dev --ignore-scripts
+      - name: Play games
+        run: |
+          GAMES="${{ github.event.inputs.games || '6' }}"
+          MATCHUPS="${{ github.event.inputs.matchups || 'expert:hard,mcts:expert,master:mcts,master:hard' }}"
+          if [ -f ai/bench-config.txt ]; then . ai/bench-config.txt; fi   # branch can override
+          node ai/benchmark.js --games "$GAMES" --matchups "$MATCHUPS" --json shard-${{ matrix.shard }}.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}
+          path: shard-${{ matrix.shard }}.json
+
+  report:
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/download-artifact@v4
+        with: { path: shards }
+      - name: Merge
+        run: |
+          MATCHUPS="${{ github.event.inputs.matchups || 'expert:hard,mcts:expert,master:mcts,master:hard' }}"
+          if [ -f ai/bench-config.txt ]; then . ai/bench-config.txt; fi
+          node ai/benchmark.js --merge shards --matchups "$MATCHUPS"
+          cat ai/benchmark-report.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-report
+          path: ai/benchmark-report.md

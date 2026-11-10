@@ -13,7 +13,8 @@ const { randomUUID } = require('crypto');
 const { Server } = require('socket.io');
 const rateLimit  = require('express-rate-limit');
 const engine     = require('./gameEngine');
-const { decideBotAction, BOT_ROSTER } = require('./botAI');
+const { decideBotAction, BOT_ROSTER, maybeDeclareEnd } = require('./botAI');
+const { applySearchAction, SEARCH_LEVELS } = require('./ai/searchBot');
 const db         = require('./db');
 const { signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone } = require('./auth');
 
@@ -542,44 +543,124 @@ function scheduleBotTurn(code) {
   if (actingBotIdx === null) return;
 
   room.botScheduled = true;
+  const botPlayer = room.players.find(p => p.idx === actingBotIdx);
   const delay = 1800 + Math.random() * 2200;
+  const startedAt = Date.now();
+  const gameAtStart = game;
+  const turnKey = botFingerprint(game);
 
-  setTimeout(() => {
-    room.botScheduled = false;
-    if (!rooms[code] || !rooms[code].game) return;
+  // Search bots (Hard / Master) think in a worker thread while the normal
+  // "bot is thinking" delay runs, so they cost the player no extra waiting.
+  const wantsSearch = SEARCH_BUDGETS[botPlayer.difficulty]
+    && ['placeTile', 'buyStock', 'mergerDecision'].includes(game.phase)
+    && !(maybeBotDeclaresEnd(game, actingBotIdx)); // ends the game if it's leading
+  if (game.phase === 'gameOver') { room.botScheduled = false; broadcastState(code); return; }
 
-    const botPlayer = room.players.find(p => p.idx === actingBotIdx);
-    if (!botPlayer) return;
+  const thinking = wantsSearch
+    ? runSearchInWorker(game, actingBotIdx, SEARCH_BUDGETS[botPlayer.difficulty])
+    : Promise.resolve(null);
 
-    const game = rooms[code].game;
-    const fingerprint = () => JSON.stringify([game.phase, game.currentPlayerIdx, game.turnNumber,
-      game.log.length, game.pendingMerger && game.pendingMerger.currentPlayerOffset,
-      game.pendingMerger && game.pendingMerger.currentDefunctIdx]);
-    const before = fingerprint();
+  thinking.then(action => {
+    const wait = Math.max(0, delay - (Date.now() - startedAt));
+    setTimeout(() => {
+      room.botScheduled = false;
+      const r = rooms[code];
+      // Game restarted/abandoned, or state moved on while we were thinking
+      if (!r || r.game !== gameAtStart || botFingerprint(r.game) !== turnKey) {
+        if (r && r.game) scheduleBotTurn(code);
+        return;
+      }
+      playBotMove(code, r.game, botPlayer, action);
+    }, wait);
+  });
+}
 
+// Thinking budgets per difficulty live in ai/searchBot.js (SEARCH_LEVELS).
+const SEARCH_BUDGETS = SEARCH_LEVELS;
+
+function botFingerprint(game) {
+  return JSON.stringify([game.phase, game.currentPlayerIdx, game.turnNumber, game.log.length,
+    game.pendingMerger && game.pendingMerger.currentPlayerOffset,
+    game.pendingMerger && game.pendingMerger.currentDefunctIdx]);
+}
+
+function maybeBotDeclaresEnd(game, idx) {
+  try { return maybeDeclareEnd(game, idx); } catch { return false; }
+}
+
+/* ── Worker thread for search bots ───────────────────────────── */
+const { Worker } = require('worker_threads');
+let searchWorker = null;
+let searchSeq = 0;
+const searchPending = new Map();
+
+function getSearchWorker() {
+  if (searchWorker) return searchWorker;
+  searchWorker = new Worker(path.join(__dirname, 'ai', 'botWorker.js'));
+  searchWorker.on('message', ({ id, action, error }) => {
+    const done = searchPending.get(id);
+    if (!done) return;
+    searchPending.delete(id);
+    if (error) console.error('Search bot error:', error);
+    done(action || null);
+  });
+  const reset = (why) => {
+    console.error('Search worker stopped:', why);
+    searchWorker = null;
+    for (const done of searchPending.values()) done(null); // fall back to heuristic
+    searchPending.clear();
+  };
+  searchWorker.on('error', reset);
+  searchWorker.on('exit', reset);
+  return searchWorker;
+}
+
+function runSearchInWorker(game, me, opts) {
+  return new Promise(resolve => {
+    const id = ++searchSeq;
+    // Never wait forever: queue time + budget + slack
+    const timer = setTimeout(() => { if (searchPending.delete(id)) resolve(null); }, opts.budgetMs + 15000);
+    searchPending.set(id, a => { clearTimeout(timer); resolve(a); });
     try {
-      decideBotAction(game, actingBotIdx, botPlayer.personality, botPlayer.difficulty, botPlayer.name);
+      const { log, ...rest } = game; // log isn't needed and can be large
+      getSearchWorker().postMessage({ id, game: { ...rest, log: [] }, me, opts });
+    } catch (e) {
+      searchPending.delete(id); clearTimeout(timer);
+      console.error('Could not start search:', e.message);
+      resolve(null);
+    }
+  });
+}
+
+function playBotMove(code, game, botPlayer, searchAction) {
+  const idx = botPlayer.idx;
+  const before = botFingerprint(game);
+
+  if (searchAction) {
+    const res = applySearchAction(game, idx, searchAction);
+    if (res && res.error) console.error(`Search move rejected in room ${code}: ${res.error}`);
+  }
+  if (botFingerprint(game) === before) {
+    // Heuristic for phases search doesn't handle (naming a chain, etc.).
+    // Search difficulties use the strongest heuristic here.
+    try {
+      // heuristicOnly: never run a (blocking) search on the main thread
+      decideBotAction(game, idx, botPlayer.personality, botPlayer.difficulty, botPlayer.name, { heuristicOnly: true });
     } catch (e) {
       console.error(`Bot error in room ${code} (${botPlayer.difficulty}):`, e.stack || e.message);
     }
-
-    // Safety net: if the bot's move threw or was rejected, the game state is
-    // unchanged and re-scheduling would retry the same failing move forever
-    // (the "game just stops" bug). Fall back to the hard heuristic, then to a
-    // guaranteed-legal default move.
-    if (fingerprint() === before) {
-      try {
-        decideBotAction(game, actingBotIdx, botPlayer.personality, 'hard', botPlayer.name);
-      } catch (e) {
-        console.error(`Bot fallback error in room ${code}:`, e.stack || e.message);
-      }
-    }
-    if (fingerprint() === before) {
-      forceDefaultBotMove(game, actingBotIdx);
-      console.error(`Bot ${botPlayer.name} stalled in room ${code} (phase ${game.phase}) — forced default move`);
-    }
-    broadcastState(code);
-  }, delay);
+  }
+  // Safety net: a move that threw or was rejected leaves the state unchanged,
+  // and re-scheduling would retry it forever (the "game just stops" bug).
+  if (botFingerprint(game) === before) {
+    try { decideBotAction(game, idx, botPlayer.personality, 'hard', botPlayer.name); }
+    catch (e) { console.error(`Bot fallback error in room ${code}:`, e.stack || e.message); }
+  }
+  if (botFingerprint(game) === before) {
+    forceDefaultBotMove(game, idx);
+    console.error(`Bot ${botPlayer.name} stalled in room ${code} (phase ${game.phase}) — forced default move`);
+  }
+  broadcastState(code);
 }
 
 /* ── Socket events ─────────────────────────────────────────── */
