@@ -19,8 +19,9 @@ CMD_ID=$(aws ssm send-command \
   --document-name "AWS-RunShellScript" \
   --parameters 'commands=[
     "git -C /home/ubuntu/acquire-main -c safe.directory=/home/ubuntu/acquire-main pull origin main",
-    "npm --prefix /home/ubuntu/acquire-main install --omit=dev",
-    "pm2 restart acquire-main",
+    "chown -R ubuntu:ubuntu /home/ubuntu/acquire-main",
+    "sudo -u ubuntu npm --prefix /home/ubuntu/acquire-main install --omit=dev",
+    "sudo -u ubuntu pm2 restart acquire-main",
     "echo PROD_DEPLOY_DONE"
   ]' \
   --query "Command.CommandId" --output text)

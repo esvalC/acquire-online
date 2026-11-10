@@ -3980,7 +3980,7 @@ async function loadGamesCounter() {
 let newsPosts = [];
 const newsOpen = new Set();       // post ids whose replies are expanded
 let newsShowOlder = false;
-const NEWS_VISIBLE = 2;           // newest posts shown before "older updates"
+const NEWS_VISIBLE = 1;           // only the newest post shows until "See more"
 const isAdminUser = () => !!(currentUser && currentUser.role === 'admin');
 
 async function loadNews() {
@@ -4039,7 +4039,7 @@ function renderNews() {
   }).join('');
   if (!newsPosts.length) html = '<div class="news-meta">No updates yet — post the first one above.</div>';
   if (newsPosts.length > NEWS_VISIBLE) {
-    html += `<div class="news-older"><button class="news-link" onclick="newsShowOlder=!newsShowOlder;renderNews()">${newsShowOlder ? 'Show fewer' : `Older updates (${newsPosts.length - NEWS_VISIBLE})`}</button></div>`;
+    html += `<div class="news-older"><button class="news-link" onclick="newsShowOlder=!newsShowOlder;renderNews()">${newsShowOlder ? 'Show less' : `See more updates (${newsPosts.length - NEWS_VISIBLE})`}</button></div>`;
   }
   document.getElementById('newsList').innerHTML = html;
 }
