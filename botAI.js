@@ -102,8 +102,8 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
       if (difficulty !== 'easy') {
         const num = parseInt(tile);
         const letter = tile.replace(/[0-9]/g, '');
-        const row = num - 1; // 0-8
-        const col = letter.charCodeAt(0) - 65; // 0-11
+        const row = letter.charCodeAt(0) - 65; // 0-8
+        const col = num - 1; // 0-11
         const rowDist = Math.abs(row - 4) / 4;   // 0=center, 1=edge
         const colDist = Math.abs(col - 5.5) / 5.5;
         const edginess = (rowDist + colDist) / 2;
@@ -153,14 +153,14 @@ function scoreTile(game, tile, botIdx, difficulty, traits, mult) {
       // (tiles near chains could become expanders or founders — keep those).
       if (difficulty === 'expert') {
         const tileNum = parseInt(tile);
-        const tileCol = tile.replace(/\d/g, '').charCodeAt(0) - 65;
-        const tileRow = tileNum - 1;
+        const tileRow = tile.replace(/\d/g, '').charCodeAt(0) - 65;
+        const tileCol = tileNum - 1;
         let minDist = Infinity;
         for (const ch of engine.HOTEL_CHAINS) {
           if (!game.chains[ch].active) continue;
           for (const ct of game.chains[ch].tiles) {
-            const ctRow = parseInt(ct) - 1;
-            const ctCol = ct.replace(/\d/g, '').charCodeAt(0) - 65;
+            const ctCol = parseInt(ct) - 1;
+            const ctRow = ct.replace(/\d/g, '').charCodeAt(0) - 65;
             minDist = Math.min(minDist, Math.abs(tileRow - ctRow) + Math.abs(tileCol - ctCol));
           }
         }
@@ -371,8 +371,8 @@ function edgePenalty(chain, game) {
   for (const tile of tiles) {
     const num = parseInt(tile);
     const letter = tile.replace(/[0-9]/g, '');
-    const row = num - 1;
-    const col = letter.charCodeAt(0) - 65;
+    const row = letter.charCodeAt(0) - 65;
+    const col = num - 1;
     if (row === 0 || row === ROWS - 1 || col === 0 || col === COLS - 1) edgeCount++;
   }
   return edgeCount / tiles.length;
@@ -667,6 +667,14 @@ function decideBotAction(game, botIdx, personality, difficulty, botName) {
   }
 
   const phase = game.phase;
+
+  // End the game if we're allowed to and currently in the lead.
+  if (game.currentPlayerIdx === botIdx && (phase === 'placeTile' || phase === 'buyStock')
+      && engine.canDeclareGameEnd(game)) {
+    const mine = estimateWealth(game, botIdx);
+    const leading = game.players.every((_, i) => i === botIdx || estimateWealth(game, i) < mine);
+    if (leading) { engine.declareGameEnd(game, botIdx); return true; }
+  }
 
   if (phase === 'placeTile' && game.currentPlayerIdx === botIdx) {
     const tile = chooseBotTile(game, botIdx, difficulty, traits, mult);

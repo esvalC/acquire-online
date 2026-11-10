@@ -11,8 +11,8 @@
  *  - Declare game end when conditions met
  */
 
-const ROWS = 9;   // 1-9
-const COLS = 12;  // A-L
+const ROWS = 9;   // A-I (rows are lettered)
+const COLS = 12;  // 1-12 (columns are numbered)
 const HOTEL_CHAINS = [
   'Tower', 'Luxor', 'American', 'Worldwide', 'Festival', 'Imperial', 'Continental'
 ];
@@ -53,12 +53,13 @@ function minorityBonus(chain, size) { return stockPrice(chain, size) * 5; }
 
 /* ── Coordinate helpers ────────────────────────────────────── */
 function tileToCoord(tile) {
+  // Tiles are named like the real board: column number + row letter ("1A" … "12I")
   const num = parseInt(tile);
   const letter = tile.replace(/[0-9]/g, '');
-  return { row: num - 1, col: letter.charCodeAt(0) - 65 };
+  return { row: letter.charCodeAt(0) - 65, col: num - 1 };
 }
 function coordToTile(row, col) {
-  return `${row + 1}${String.fromCharCode(65 + col)}`;
+  return `${col + 1}${String.fromCharCode(65 + row)}`;
 }
 function neighbors(row, col) {
   const n = [];
@@ -656,7 +657,16 @@ function checkGameEnd(state) {
   return HOTEL_CHAINS.every(ch => state.chains[ch].active && state.chains[ch].tiles.length >= SAFE_SIZE);
 }
 
-function canDeclareGameEnd(state) { return checkGameEnd(state); }
+// Official rule: on their turn, a player MAY end the game when any chain has
+// 41+ tiles, or when every chain on the board is safe (11+ tiles).
+const GAME_END_SIZE = 41;
+function canDeclareGameEnd(state) {
+  if (state.phase === 'gameOver') return false;
+  const active = HOTEL_CHAINS.filter(ch => state.chains[ch].active);
+  if (active.length === 0) return false;
+  return active.some(ch => state.chains[ch].tiles.length >= GAME_END_SIZE)
+      || active.every(ch => state.chains[ch].tiles.length >= SAFE_SIZE);
+}
 
 function endGame(state) {
   state.phase = 'gameOver';
@@ -736,6 +746,7 @@ function checkConcedeResult(state) {
 /* ── Declare game end (current player's choice) ────────────── */
 function declareGameEnd(state, playerIdx) {
   if (state.currentPlayerIdx !== playerIdx) return { error: 'Not your turn' };
+  if (state.phase !== 'placeTile' && state.phase !== 'buyStock') return { error: 'Finish the current action first' };
   if (!canDeclareGameEnd(state)) return { error: 'End game conditions not met' };
 
   state.log.push(`${state.players[playerIdx].name} declares the game over!`);

@@ -314,7 +314,7 @@ app.get('/api/training-stats', (req, res) => {
 });
 
 // Serve index.html for all known routes (client-side routing)
-const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback', '/finance-road', '/finance-road/:tier/:level', '/quick-master', '/replay/:id'];
+const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback', '/finance-road', '/finance-road/:tier/:level', '/quick-master', '/replay/:id', '/game/:code([0-9]{4})'];
 app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
 app.get('/training', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'training.html')));
 for (const route of clientRoutes) {
@@ -472,6 +472,53 @@ function startGame(code) {
   broadcastState(code);
 }
 
+/* ── Last-resort legal move for a stuck bot ─────────────────── */
+function forceDefaultBotMove(game, idx) {
+  const HOTELS = ['Tower','Luxor','American','Worldwide','Festival','Imperial','Continental'];
+  switch (game.phase) {
+    case 'placeTile': {
+      const { playable } = engine.getPlayableTiles(game);
+      if (playable.length) engine.placeTile(game, idx, playable[0]);
+      else engine.passTile(game, idx);
+      break;
+    }
+    case 'chooseChain': {
+      const free = HOTELS.find(ch => !game.chains[ch].active);
+      if (free) engine.chooseChain(game, idx, free);
+      break;
+    }
+    case 'chooseMergerSurvivor': {
+      const opts = (game.pendingMerger && (game.pendingMerger.survivorOptions || game.pendingMerger.tiedChains)) || [];
+      for (const ch of opts) { if (!engine.chooseMergerSurvivor(game, idx, ch).error) break; }
+      break;
+    }
+    case 'mergerDecision':
+      engine.mergerDecision(game, idx, { sell: 0, trade: 0 }); // hold everything
+      break;
+    case 'buyStock':
+      engine.buyStock(game, idx, {});
+      break;
+  }
+}
+
+// How long a game survives with no human connected before it's thrown away.
+const RECONNECT_GRACE_MS = 5 * 60 * 1000;
+
+function scheduleAbandonedRoomCleanup(code) {
+  const room = rooms[code];
+  if (!room) return;
+  clearTimeout(room.cleanupTimer);
+  room.cleanupTimer = setTimeout(() => {
+    const r = rooms[code];
+    if (!r) return;
+    const humansGone = r.players.every(p => p.isBot || p.disconnected || !p.socketId);
+    if (humansGone && r.spectators.length === 0) {
+      console.log(`Room ${code} abandoned for ${RECONNECT_GRACE_MS / 60000} min — deleting`);
+      delete rooms[code];
+    }
+  }, RECONNECT_GRACE_MS);
+}
+
 /* ── Bot scheduling ─────────────────────────────────────────── */
 function scheduleBotTurn(code) {
   const room = rooms[code];
@@ -504,10 +551,32 @@ function scheduleBotTurn(code) {
     const botPlayer = room.players.find(p => p.idx === actingBotIdx);
     if (!botPlayer) return;
 
+    const game = rooms[code].game;
+    const fingerprint = () => JSON.stringify([game.phase, game.currentPlayerIdx, game.turnNumber,
+      game.log.length, game.pendingMerger && game.pendingMerger.currentPlayerOffset,
+      game.pendingMerger && game.pendingMerger.currentDefunctIdx]);
+    const before = fingerprint();
+
     try {
-      decideBotAction(rooms[code].game, actingBotIdx, botPlayer.personality, botPlayer.difficulty, botPlayer.name);
+      decideBotAction(game, actingBotIdx, botPlayer.personality, botPlayer.difficulty, botPlayer.name);
     } catch (e) {
-      console.error(`Bot error in room ${code}:`, e.message);
+      console.error(`Bot error in room ${code} (${botPlayer.difficulty}):`, e.stack || e.message);
+    }
+
+    // Safety net: if the bot's move threw or was rejected, the game state is
+    // unchanged and re-scheduling would retry the same failing move forever
+    // (the "game just stops" bug). Fall back to the hard heuristic, then to a
+    // guaranteed-legal default move.
+    if (fingerprint() === before) {
+      try {
+        decideBotAction(game, actingBotIdx, botPlayer.personality, 'hard', botPlayer.name);
+      } catch (e) {
+        console.error(`Bot fallback error in room ${code}:`, e.stack || e.message);
+      }
+    }
+    if (fingerprint() === before) {
+      forceDefaultBotMove(game, actingBotIdx);
+      console.error(`Bot ${botPlayer.name} stalled in room ${code} (phase ${game.phase}) — forced default move`);
     }
     broadcastState(code);
   }, delay);
@@ -625,6 +694,7 @@ io.on('connection', (socket) => {
 
     p.socketId = socket.id;
     p.disconnected = false;
+    clearTimeout(room.cleanupTimer);
     currentRoom = code;
     playerName = name;
     socket.join(code);
@@ -809,8 +879,12 @@ io.on('connection', (socket) => {
     room.spectators = room.spectators.filter(s => s.socketId !== socket.id);
 
     if (room.isSolo) {
-      // Clean up solo room when human leaves
-      delete rooms[currentRoom];
+      // Don't delete immediately: phones locking, Wi-Fi blips and tab switches
+      // all drop the socket. The player can come back via /game/<code> (or the
+      // auto-rejoin on reconnect) within RECONNECT_GRACE_MS.
+      const human = room.players.find(p => p.socketId === socket.id);
+      if (human) { human.socketId = null; human.disconnected = true; }
+      scheduleAbandonedRoomCleanup(currentRoom);
       return;
     }
 
@@ -821,6 +895,7 @@ io.on('connection', (socket) => {
         p.disconnected = true;
         room.game.log.push(`${p.name} disconnected`);
         broadcastState(currentRoom);
+        if (room.players.every(q => q.isBot || q.disconnected)) scheduleAbandonedRoomCleanup(currentRoom);
       }
     } else {
       room.players = room.players.filter(p => p.socketId !== socket.id);

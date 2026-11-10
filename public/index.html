@@ -1912,7 +1912,7 @@ function saveFRProgress(p) {
 function goFinanceRoad() {
   document.getElementById('gameOverOverlay').style.display = 'none';
   stopTurnClock();
-  if (isSoloGame) socket.emit('leaveRoom');
+  if (isSoloGame) { activeSession = null; socket.emit('leaveRoom'); }
   isSoloGame = false;
   currentFinanceRoadTier  = null;
   currentFinanceRoadLevel = null;
@@ -2105,12 +2105,13 @@ function showScreen(id) {
 }
 
 function goHome() {
+  activeSession = null;
   document.getElementById('gameOverOverlay').style.display = 'none';
   stopTurnClock();
   gameState = null;
   prevBoard = null;
   recentTiles = new Set();
-  if (isSoloGame) socket.emit('leaveRoom');
+  if (isSoloGame) { activeSession = null; socket.emit('leaveRoom'); }
   isSoloGame = false;
   currentFinanceRoadTier  = null;
   currentFinanceRoadLevel = null;
@@ -2121,7 +2122,7 @@ function goHome() {
 function goSolo() {
   document.getElementById('gameOverOverlay').style.display = 'none';
   stopTurnClock();
-  if (isSoloGame) socket.emit('leaveRoom');
+  if (isSoloGame) { activeSession = null; socket.emit('leaveRoom'); }
   isSoloGame = false;
   gameState = null;
   prevBoard = null;
@@ -2301,12 +2302,17 @@ function startSoloGame() {
   socket.emit('createSoloGame', { name, botCount: selectedBotCount, quickstart, botConfigs, authToken }, (res) => {
     if (res.error) return showError(res.error);
     saveSession(res.code, name, res.token);
+    // Give the game its own URL so a refresh / reopened tab can rejoin it
+    const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
+    history.replaceState({}, '', `${base}/game/${res.code}`);
     showScreen('game');
     startTurnClock();
   });
 }
 
+let activeSession = null; // { code, name, token } of the room we're in — used to rejoin after a reconnect
 function saveSession(code, name, token) {
+  activeSession = { code, name, token };
   localStorage.setItem('acquire_token_' + code, token);
   localStorage.setItem('acquire_name_' + code, name);
 }
@@ -2335,6 +2341,7 @@ function attemptReconnect(code, name, token) {
       return;
     }
     isSoloGame = res.isSolo || false;
+    activeSession = { code, name, token };
     document.getElementById('lobbyCode').textContent = code;
     if (res.inGame) {
       showScreen('game');
@@ -2361,6 +2368,7 @@ function attemptReconnect(code, name, token) {
         isSoloGame = true; window._endConditionNotified = false;
         socket.emit('rejoinRoom', { code: saved.code, token, name }, (res) => {
           if (!res.error && res.inGame) {
+            activeSession = { code: saved.code, name, token };
             showScreen('game');
             startTurnClock();
           } else {
@@ -2412,6 +2420,31 @@ function attemptReconnect(code, name, token) {
   // /multiplayer
   if (path === '/multiplayer') {
     showScreen('landing');
+    return;
+  }
+  // /game/XXXX — rejoin a solo game (works within 5 min of everyone leaving)
+  const gameMatch = path.match(/\/game\/(\d{4})$/);
+  if (gameMatch) {
+    const code  = gameMatch[1];
+    const token = localStorage.getItem('acquire_token_' + code);
+    const name  = localStorage.getItem('acquire_name_'  + code);
+    const home  = path.startsWith('/beta') ? '/beta' : '/';
+    if (!token || !name) { history.replaceState({}, '', home); showScreen('newLanding'); loadRecentGames(); return; }
+    myName = name;
+    socket.emit('rejoinRoom', { code, token, name }, (res) => {
+      if (res && !res.error && res.inGame) {
+        activeSession = { code, name, token };
+        isSoloGame = !!res.isSolo; window._endConditionNotified = false;
+        showScreen('game');
+        startTurnClock();
+      } else {
+        clearSession(code);
+        history.replaceState({}, '', home);
+        showScreen('newLanding');
+        loadRecentGames();
+        showToast('That game has ended or expired.');
+      }
+    });
     return;
   }
   // /multiplayer/XXXX
@@ -2484,11 +2517,33 @@ socket.on('soloRestart', () => {
   stopTurnClock();
 });
 
+// Socket.IO reconnects automatically, but with a NEW socket id — the server
+// doesn't know it's us until we rejoin. Without this, a phone lock / Wi-Fi
+// blip leaves the board frozen on the last state ("game just stops").
+let lostConnection = false;
 socket.on('disconnect', () => {
-  const home = window.location.pathname.startsWith('/beta') ? '/beta' : '/';
-  if (window.location.pathname !== home) {
-    history.replaceState({}, '', home);
+  lostConnection = true;
+  if (activeSession && gameState && gameState.phase !== 'gameOver') {
+    showToast('Connection lost — reconnecting…');
   }
+});
+socket.on('connect', () => {
+  if (!lostConnection) return;          // first connect on page load
+  lostConnection = false;
+  if (!activeSession) return;
+  const { code, name, token } = activeSession;
+  socket.emit('rejoinRoom', { code, token, name }, (res) => {
+    if (res && !res.error) {
+      showToast('Reconnected');
+      return;
+    }
+    // Room is gone (usually the server restarted) — don't leave a dead board on screen
+    activeSession = null;
+    clearSession(code);
+    showToast('That game was lost when the server restarted. Sorry!');
+    const home = window.location.pathname.startsWith('/beta') ? '/beta' : '/';
+    setTimeout(() => { window.location.href = home; }, 2500);
+  });
 });
 
 /* ── Game State ────────────────────────────────── */
@@ -2507,7 +2562,7 @@ socket.on('gameState', (state) => {
     for (let r = 0; r < 9; r++) {
       for (let c = 0; c < 12; c++) {
         if (prevBoard[r][c] !== state.board[r][c] && state.board[r][c]) {
-          newRecent.add(`${r+1}${String.fromCharCode(65+c)}`);
+          newRecent.add(`${c + 1}${String.fromCharCode(65 + r)}`);
         }
       }
     }
@@ -2656,7 +2711,7 @@ function detectBotCommentary(savedPrevPhase, savedPrevIdx, savedPrevBoard, saved
     for (let r = 0; r < 9 && !playedTile; r++) {
       for (let c = 0; c < 12 && !playedTile; c++) {
         if (!savedPrevBoard[r][c] && newState.board[r][c]) {
-          playedTile = `${r+1}${String.fromCharCode(65+c)}`;
+          playedTile = `${c + 1}${String.fromCharCode(65 + r)}`;
         }
       }
     }
@@ -2730,8 +2785,8 @@ function renderQuickstart() {
 /* ── Tile placement type (for color coding) ────── */
 function getTilePlacementType(tile) {
   const st = gameState;
-  const row = parseInt(tile) - 1;
-  const col = tile.replace(/[0-9]/g, '').charCodeAt(0) - 65;
+  const col = parseInt(tile) - 1;
+  const row = tile.replace(/[0-9]/g, '').charCodeAt(0) - 65;
   const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
   const adjChains = new Set(); let adjLone = 0;
   for (const [dr,dc] of dirs) {
@@ -2761,7 +2816,7 @@ function clientStockPrice(chain, size) {
 function analyzeTileClient(tile) {
   const st = gameState;
   const num = parseInt(tile); const letter = tile.replace(/[0-9]/g, '');
-  const row = num - 1; const col = letter.charCodeAt(0) - 65;
+  const row = letter.charCodeAt(0) - 65; const col = num - 1;
   const dirs = [[-1,0],[1,0],[0,-1],[0,1]];
   const adjChains = new Set(); let adjLone = 0;
   for (const [dr,dc] of dirs) {
@@ -2822,7 +2877,7 @@ function renderBoard() {
 
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 12; c++) {
-      const tile = `${r+1}${String.fromCharCode(65+c)}`;
+      const tile = `${c + 1}${String.fromCharCode(65 + r)}`;
       const cell = st.board[r][c];
       let cls = 'board-cell';
       if (cell === 'lone') cls += ' lone';
@@ -3246,11 +3301,13 @@ function renderHeader() {
   document.getElementById('turnLabel').textContent = `Turn ${gameState.turnNumber}`;
   document.getElementById('currentPlayerLabel').textContent = gameState.players[gameState.currentPlayerIdx]?.name || '';
   const canEnd = gameState.canDeclareEnd;
-  document.getElementById('btnDeclareEnd').style.display = 'none';
+  const myTurnToEnd = canEnd && myIdx === gameState.currentPlayerIdx
+    && (gameState.phase === 'placeTile' || gameState.phase === 'buyStock');
+  document.getElementById('btnDeclareEnd').style.display = myTurnToEnd ? 'inline-block' : 'none';
   // Show a one-time toast the first time end conditions are met
   if (canEnd && !window._endConditionNotified) {
     window._endConditionNotified = true;
-    showToast('End game conditions met — game will end automatically after current turn');
+    showToast('End game conditions met — the player whose turn it is may end the game');
   }
   document.getElementById('btnRestartSolo').style.display = isSoloGame ? 'inline-block' : 'none';
   // Spectator badge
@@ -3280,6 +3337,7 @@ function restartSoloGame() {
   if (currentFinanceRoadTier !== null && currentFinanceRoadLevel !== null) {
     // Finance Road: restart same level
     const ti = currentFinanceRoadTier, li = currentFinanceRoadLevel;
+    activeSession = null;
     socket.emit('leaveRoom');
     isSoloGame = false;
     currentFinanceRoadTier = null; currentFinanceRoadLevel = null;
@@ -3348,7 +3406,9 @@ function renderGameOver() {
 function placeTile(tile) { hideTilePreview(); socket.emit('placeTile', { tile }); }
 function chooseChain(chain) { socket.emit('chooseChain', { chain }); }
 function chooseMergerSurvivor(chain) { socket.emit('chooseMergerSurvivor', { chain }); }
-function declareEnd() { socket.emit('declareGameEnd'); }
+function declareEnd() {
+  if (confirm('End the game now? Final bonuses will be paid and stocks sold.')) socket.emit('declareGameEnd');
+}
 function initiateConcedeVote() { socket.emit('initiateConcedeVote'); }
 function submitVote(vote) { socket.emit('submitConcedeVote', { vote }); }
 function playAgain() {
@@ -4025,11 +4085,11 @@ function renderReplayFrame() {
 function renderReplayBoard(snap) {
   const el = document.getElementById('replayBoard');
   let html = '<div class="board-cell header-cell"></div>';
-  for (let c = 0; c < 12; c++) html += `<div class="board-cell header-cell">${String.fromCharCode(65+c)}</div>`;
+  for (let c = 0; c < 12; c++) html += `<div class="board-cell header-cell">${c+1}</div>`;
   for (let r = 0; r < 9; r++) {
-    html += `<div class="board-cell header-cell">${r+1}</div>`;
+    html += `<div class="board-cell header-cell">${String.fromCharCode(65+r)}</div>`;
     for (let c = 0; c < 12; c++) {
-      const tile = `${r+1}${String.fromCharCode(65+c)}`;
+      const tile = `${c + 1}${String.fromCharCode(65 + r)}`;
       const cell = snap.board[r][c];
       let cls = 'board-cell';
       if (cell === 'lone') cls += ' lone';

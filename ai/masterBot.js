@@ -137,7 +137,7 @@ function encodeState(game, playerIdx) {
   // 2. Player's tile hand: 108 features (1 if player holds that tile)
   for (let r = 0; r < 9; r++) {
     for (let c = 0; c < 12; c++) {
-      const tileStr = `${r + 1}${String.fromCharCode(65 + c)}`;
+      const tileStr = `${c + 1}${String.fromCharCode(65 + r)}`;
       vec[vi++] = handSet.has(tileStr) ? 1 : 0;
     }
   }
@@ -155,8 +155,8 @@ function encodeState(game, playerIdx) {
     let adjEmpty = 0;
     if (info.active) {
       for (const tileStr of info.tiles) {
-        const tr = parseInt(tileStr) - 1;
-        const tc = tileStr.charCodeAt(tileStr.length - 1) - 65;
+        const tc = parseInt(tileStr) - 1;
+        const tr = tileStr.charCodeAt(tileStr.length - 1) - 65;
         if (game.board[tr - 1] !== undefined && !game.board[tr - 1][tc]) adjEmpty++;
         if (game.board[tr + 1] !== undefined && !game.board[tr + 1][tc]) adjEmpty++;
         if (tc > 0  && !game.board[tr][tc - 1]) adjEmpty++;
@@ -185,8 +185,8 @@ function encodeState(game, playerIdx) {
 
 /* ── Tile → policy index ──────────────────────────────────────── */
 function tileToIdx(tile) {
-  const row = parseInt(tile) - 1;
-  const col = tile.charCodeAt(tile.length - 1) - 65;
+  const col = parseInt(tile) - 1;                    // column number 1-12
+  const row = tile.charCodeAt(tile.length - 1) - 65; // row letter A-I
   return row * 12 + col;
 }
 
