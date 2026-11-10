@@ -35,7 +35,7 @@ Open `http://localhost:3000`. Share your local IP (e.g. `http://192.168.1.x:3000
 - Reconnect support — rejoin a game in progress if you lose connection
 
 ### Accounts & Stats
-- Username + password accounts (scrypt-hashed, no email or phone needed), optional "stay signed in" (90 days; otherwise 12 hours)
+- Username + password accounts (scrypt-hashed, no email or phone needed); "stay signed in" never expires (ends on sign-out or password change), otherwise 12 hours
 - Changing a password signs the account out everywhere; 10 wrong passwords lock an account for 15 minutes
 - Admins can issue a one-time temporary password from `/plan` → Users
 - Older phone-verified accounts keep working; text-code sign-in switches off automatically once `TWILIO_*` is removed from `.env`

@@ -13,9 +13,9 @@ const JWT_SECRET  = process.env.JWT_SECRET  || 'dev-jwt-secret-change-in-product
 if (process.env.NODE_ENV === 'production' && !process.env.JWT_SECRET) {
   console.error('[auth] WARNING: JWT_SECRET is not set — sessions are signed with a public default key');
 }
-// "Stay signed in" → 90 days; otherwise the session ends after 12 hours
-// (and the browser keeps it only for the tab's lifetime).
-const JWT_EXPIRES_REMEMBER = '90d';
+// "Stay signed in" → the token never expires; it only stops working when you
+// sign out, change your password, or an admin resets it (token_version).
+// Without it the session ends after 12 hours / when the tab closes.
 const JWT_EXPIRES_SESSION  = '12h';
 
 /* ── Passwords (scrypt, built into Node — no extra dependency) ── */
@@ -84,10 +84,9 @@ function decryptPhone(b64) {
 function signToken(userId, { remember = true } = {}) {
   const db = require('./db');
   const v  = db.tokenVersion(userId) || 0;
-  return jwt.sign({ sub: userId, v }, JWT_SECRET, {
-    expiresIn: remember ? JWT_EXPIRES_REMEMBER : JWT_EXPIRES_SESSION,
-    algorithm: 'HS256',
-  });
+  const opts = { algorithm: 'HS256' };
+  if (!remember) opts.expiresIn = JWT_EXPIRES_SESSION;
+  return jwt.sign({ sub: userId, v }, JWT_SECRET, opts);
 }
 
 function verifyToken(token) {

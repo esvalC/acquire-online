@@ -182,6 +182,12 @@ app.post('/api/login-password', loginLimit, async (req, res) => {
   res.json({ ok: true, token: signToken(user.id, { remember: remember !== false }), user: publicUser(user) });
 });
 
+// Swap a remembered token that still has an expiry date (older sign-ins) for a
+// permanent one, so "stay signed in" really means staying signed in.
+app.post('/api/me/token', requireAuth, (req, res) => {
+  res.json({ ok: true, token: signToken(req.userId, { remember: true }) });
+});
+
 // Set or change your password (signed in). Signs out every other device.
 app.post('/api/me/password', loginLimit, requireAuth, async (req, res) => {
   const { currentPassword, newPassword, remember } = req.body || {};

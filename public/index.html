@@ -1845,7 +1845,7 @@
           <input type="password" id="regPassword2" placeholder="Type it again" maxlength="128" autocomplete="new-password" />
           <label class="auth-remember"><input type="checkbox" id="regRemember" checked /> Stay signed in on this device</label>
           <button class="btn" type="submit" id="regBtn">Create Account</button>
-          <p class="auth-hint">No email or phone needed. Pick a password you don't use anywhere else — there's no automatic reset, so a password manager helps.</p>
+          <p class="auth-hint">No email or phone needed. With "Stay signed in" checked you stay signed in on this device until you sign out. Pick a password you don't use anywhere else — there's no automatic reset, so a password manager helps.</p>
         </form>
       </div>
 
@@ -3714,6 +3714,18 @@ function storeAuthToken(token, remember) {
     if (token) (remember ? localStorage : sessionStorage).setItem('acquire_auth_token', token);
   } catch {}
 }
+// Older "stay signed in" tokens expire after 30–90 days; trade them for a
+// permanent one the next time the site loads.
+async function upgradeRememberedToken() {
+  if (!authToken || !tokenIsRemembered()) return;
+  try {
+    const payload = JSON.parse(atob(authToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+    if (!payload.exp) return;
+    const res = await fetch(`${API_BASE}/me/token`, { method: 'POST', headers: { Authorization: 'Bearer ' + authToken } });
+    const d = await res.json();
+    if (d.token) { authToken = d.token; storeAuthToken(authToken, true); }
+  } catch {}
+}
 function tokenIsRemembered() { try { return !!localStorage.getItem('acquire_auth_token'); } catch { return false; } }
 let authToken    = readStoredToken();
 let currentUser  = null; // { id, username, elo, games_played, games_won }
@@ -3889,6 +3901,7 @@ async function loadProfile() {
     if (meRes.status === 401) { authToken = null; storeAuthToken(null); document.querySelector('.menu-btn')?.classList.remove('logged-in'); renderDrawerLoggedOut(); return; }
     const data = await meRes.json();
     const sessData = sessRes.ok ? await sessRes.json() : {};
+    upgradeRememberedToken();
     renderDrawerLoggedIn(data.user, data.history || [], sessData.sessions || []);
   } catch {
     renderDrawerLoggedOut();
