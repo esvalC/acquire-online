@@ -316,6 +316,10 @@ function decideSearchAction(game, me, opts = {}) {
 //   3s vs 1.5s Master   31% (160)  → Master uses 3s
 //   searching chain naming / tied survivor: 24% vs Master (160) → no gain, off
 //   stronger 'expert' heuristic for playouts: 24% vs Hard (240) → no gain, off
+//   paired futures + successive halving: 26% vs Master (160) → no gain, off
+//   rank-based scoring: 28% vs Master (160) → within noise, off
+//   paired + rank: 18% vs Master (160) → worse, off
+//   engine speedups (precomputed coords/neighbors): ~55% more playouts per second
 const SEARCH_LEVELS = {
   expert: { budgetMs: 150,  maxPlayouts: 40 },
   mcts:   { budgetMs: 400,  maxPlayouts: 200 },
@@ -325,7 +329,6 @@ const SEARCH_LEVELS = {
   'lab-full': { budgetMs: 3000, maxPlayouts: 16000, full: true },
   'lab-pair': { budgetMs: 3000, maxPlayouts: 16000, paired: true },            // paired futures + halving
   'lab-rank': { budgetMs: 3000, maxPlayouts: 16000, scoreMode: 'rank' },       // rank-based scoring
-  'lab-pair-rank': { budgetMs: 3000, maxPlayouts: 16000, paired: true, scoreMode: 'rank' },
 };
 
 module.exports = { decideSearchAction, applySearchAction: apply, SEARCH_LEVELS };
