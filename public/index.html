@@ -349,6 +349,14 @@
   .buy-card .buy-name { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .buy-card .buy-meta { font-size: 10px; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
   .buy-card .buy-counter { justify-content: space-between; margin-top: auto; }
+  .buy-choice { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin-top: auto; }
+  .buy-choice button { padding: 5px 0; border-radius: 5px; border: 1px solid var(--border-light); background: var(--bg-card);
+    color: var(--text); font-family: 'JetBrains Mono', monospace; font-size: 12px; cursor: pointer; touch-action: manipulation; }
+  .buy-choice button:hover:not(:disabled) { border-color: var(--card-color, var(--gold)); }
+  .buy-choice button.on { background: var(--card-color, var(--gold)); border-color: var(--card-color, var(--gold)); color: #111; font-weight: 700; }
+  .buy-choice button:disabled { opacity: .3; cursor: not-allowed; }
+  /* No double-tap-to-zoom on any game control (iPhone) */
+  button, .hand-tile, .board-cell, .chain-choice-btn { touch-action: manipulation; }
   .action-side { flex: 0 0 170px; display: flex; flex-direction: column; justify-content: space-between; gap: 6px; font-size: 11px; color: var(--text-muted); }
   .merger-col { flex: 1 1 0; min-width: 150px; display: flex; flex-direction: column; justify-content: center; }
   .tile-hand { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -3304,16 +3312,37 @@ function renderStockPanel() {
       <div class="buy-name" style="color:${chainColors[ch]}">${ch}</div>
       <div class="buy-meta">${meta}</div>
       <div class="buy-own">${myIdx >= 0 ? `you own ${own}` : ''}</div>
-      ${canPick ? `<div class="buy-counter">
-        <button onclick="adjustBuy('${ch}',-1,${info.price},${cash})" aria-label="One less ${ch}">−</button>
-        <span id="buy-${ch}">${picked}</span>
-        <button onclick="adjustBuy('${ch}',1,${info.price},${cash})" aria-label="One more ${ch}">+</button>
+      ${canPick ? `<div class="buy-choice" role="group" aria-label="How many ${ch} shares">
+        ${[0, 1, 2, 3].map(n => `<button type="button" class="${n === picked ? 'on' : ''}" ${buyAllowed(ch, n) ? '' : 'disabled'}
+          onclick="setBuy('${ch}', ${n})" aria-pressed="${n === picked}">${n}</button>`).join('')}
       </div>` : ''}
     </div>`;
   }).join('');
 }
 
 /* ── Buy helpers ───────────────────────────────── */
+/* Pick 0–3 shares of a chain. Choices that would go over 3 shares total,
+ * your cash, or the shares left in the bank are greyed out. */
+function buyAllowed(chain, n) {
+  const st = gameState; if (!st || myIdx < 0) return false;
+  const others = Object.entries(buySelections).filter(([c]) => c !== chain);
+  const count = others.reduce((s, [, v]) => s + v, 0) + n;
+  const cost  = others.reduce((s, [c, v]) => s + v * st.chains[c].price, 0) + n * st.chains[chain].price;
+  const left  = 25 - st.players.reduce((s, p) => s + (p.stocks[chain] || 0), 0);
+  return count <= 3 && cost <= st.players[myIdx].cash && n <= left;
+}
+function setBuy(chain, n) {
+  if (!buyAllowed(chain, n)) return;
+  buySelections[chain] = n;
+  if (!n) delete buySelections[chain];
+  renderStockPanel();                       // refresh which choices are still possible
+  const st = gameState;
+  const cost = Object.entries(buySelections).reduce((s, [c, v]) => s + v * st.chains[c].price, 0);
+  const tEl = document.getElementById('buyTotal'), cEl = document.getElementById('buyCount');
+  if (tEl) tEl.textContent = '$' + cost;
+  if (cEl) cEl.textContent = Object.values(buySelections).reduce((s, v) => s + v, 0);
+}
+
 function adjustBuy(chain, delta, price, cash) {
   const current = buySelections[chain] || 0;
   const newVal = current + delta;
