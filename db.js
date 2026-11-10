@@ -326,8 +326,10 @@ module.exports = {
   },
 
   // Returns { id, played_at, expired, snapshots }
+  getAdminIds() { return db.prepare('SELECT id FROM users WHERE is_admin = 1').all().map(r => r.id); },
+
   getSessionReplay(id) {
-    const row = db.prepare('SELECT id, played_at, replay_data, replay_gz FROM game_sessions WHERE id = ?').get(id);
+    const row = db.prepare('SELECT id, played_at, standings, replay_data, replay_gz FROM game_sessions WHERE id = ?').get(id);
     if (!row) return null;
     let snapshots = [];
     try {
@@ -335,7 +337,9 @@ module.exports = {
       else if (row.replay_data) snapshots = JSON.parse(row.replay_data);
     } catch {}
     const expired = !snapshots.length && row.played_at < replayCutoff();
-    return { id: row.id, played_at: row.played_at, expired, snapshots };
+    let standings = [];
+    try { standings = JSON.parse(row.standings || '[]'); } catch {}
+    return { id: row.id, played_at: row.played_at, expired, snapshots, standings };
   },
 
   getStats() {

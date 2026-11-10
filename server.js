@@ -420,7 +420,8 @@ app.post('/api/feedback', feedbackLimit, async (req, res) => {
 app.get('/api/recent-games', (req, res) => {
   const sessions = db.getRecentSessions(15).map(s => ({
     ...s,
-    standings: (() => { try { return JSON.parse(s.standings); } catch { return []; } })(),
+    standings: (() => { try { return JSON.parse(s.standings); } catch { return []; } })()
+      .map(p => ({ ...p, isAdmin: isAdminUser(p.userId) || undefined })),
   }));
   res.json({ sessions });
 });
@@ -429,7 +430,9 @@ app.get('/api/recent-games', (req, res) => {
 app.get('/api/sessions/:id/replay', (req, res) => {
   const row = db.getSessionReplay(Number(req.params.id));
   if (!row) return res.status(404).json({ error: 'Session not found' });
-  res.json({ sessionId: row.id, snapshots: row.snapshots, expired: row.expired, replayDays: db.REPLAY_DAYS });
+  // Works for older replays too: admin names come from the saved standings
+  const adminNames = (row.standings || []).filter(p => isAdminUser(p.userId)).map(p => p.name);
+  res.json({ sessionId: row.id, snapshots: row.snapshots, expired: row.expired, replayDays: db.REPLAY_DAYS, adminNames });
 });
 
 // Plan dashboard data (admin only)
@@ -586,11 +589,22 @@ function generateCode() {
 }
 
 /* ── State broadcasting ─────────────────────────────────────── */
+/* Admin tag: shown next to an admin's name in lobbies, games, chat, replays
+ * and recent games. Comes from the signed-in account (never the typed name). */
+let _adminIds = { at: 0, set: new Set() };
+function isAdminUser(userId) {
+  if (!userId) return false;
+  if (Date.now() - _adminIds.at > 60000) {
+    try { _adminIds = { at: Date.now(), set: new Set(db.getAdminIds()) }; } catch {}
+  }
+  return _adminIds.set.has(userId);
+}
+
 function broadcastState(code) {
   const room = rooms[code];
   if (!room || !room.game) return;
 
-  const playerList = room.players.map(p => ({ name: p.name, isBot: p.isBot || false, difficulty: p.isBot ? p.difficulty : undefined }));
+  const playerList = room.players.map(p => ({ name: p.name, isBot: p.isBot || false, difficulty: p.isBot ? p.difficulty : undefined, isAdmin: isAdminUser(p.userId) || undefined }));
 
   // Capture spectator snapshot for replay before recording game end
   const spectatorState = engine.getClientState(room.game, -1);
@@ -711,7 +725,7 @@ function broadcastLobby(code) {
   if (!room) return;
   const lobbyData = {
     code,
-    players: room.players.map(p => ({ name: p.name, ready: p.ready, isBot: p.isBot || false, difficulty: p.isBot ? p.difficulty : undefined })),
+    players: room.players.map(p => ({ name: p.name, ready: p.ready, isBot: p.isBot || false, difficulty: p.isBot ? p.difficulty : undefined, isAdmin: isAdminUser(p.userId) || undefined })),
     spectators: room.spectators.map(s => ({ name: s.name })),
     maxPlayers: room.config.maxPlayers,
     host: (roomHost(room) || {}).name || null,
@@ -1308,7 +1322,8 @@ io.on('connection', (socket) => {
     if (!room) return;
     const name = playerName || 'Anonymous';
     const msg = message.trim().slice(0, 300);
-    io.to(currentRoom).emit('chatMessage', { name, message: msg, time: Date.now() });
+    const sender = room.players.find(p => p.socketId === socket.id);
+    io.to(currentRoom).emit('chatMessage', { name, message: msg, time: Date.now(), isAdmin: isAdminUser(sender && sender.userId) || undefined });
   });
 
   /* ── Play again ───────────────────────────────── */

@@ -796,6 +796,9 @@
   .news-meta { font-size: 11px; color: rgba(255,255,255,0.55); display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
   .news-author { color: #fff; font-weight: 600; font-size: 12px; }
   .news-badge { font-size: 9px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px; padding: 1px 6px; border-radius: 99px; }
+  .admin-tag { display: inline-block; font-size: 9px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase;
+    padding: 1px 5px; margin-left: 4px; border-radius: 4px; vertical-align: middle; line-height: 1.4;
+    background: rgba(245,210,122,0.18); color: #f5d27a; border: 1px solid rgba(245,210,122,0.45); }
   .news-badge-admin { background: rgba(245,210,122,0.2); color: #f5d27a; border: 1px solid rgba(245,210,122,0.4); }
   .news-badge-guest { background: rgba(255,255,255,0.08); color: rgba(255,255,255,0.6); border: 1px solid rgba(255,255,255,0.15); }
   .news-body { font-size: 14px; color: #fff; line-height: 1.5; margin: 4px 0 6px; white-space: pre-wrap; word-wrap: break-word; }
@@ -2589,7 +2592,7 @@ socket.on('lobbyUpdate', (data) => {
   const list = document.getElementById('lobbyPlayers');
   list.innerHTML = data.players.map(p => `
     <li class="player-item">
-      <span>${escapeHtml(p.name)}${p.isBot ? ` <span class="player-badge player-badge-bot">Bot · ${LOBBY_DIFF_LABEL[p.difficulty] || 'Medium'}</span>` : ''}${p.name === data.host ? ' <span class="lobby-host">host</span>' : ''}</span>
+      <span>${escapeHtml(p.name)}${p.isAdmin ? ADMIN_TAG : ''}${p.isBot ? ` <span class="player-badge player-badge-bot">Bot · ${LOBBY_DIFF_LABEL[p.difficulty] || 'Medium'}</span>` : ''}${p.name === data.host ? ' <span class="lobby-host">host</span>' : ''}</span>
       <span style="display:flex;align-items:center;gap:6px;">
         <span class="ready-badge ${p.ready ? 'ready' : 'waiting'}">${p.ready ? 'Ready' : 'Waiting'}</span>
         ${p.isBot && isHost && !data.gameInProgress ? `<button class="lobby-remove-bot" title="Remove bot" onclick='removeLobbyBot(${JSON.stringify(p.name)})'>✕</button>` : ''}
@@ -3346,7 +3349,7 @@ function renderStockMatrix() {
     const mins = Math.floor(timer / 60), secs = String(timer % 60).padStart(2, '0');
     const shortName = escapeHtml(p.name.split(' ')[0]);
     html += `<div class="smatrix-player-col${cur ? ' current' : ''}">
-      <div class="smatrix-player-name">${cur ? '▸ ' : ''}${shortName}</div>
+      <div class="smatrix-player-name">${cur ? '▸ ' : ''}${shortName}${isAdminName(p.name) ? ADMIN_TAG : ''}</div>
       ${i === myIdx ? '<div class="smatrix-player-you">you</div>' : ''}
       <div class="smatrix-player-cash">$${(p.cash/1000).toFixed(1)}k</div>
       <div style="font-size:9px;color:var(--text-muted);font-family:'JetBrains Mono',monospace">${mins}:${secs}</div>
@@ -3459,14 +3462,16 @@ function _renderScoreboardFull() {
 /* ── Game Log ──────────────────────────────────── */
 function renderLog() {
   const el = document.getElementById('gameLog');
-  el.innerHTML = (gameState.log||[]).map(l=>`<div class="log-entry">${escapeHtml(l)}</div>`).join('');
+  const admins = adminNamesOf(gameState.playerList);
+  el.innerHTML = (gameState.log||[]).map(l=>`<div class="log-entry">${tagAdminsInText(escapeHtml(l), admins)}</div>`).join('');
   el.scrollTop = el.scrollHeight;
 }
 
 /* ── Header ────────────────────────────────────── */
 function renderHeader() {
   document.getElementById('turnLabel').textContent = `Turn ${gameState.turnNumber}`;
-  document.getElementById('currentPlayerLabel').textContent = gameState.players[gameState.currentPlayerIdx]?.name || '';
+  const curName = gameState.players[gameState.currentPlayerIdx]?.name || '';
+  document.getElementById('currentPlayerLabel').innerHTML = escapeHtml(curName) + (isAdminName(curName) ? ADMIN_TAG : '');
   const canEnd = gameState.canDeclareEnd;
   const myTurnToEnd = canEnd && !gameState.endDeclared && myIdx === gameState.currentPlayerIdx
     && (gameState.phase === 'placeTile' || gameState.phase === 'buyStock');
@@ -3531,7 +3536,7 @@ function renderGameOver() {
   document.getElementById('gameOverReason').textContent = gameState.endReason ? gameState.endReason.text : '';
   const places = ['🥇','🥈','🥉','4th','5th','6th'];
   document.getElementById('standingsDisplay').innerHTML = (gameState.standings||[]).map((s,i)=>
-    `<div class="standing-row"><span class="place">${places[i]||''}</span><span class="sname">${escapeHtml(s.name)}</span><span class="scash">$${s.cash.toLocaleString()}</span></div>`
+    `<div class="standing-row"><span class="place">${places[i]||''}</span><span class="sname">${escapeHtml(s.name)}${isAdminName(s.name) ? ADMIN_TAG : ''}</span><span class="scash">$${s.cash.toLocaleString()}</span></div>`
   ).join('');
 
   const title = document.getElementById('gameOverTitle');
@@ -3598,6 +3603,20 @@ function playAgain() {
   }
 }
 
+/* ── Admin tag ─────────────────────────────────── */
+const ADMIN_TAG = '<span class="admin-tag" title="Site admin">Admin</span>';
+function adminNamesOf(playerList) { return (playerList || []).filter(p => p.isAdmin).map(p => p.name); }
+function isAdminName(name) { return !!(gameState && adminNamesOf(gameState.playerList).includes(name)); }
+// Adds the tag after each admin's name in an already-escaped log line
+function tagAdminsInText(escaped, names) {
+  let out = escaped;
+  for (const n of names || []) {
+    const e = escapeHtml(n).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`(^|[^\\w])(${e})(?![\\w])`, 'g'), `$1$2${ADMIN_TAG}`);
+  }
+  return out;
+}
+
 /* ── Bot helpers ───────────────────────────────── */
 function isBot(playerIdx) {
   if (!gameState || !gameState.playerList) return false;
@@ -3628,13 +3647,13 @@ function sendChat() {
   input.value = '';
 }
 
-socket.on('chatMessage', ({ name, message }) => {
+socket.on('chatMessage', ({ name, message, isAdmin }) => {
   const chat = document.getElementById('chatMessages');
   const isSelf = name === myName;
   const wrap = document.createElement('div');
   wrap.className = `chat-wrap ${isSelf ? 'self' : 'other'}`;
   let h = '';
-  if (!isSelf) h += `<div class="chat-name">${escapeHtml(name)}</div>`;
+  if (!isSelf) h += `<div class="chat-name">${escapeHtml(name)}${isAdmin ? ADMIN_TAG : ''}</div>`;
   h += `<div class="${isSelf ? 'chat-bubble-self' : 'chat-bubble-other'}">${escapeHtml(message)}</div>`;
   wrap.innerHTML = h;
   chat.appendChild(wrap);
@@ -4322,7 +4341,7 @@ function renderRecentGames(sessions) {
         badge    = `<span class="player-badge player-badge-bot">Bot</span>`;
       } else if (p.userId) {
         namePart = `<span class="chip-name-member" data-name="${escH(p.name)}" onclick="openProfileModal(${Number(p.userId)}, this.dataset.name)">${escH(p.name)}</span>`;
-        badge    = `<span class="player-badge player-badge-member">Member</span>`;
+        badge    = p.isAdmin ? ADMIN_TAG : `<span class="player-badge player-badge-member">Member</span>`;
       } else {
         namePart = `<span>${escH(p.name)}</span>`;
         badge    = `<span class="player-badge player-badge-guest">Guest</span>`;
@@ -4404,6 +4423,7 @@ async function openReplay(sessionId, event) {
     const res = await fetch(`${apiBase}/sessions/${sessionId}/replay`);
     const data = await res.json();
     replaySnapshots = data.snapshots || [];
+    replayAdminNames = data.adminNames || [];
     // Restore step from URL hash if present (e.g. /replay/45#23)
     const hashStep = parseInt(location.hash.replace('#', ''), 10);
     replayIdx = (hashStep >= 1 && hashStep <= replaySnapshots.length) ? hashStep - 1 : 0;
@@ -4502,7 +4522,12 @@ function renderReplayBoard(snap) {
 }
 
 // "Bot · Hard" for bots (difficulty recorded since Nov 2026), "Player" for humans
+let replayAdminNames = [];
+function replayIsAdmin(snap, name) {
+  return replayAdminNames.includes(name) || adminNamesOf(snap.playerList).includes(name);
+}
 function replayPlayerBadge(snap, name) {
+  if (replayIsAdmin(snap, name)) return ADMIN_TAG;
   const meta = (snap.playerList || []).find(x => x.name === name);
   if (!meta) return '';
   const DIFF = { hard: 'Easy', expert: 'Medium', mcts: 'Hard', master: 'Master' };
@@ -4539,7 +4564,8 @@ function renderReplayStock(snap) {
 function renderReplayLog(snap) {
   const el = document.getElementById('replayLog');
   const log = snap.log || [];
-  el.innerHTML = [...log].reverse().map(l => `<div class="log-entry">${escapeHtml(l)}</div>`).join('');
+  const admins = [...new Set([...replayAdminNames, ...adminNamesOf(snap.playerList)])];
+  el.innerHTML = [...log].reverse().map(l => `<div class="log-entry">${tagAdminsInText(escapeHtml(l), admins)}</div>`).join('');
 }
 
 /* ── Feedback modal ──────────────────────────────────────────── */
