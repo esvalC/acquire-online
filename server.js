@@ -594,16 +594,18 @@ function scheduleBotTurn(code) {
   const delay = 1800 + Math.random() * 2200;
   const startedAt = Date.now();
   const gameAtStart = game;
-  const turnKey = botFingerprint(game);
 
   // Search bots (Hard / Master) think in a worker thread while the normal
   // "bot is thinking" delay runs, so they cost the player no extra waiting.
   const level = SEARCH_BUDGETS[botPlayer.difficulty];
+  // Declares the end if this bot is leading; its turn then continues normally
+  // and the game finishes when the turn does.
+  maybeBotDeclaresEnd(game, actingBotIdx);
   const wantsSearch = level
     && (['placeTile', 'buyStock', 'mergerDecision'].includes(game.phase)
-        || (level.full && ['chooseChain', 'chooseMergerSurvivor'].includes(game.phase)))
-    && !(maybeBotDeclaresEnd(game, actingBotIdx)); // ends the game if it's leading
+        || (level.full && ['chooseChain', 'chooseMergerSurvivor'].includes(game.phase)));
   if (game.phase === 'gameOver') { room.botScheduled = false; broadcastState(code); return; }
+  const turnKey = botFingerprint(game); // after any declaration above
 
   const thinking = wantsSearch
     ? runSearchInWorker(game, actingBotIdx, SEARCH_BUDGETS[botPlayer.difficulty])

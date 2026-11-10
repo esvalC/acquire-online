@@ -631,12 +631,10 @@ function maybeDeclareEnd(game, botIdx) {
   // Checked once per turn, at the start of it. (A tile placed this turn that
   // makes the game endable is picked up at the start of the next turn.)
   if (game.currentPlayerIdx !== botIdx || phase !== 'placeTile') return false;
-  if (!engine.canDeclareGameEnd(game)) return false;
-  // Exact check: end a copy of the game (pays every bonus, sells all stock)
-  // and only end the real one if this bot would win outright.
-  const sim = JSON.parse(JSON.stringify({ ...game, log: [] }));
-  if (engine.declareGameEnd(sim, botIdx).error) return false;
-  const st = sim.standings || [];
+  if (game.endDeclared || !engine.canDeclareGameEnd(game)) return false;
+  // Exact check: tally a copy of the game as if it ended now (pays every
+  // bonus, sells all stock) and only declare if this bot would win outright.
+  const st = engine.standingsIfEndedNow(game) || [];
   const me = game.players[botIdx].name;
   if (!(st[0] && st[0].name === me && (!st[1] || st[1].cash < st[0].cash))) return false;
   return !engine.declareGameEnd(game, botIdx).error;

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Acquire – The Classic Board Game, Digitized</title>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.4/socket.io.min.js"></script>
+<script src="/socket.io/socket.io.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
@@ -216,7 +216,8 @@
 
   .game-header {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 5px 12px; background: var(--bg-card);
+    padding: 5px 64px 5px 12px; /* right: room for the fixed ☰ menu button */
+    background: var(--bg-card);
     border: 1px solid var(--border); border-radius: var(--radius);
     flex-shrink: 0;
   }
@@ -987,6 +988,8 @@
   }
   @keyframes thinkDots { 0% { content: '.'; } 33% { content: '..'; } 66% { content: '...'; } }
 
+  .game-over-reason { font-size: 13px; color: var(--text-dim); margin: -4px 0 14px; text-align: center; line-height: 1.4; }
+
   /* ── Hamburger button ─────────────────────────────── */
   .menu-btn {
     position: fixed; top: 16px; right: 16px; z-index: 200;
@@ -1692,6 +1695,7 @@
 <div class="game-over-overlay" id="gameOverOverlay" style="display:none;">
   <div class="game-over-card">
     <h2 id="gameOverTitle">Game Over</h2>
+    <div id="gameOverReason" class="game-over-reason"></div>
     <div id="standingsDisplay"></div>
     <div id="gameOverButtons" style="display:flex; gap:8px; justify-content:center; margin-top:20px; flex-wrap:wrap;">
       <button class="btn" onclick="playAgain()">Play Again</button>
@@ -2732,13 +2736,29 @@ function showAnnotationBubble(anchorEl, mainText, subText) {
   bubble.style.visibility = '';
 
   const gap = 10;
-  const useAbove = (rect.top + rect.height / 2) > window.innerHeight / 2;
-  let bubbleTop = useAbove ? rect.top - bh - gap : rect.bottom + gap;
-  let bubbleLeft = anchorCX - bw / 2;
+  const preferAbove = (rect.top + rect.height / 2) > window.innerHeight / 2;
+  const clampX = x => Math.max(8, Math.min(x, window.innerWidth - bw - 8));
+  const clampY = y => Math.max(8, Math.min(y, window.innerHeight - bh - 8));
 
-  // Clamp horizontally within viewport
-  bubbleLeft = Math.max(8, Math.min(bubbleLeft, window.innerWidth - bw - 8));
-  bubbleTop  = Math.max(8, Math.min(bubbleTop, window.innerHeight - bh - 8));
+  // Other bubbles currently on screen — never cover one of them.
+  const taken = [...layer.querySelectorAll('.ann-bubble')]
+    .filter(b => b !== bubble && b.style.opacity !== '0')
+    .map(b => b.getBoundingClientRect());
+  const hits = (x, y) => taken.some(r => x < r.right + 4 && x + bw > r.left - 4 && y < r.bottom + 4 && y + bh > r.top - 4);
+
+  // Try: preferred side, other side, then slide sideways / further out.
+  const baseX = anchorCX - bw / 2;
+  const candidates = [];
+  for (const above of [preferAbove, !preferAbove]) {
+    const y0 = above ? rect.top - bh - gap : rect.bottom + gap;
+    for (const dx of [0, bw * 0.6, -bw * 0.6, bw * 1.2, -bw * 1.2]) {
+      for (const dy of [0, above ? -(bh + 6) : bh + 6]) candidates.push({ above, x: clampX(baseX + dx), y: clampY(y0 + dy) });
+    }
+  }
+  const spot = candidates.find(c => !hits(c.x, c.y)) || candidates[0];
+  const useAbove = spot.above;
+  let bubbleLeft = spot.x;
+  let bubbleTop  = spot.y;
 
   // Tail points toward anchor center
   const tailX = Math.max(16, Math.min(anchorCX - bubbleLeft, bw - 16));
@@ -2794,17 +2814,15 @@ function detectBotCommentary(savedPrevPhase, savedPrevIdx, savedPrevBoard, saved
   if (savedPrevPhase === 'buyStock' && savedPrevStocks) {
     const prev = savedPrevStocks[savedPrevIdx] || {};
     const cur  = newState.players[savedPrevIdx]?.stocks || {};
-    const parts = [];
-    let firstChain = null;
+    // One bubble per chain bought, pointing at this player's cell in that
+    // chain's row of the stock chart (cells follow player order after the
+    // chain-name column). Bubbles avoid each other automatically.
     for (const ch of Object.keys(cur)) {
       const gained = (cur[ch] || 0) - (prev[ch] || 0);
-      if (gained > 0) { parts.push(`${gained}× ${ch}`); if (!firstChain) firstChain = ch; }
-    }
-    if (parts.length > 0) {
-      const chainRow = firstChain
-        ? document.querySelector(`#stockMatrix .smatrix-row[data-chain="${firstChain}"]`)
-        : document.getElementById('stockMatrix');
-      showAnnotationBubble(chainRow, `${botName} buys`, parts.join(', '));
+      if (gained <= 0) continue;
+      const row = document.querySelector(`#stockMatrix .smatrix-row[data-chain="${ch}"]`);
+      const cell = row ? row.children[1 + savedPrevIdx] : null;
+      showAnnotationBubble(cell || row || document.getElementById('stockMatrix'), `${botName} buys ${gained}× ${ch}`, null);
     }
   }
 }
@@ -3359,13 +3377,24 @@ function renderHeader() {
   document.getElementById('turnLabel').textContent = `Turn ${gameState.turnNumber}`;
   document.getElementById('currentPlayerLabel').textContent = gameState.players[gameState.currentPlayerIdx]?.name || '';
   const canEnd = gameState.canDeclareEnd;
-  const myTurnToEnd = canEnd && myIdx === gameState.currentPlayerIdx
+  const myTurnToEnd = canEnd && !gameState.endDeclared && myIdx === gameState.currentPlayerIdx
     && (gameState.phase === 'placeTile' || gameState.phase === 'buyStock');
   document.getElementById('btnDeclareEnd').style.display = myTurnToEnd ? 'inline-block' : 'none';
   // Show a one-time toast the first time end conditions are met
   if (canEnd && !window._endConditionNotified) {
     window._endConditionNotified = true;
     showToast('End game conditions met — the player whose turn it is may end the game');
+  }
+  // Someone declared the end: the game finishes when their turn does.
+  if (gameState.endDeclared) {
+    const key = `${gameState.endDeclared.by}-${gameState.turnNumber}`;
+    if (window._endDeclaredToast !== key) {
+      window._endDeclaredToast = key;
+      const who = gameState.players[gameState.endDeclared.by]?.name || 'A player';
+      showToast(gameState.endDeclared.by === myIdx
+        ? 'Game ends after this turn — finish your move.'
+        : `${who} ended the game — it finishes after their turn.`);
+    }
   }
   document.getElementById('btnRestartSolo').style.display = isSoloGame ? 'inline-block' : 'none';
   // Spectator badge
@@ -3408,6 +3437,7 @@ function restartSoloGame() {
 function renderGameOver() {
   clearLastSolo(); // game is over — don't resume it on reload
   document.getElementById('gameOverOverlay').style.display = 'flex';
+  document.getElementById('gameOverReason').textContent = gameState.endReason ? gameState.endReason.text : '';
   const places = ['🥇','🥈','🥉','4th','5th','6th'];
   document.getElementById('standingsDisplay').innerHTML = (gameState.standings||[]).map((s,i)=>
     `<div class="standing-row"><span class="place">${places[i]||''}</span><span class="sname">${escapeHtml(s.name)}</span><span class="scash">$${s.cash.toLocaleString()}</span></div>`
@@ -3465,7 +3495,7 @@ function placeTile(tile) { hideTilePreview(); socket.emit('placeTile', { tile })
 function chooseChain(chain) { socket.emit('chooseChain', { chain }); }
 function chooseMergerSurvivor(chain) { socket.emit('chooseMergerSurvivor', { chain }); }
 function declareEnd() {
-  if (confirm('End the game now? Final bonuses will be paid and stocks sold.')) socket.emit('declareGameEnd');
+  if (confirm('End the game? You still finish this turn (place your tile, buy stock), then final bonuses are paid and all stock is sold.')) socket.emit('declareGameEnd');
 }
 function initiateConcedeVote() { socket.emit('initiateConcedeVote'); }
 function submitVote(vote) { socket.emit('submitConcedeVote', { vote }); }

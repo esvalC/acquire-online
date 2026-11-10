@@ -620,6 +620,12 @@ function replaceDeadTiles(state, playerIdx) {
 
 /* ── Advance to next player ────────────────────────────────── */
 function advanceTurn(state) {
+  // The player declared the end earlier this turn and has now finished it.
+  if (state.endDeclared) {
+    endGame(state, state.endDeclared.reason);
+    return;
+  }
+
   const now = Date.now();
   const elapsed = Math.floor((now - state.turnStartTime) / 1000);
   state.turnTimers[state.currentPlayerIdx] += elapsed;
@@ -652,14 +658,14 @@ function advanceTurn(state) {
   // If every player was skipped (bag empty, all tiles unplayable), force end the game
   if (skips >= state.players.length) {
     state.log.push('No player has a legal move — game ends automatically.');
-    endGame(state);
+    endGame(state, { type: 'noMoves', text: 'No player had a legal tile left to play.' });
     return;
   }
 
   // Auto-end when all 7 chains are active and all are safe
   if (checkGameEnd(state)) {
     state.log.push('End game conditions met — game ends automatically.');
-    endGame(state);
+    endGame(state, { type: 'allSafe', text: 'All seven chains were on the board and safe (11+ tiles).' });
   }
 }
 
@@ -682,8 +688,18 @@ function canDeclareGameEnd(state) {
       || active.every(ch => state.chains[ch].tiles.length >= SAFE_SIZE);
 }
 
-function endGame(state) {
+/* Why the game can be (or was) ended — shown on the final screen. */
+function describeEndCondition(state, who) {
+  const big = HOTEL_CHAINS.filter(ch => state.chains[ch].active && state.chains[ch].tiles.length >= GAME_END_SIZE)
+    .sort((a, b) => state.chains[b].tiles.length - state.chains[a].tiles.length)[0];
+  const by = who ? `${who} ended the game: ` : '';
+  if (big) return { type: 'chain41', chain: big, text: `${by}${big} reached ${state.chains[big].tiles.length} tiles (41+ ends the game).` };
+  return { type: 'allSafe', text: `${by}every chain on the board was safe (11+ tiles).` };
+}
+
+function endGame(state, reason) {
   state.phase = 'gameOver';
+  state.endReason = reason || state.endReason || null;
 
   for (const chain of HOTEL_CHAINS) {
     if (state.chains[chain].active) {
@@ -743,7 +759,7 @@ function checkConcedeResult(state) {
   if (yesVotes >= needed) {
     state.concedeActive = false;
     state.log.push('Vote passed! Ending game by concession.');
-    endGame(state);
+    endGame(state, { type: 'vote', text: 'The players voted to end the game early.' });
     return { ok: true, result: 'passed', gameOver: true };
   }
 
@@ -762,10 +778,21 @@ function declareGameEnd(state, playerIdx) {
   if (state.currentPlayerIdx !== playerIdx) return { error: 'Not your turn' };
   if (state.phase !== 'placeTile' && state.phase !== 'buyStock') return { error: 'Finish the current action first' };
   if (!canDeclareGameEnd(state)) return { error: 'End game conditions not met' };
+  if (state.endDeclared) return { error: 'The end has already been declared' };
 
-  state.log.push(`${state.players[playerIdx].name} declares the game over!`);
-  endGame(state);
-  return { ok: true, gameOver: true };
+  // Official rule: after announcing the end, the player still completes their
+  // turn (place a tile, buy stock). The game ends when that turn finishes.
+  const name = state.players[playerIdx].name;
+  state.endDeclared = { by: playerIdx, reason: describeEndCondition(state, name) };
+  state.log.push(`${name} declares the game over — it ends after this turn.`);
+  return { ok: true, endsAfterTurn: true };
+}
+
+/* Final standings if the game ended right now (no state change). */
+function standingsIfEndedNow(state) {
+  const sim = JSON.parse(JSON.stringify({ ...state, log: [] }));
+  endGame(sim, null);
+  return sim.standings;
 }
 
 /* ── Build client-safe state (hides other players' tiles) ──── */
@@ -808,7 +835,9 @@ function getClientState(state, forPlayerIdx) {
     concedeActive: state.concedeActive,
     concedeVotes: state.concedeActive ? state.concedeVotes : null,
     concedeInitiator: state.concedeInitiator,
-    canDeclareEnd: canDeclareGameEnd(state),
+    canDeclareEnd: canDeclareGameEnd(state) && !state.endDeclared,
+    endDeclared: state.endDeclared ? { by: state.endDeclared.by } : null,
+    endReason: state.endReason || null,
     playableTiles: forPlayerIdx === state.currentPlayerIdx && state.phase === 'placeTile'
       ? getPlayableTiles(state).playable : undefined,
     myIdx: forPlayerIdx,
@@ -816,6 +845,7 @@ function getClientState(state, forPlayerIdx) {
 }
 
 module.exports = {
+  standingsIfEndedNow,
   tileToCoord, coordToTile,
   createGame,
   placeTile,
