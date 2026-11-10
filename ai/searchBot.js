@@ -61,6 +61,29 @@ function playout(sim, policy = 'hard') {
   return sim.phase === 'gameOver';
 }
 
+/* Seeded RNG so every candidate faces exactly the same simulated future
+ * (the heuristic's few random choices included). */
+function mulberry32(a) {
+  return function () {
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  };
+}
+
+/* Rank-based score: 1 for first, 0 for last, plus a small margin term. */
+function rankScore(sim, me) {
+  const myName = sim.players[me].name;
+  const st = sim.standings || [];
+  const idx = st.findIndex(s => s.name === myName);
+  if (idx < 0) return 0;
+  const n = Math.max(2, st.length);
+  const bestOther = Math.max(...st.filter(s => s.name !== myName).map(s => s.cash));
+  const margin = Math.tanh((st[idx].cash - bestOther) / 15000);
+  return 0.5 * (idx === 0 ? 1 : 0) + 0.3 * (n - 1 - idx) / (n - 1) + 0.2 * (margin + 1) / 2;
+}
+
 /* Score in [0,1]: mostly "did I win", plus a margin term so the search
  * prefers bigger wins / smaller losses when win rates are close. */
 function score(sim, me) {
@@ -141,9 +164,57 @@ function apply(game, me, a) {
   return { error: 'unknown action' };
 }
 
+/* ── Paired search: every surviving candidate is played out in the SAME
+ * simulated future (same re-deal, same tile draws, same random choices).
+ * Comparing candidates on identical futures cancels most of the luck, so
+ * far fewer playouts are needed to tell a good move from a bad one.
+ * Successive halving drops the weaker half at 4, 8, 16, ... futures. ── */
+function pairedSearch(game, me, candidates, budgetMs, maxPlayouts, policy, scoreFn) {
+  const deadline = Date.now() + budgetMs;
+  const totals = candidates.map(() => 0);
+  let alive = candidates.map((_, i) => i);
+  let worlds = 0, playouts = 0, nextCut = 4;
+  const realRandom = Math.random;
+  try {
+    while (Date.now() < deadline && playouts < maxPlayouts) {
+      const world = clone(game);
+      determinize(world, me);
+      const seed = (realRandom() * 2 ** 31) | 0;
+      const results = [];
+      for (const i of alive) {
+        const sim = clone(world);
+        Math.random = mulberry32(seed);
+        const r = apply(sim, me, candidates[i]);
+        let v;
+        if (r && r.error) v = -1000;            // illegal → never pick
+        else v = playout(sim, policy) ? scoreFn(sim, me) : 0.25;
+        Math.random = realRandom;
+        results.push([i, v]);
+        playouts++;
+      }
+      // Only count complete worlds so every survivor has identical samples
+      if (results.length < alive.length) break;
+      for (const [i, v] of results) totals[i] += v;
+      worlds++;
+      if (worlds >= nextCut && alive.length > 2) {
+        alive.sort((a, b) => totals[b] - totals[a]);
+        alive = alive.slice(0, Math.ceil(alive.length / 2));
+        nextCut *= 2;
+      }
+    }
+  } finally {
+    Math.random = realRandom;
+  }
+  let pick = alive[0];
+  for (const i of alive) if (totals[i] > totals[pick]) pick = i;
+  return candidates[pick];
+}
+
 /* ── Search: UCB1 over candidates, bounded by time ─────────────── */
-function search(game, me, candidates, budgetMs, maxPlayouts, policy) {
+function search(game, me, candidates, budgetMs, maxPlayouts, policy, opts = {}) {
   if (candidates.length <= 1) return candidates[0] || null;
+  const scoreFn = opts.scoreMode === 'rank' ? rankScore : score;
+  if (opts.paired) return pairedSearch(game, me, candidates, budgetMs, maxPlayouts, policy, scoreFn);
   const stats = candidates.map(() => ({ n: 0, total: 0 }));
   const deadline = Date.now() + budgetMs;
   let total = 0;
@@ -156,7 +227,7 @@ function search(game, me, candidates, budgetMs, maxPlayouts, policy) {
     if (r && r.error) { stats[i].n += 1000; stats[i].total -= 1000; return; } // illegal → never pick
     const ok = playout(sim, policy);
     stats[i].n++; total++;
-    stats[i].total += ok ? score(sim, me) : 0.25;
+    stats[i].total += ok ? scoreFn(sim, me) : 0.25;
   };
   for (let round = 0; round < 2; round++)
     for (let i = 0; i < candidates.length && Date.now() < deadline; i++) runOne(i);
@@ -191,7 +262,7 @@ function decideSearchAction(game, me, opts = {}) {
   if (game.phase === 'placeTile' && game.currentPlayerIdx === me) {
     const c = tileCandidates(game);
     if (c.length === 0) return null; // let heuristic pass
-    return search(game, me, c, budgetMs, maxPlayouts, policy);
+    return search(game, me, c, budgetMs, maxPlayouts, policy, opts);
   }
 
   if (game.phase === 'buyStock' && game.currentPlayerIdx === me) {
@@ -202,13 +273,13 @@ function decideSearchAction(game, me, opts = {}) {
       const traits = { mergerSeeking: 0, riskAppetite: 0, chainLoyalty: 0 };
       heuristic = botAI().decideBotBuyStock(h, me, personality, 'hard', traits, 1.0) || {};
     } catch {}
-    return search(game, me, buyCandidates(game, me, heuristic), budgetMs, maxPlayouts, policy);
+    return search(game, me, buyCandidates(game, me, heuristic), budgetMs, maxPlayouts, policy, opts);
   }
 
   if (game.phase === 'mergerDecision' && game.pendingMerger && game.pendingMerger.decidingPlayer === me) {
     const held = game.players[me].stocks[game.pendingMerger.defunctChains[game.pendingMerger.currentDefunctIdx]] || 0;
     if (held === 0) return { type: 'mergerDecision', sell: 0, trade: 0 };
-    return search(game, me, mergerCandidates(game, me, null), budgetMs, maxPlayouts, policy);
+    return search(game, me, mergerCandidates(game, me, null), budgetMs, maxPlayouts, policy, opts);
   }
 
   // Full search (Master): also search which chain to found and which chain
@@ -222,11 +293,11 @@ function decideSearchAction(game, me, opts = {}) {
       if (seenTier.has(tier)) continue;
       seenTier.add(tier); c.push({ type: 'chooseChain', chain: ch });
     }
-    return search(game, me, c, budgetMs, maxPlayouts, policy);
+    return search(game, me, c, budgetMs, maxPlayouts, policy, opts);
   }
   if (opts.full && game.phase === 'chooseMergerSurvivor' && game.currentPlayerIdx === me) {
     const c = (game.pendingMerger.tiedChains || []).map(ch => ({ type: 'chooseMergerSurvivor', chain: ch }));
-    return search(game, me, c, budgetMs, maxPlayouts, policy);
+    return search(game, me, c, budgetMs, maxPlayouts, policy, opts);
   }
 
   return null;
@@ -252,6 +323,9 @@ const SEARCH_LEVELS = {
   // Experiments for ai/benchmark.js only (not selectable in the UI):
   'lab-xp':   { budgetMs: 400,  maxPlayouts: 200, policy: 'expert' },
   'lab-full': { budgetMs: 3000, maxPlayouts: 16000, full: true },
+  'lab-pair': { budgetMs: 3000, maxPlayouts: 16000, paired: true },            // paired futures + halving
+  'lab-rank': { budgetMs: 3000, maxPlayouts: 16000, scoreMode: 'rank' },       // rank-based scoring
+  'lab-pair-rank': { budgetMs: 3000, maxPlayouts: 16000, paired: true, scoreMode: 'rank' },
 };
 
 module.exports = { decideSearchAction, applySearchAction: apply, SEARCH_LEVELS };
