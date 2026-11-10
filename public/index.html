@@ -4166,7 +4166,7 @@ function renderRecentGames(sessions) {
         namePart = `<span style="color:var(--text-muted)">${escH(p.name)}</span>`;
         badge    = `<span class="player-badge player-badge-bot">Bot</span>`;
       } else if (p.userId) {
-        namePart = `<span class="chip-name-member" onclick="openProfileModal(${p.userId},'${escH(p.name)}')">${escH(p.name)}</span>`;
+        namePart = `<span class="chip-name-member" data-name="${escH(p.name)}" onclick="openProfileModal(${Number(p.userId)}, this.dataset.name)">${escH(p.name)}</span>`;
         badge    = `<span class="player-badge player-badge-member">Member</span>`;
       } else {
         namePart = `<span>${escH(p.name)}</span>`;
@@ -4196,7 +4196,7 @@ function fmtDuration(secs) {
   return `${Math.floor(m/60)}h ${m%60}m`;
 }
 
-function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 /* ── Profile mini-modal (click member name in Recent Games) ──── */
 function openProfileModal(userId, username) {

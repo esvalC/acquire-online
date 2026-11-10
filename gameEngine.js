@@ -465,7 +465,8 @@ function mergerDecision(state, playerIdx, decisions) {
   const player = state.players[playerIdx];
   const held = player.stocks[defunctChain] || 0;
 
-  const { sell = 0, trade = 0 } = decisions;
+  const { sell = 0, trade = 0 } = decisions || {};
+  if (!Number.isInteger(sell) || !Number.isInteger(trade)) return { error: 'Share counts must be whole numbers' };
   const keep = held - sell - trade;
 
   if (sell < 0 || trade < 0 || keep < 0) return { error: 'Invalid amounts' };
@@ -551,11 +552,27 @@ function buyStock(state, playerIdx, purchases) {
 
   let totalBought = 0;
   const player = state.players[playerIdx];
+  if (!purchases || typeof purchases !== 'object') purchases = {};
+
+  // Validate the WHOLE order first (whole shares only), then apply it — a
+  // rejected order must not leave a half-completed purchase behind.
+  let totalCost = 0;
+  for (const [chain, count] of Object.entries(purchases)) {
+    if (count === 0) continue;
+    if (!Number.isInteger(count) || count < 0) return { error: 'Share counts must be whole numbers' };
+    if (!HOTEL_CHAINS.includes(chain)) return { error: `Invalid chain: ${chain}` };
+    if (!state.chains[chain].active) return { error: `${chain} is not active` };
+    totalBought += count;
+    if (totalBought > 3) return { error: 'Cannot buy more than 3 shares per turn' };
+    const issued = state.players.reduce((s, p) => s + (p.stocks[chain] || 0), 0);
+    if (issued + count > MAX_STOCK) return { error: `Not enough ${chain} shares available` };
+    totalCost += stockPrice(chain, state.chains[chain].tiles.length) * count;
+  }
+  if (totalCost > player.cash) return { error: 'Not enough cash' };
+  totalBought = 0;
 
   for (const [chain, count] of Object.entries(purchases)) {
     if (count <= 0) continue;
-    if (!HOTEL_CHAINS.includes(chain)) return { error: `Invalid chain: ${chain}` };
-    if (!state.chains[chain].active) return { error: `${chain} is not active` };
 
     totalBought += count;
     if (totalBought > 3) return { error: 'Cannot buy more than 3 shares per turn' };

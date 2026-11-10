@@ -19,19 +19,85 @@ const db         = require('./db');
 const { signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone } = require('./auth');
 
 const app    = express();
-app.set('trust proxy', 1); // nginx sits in front — trust X-Forwarded-For for rate limiting
+app.set('trust proxy', 1); // nginx sits in front — req.ip = the address nginx saw
+app.disable('x-powered-by');
+
+// Refuse to run in production with the built-in development secrets.
+if (process.env.TWILIO_ACCOUNT_SID) {
+  for (const k of ['JWT_SECRET', 'PHONE_HASH_SALT', 'PHONE_ENCRYPT_KEY']) {
+    if (!process.env[k] || process.env[k].length < 16 || /^0+$/.test(process.env[k])) {
+      console.error(`FATAL: ${k} is missing or weak in production — refusing to start`);
+      process.exit(1);
+    }
+  }
+}
+
+/* ── Real visitor IP ───────────────────────────────────────────
+ * Traffic arrives  visitor → Cloudflare → nginx → node, so req.ip is a
+ * Cloudflare edge address shared by many visitors. Use Cloudflare's
+ * CF-Connecting-IP header — but ONLY when the request really came from a
+ * Cloudflare address (otherwise anyone hitting the server directly could
+ * fake the header and dodge rate limits). Ranges: cloudflare.com/ips */
+const net = require('net');
+const CLOUDFLARE = new net.BlockList();
+for (const c of ['173.245.48.0/20','103.21.244.0/22','103.22.200.0/22','103.31.4.0/22','141.101.64.0/18',
+                 '108.162.192.0/18','190.93.240.0/20','188.114.96.0/20','197.234.240.0/22','198.41.128.0/17',
+                 '162.158.0.0/15','104.16.0.0/13','104.24.0.0/14','172.64.0.0/13','131.0.72.0/22']) {
+  const [ip, bits] = c.split('/'); CLOUDFLARE.addSubnet(ip, +bits, 'ipv4');
+}
+for (const c of ['2400:cb00::/32','2606:4700::/32','2803:f800::/32','2405:b500::/32','2405:8100::/32','2a06:98c0::/29','2c0f:f248::/32']) {
+  const [ip, bits] = c.split('/'); CLOUDFLARE.addSubnet(ip, +bits, 'ipv6');
+}
+function clientIp(req) {
+  const peer = (req.ip || '').replace(/^::ffff:/, '');
+  const cf = req.headers['cf-connecting-ip'];
+  const fam = net.isIP(peer) === 6 ? 'ipv6' : 'ipv4';
+  if (cf && net.isIP(cf) && net.isIP(peer) && CLOUDFLARE.check(peer, fam)) return cf;
+  return peer;
+}
+const { ipKeyGenerator } = require('express-rate-limit');
+const byVisitor = req => ipKeyGenerator(clientIp(req));
+
+// Basic security headers (no inline-script CSP: the single-page app uses inline handlers)
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'same-origin');
+  res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+  next();
+});
 const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: ['https://playonlineacquire.com', 'http://localhost:3000'] } });
 
-app.use(express.json());
+app.use(express.json({ limit: '50kb' }));
 app.use(express.static('public'));
 
 /* ── Rate limiters ───────────────────────────────────────────── */
 const smslimit = rateLimit({
-  windowMs: 10 * 60 * 1000, max: 5,
+  windowMs: 10 * 60 * 1000, max: 5, keyGenerator: byVisitor,
   message: { error: 'Too many SMS requests. Wait 10 minutes.' },
   standardHeaders: true, legacyHeaders: false,
 });
+// Code checks: Twilio already allows only 5 tries per code; this stops spraying many codes
+const verifyLimit = rateLimit({
+  windowMs: 10 * 60 * 1000, max: 20, keyGenerator: byVisitor,
+  message: { error: 'Too many attempts. Wait 10 minutes.' },
+  standardHeaders: true, legacyHeaders: false,
+});
+
+/* Texting protection ("SMS pumping"): only US/Canada numbers, and a site-wide
+ * cap on texts per hour so a script can't run up the Twilio bill. */
+const SMS_HOURLY_CAP = Number(process.env.SMS_HOURLY_CAP || 30);
+let smsWindow = { start: Date.now(), count: 0 };
+function smsAllowed(e164) {
+  if (!process.env.ALLOW_INTL_SMS && !/^\+1[2-9]\d{2}[2-9]\d{6}$/.test(e164)) {
+    return 'Only US and Canadian phone numbers are supported.';
+  }
+  if (Date.now() - smsWindow.start > 3600 * 1000) smsWindow = { start: Date.now(), count: 0 };
+  if (smsWindow.count >= SMS_HOURLY_CAP) return 'Sign-ups are busy right now — please try again in an hour.';
+  smsWindow.count++;
+  return null;
+}
 
 /* ── Auth / Profile routes ───────────────────────────────────── */
 
@@ -52,14 +118,16 @@ app.get('/api/username-available', (req, res) => {
 app.post('/api/send-otp', smslimit, async (req, res) => {
   const { phone } = req.body;
   if (!phone) return res.status(400).json({ error: 'Phone number required' });
-  const e164 = normalisePhone(phone);
+  const e164 = normalisePhone(String(phone));
+  const blocked = smsAllowed(e164);
+  if (blocked) return res.status(400).json({ error: blocked });
   const result = await sendOtp(e164);
   if (result.error) return res.status(500).json(result);
   res.json({ ok: true, dev: result.dev || false });
 });
 
 // Register: verify OTP + create account → return JWT
-app.post('/api/register', async (req, res) => {
+app.post('/api/register', verifyLimit, async (req, res) => {
   const { username, phone, code } = req.body;
   if (!username || !phone || !code) return res.status(400).json({ error: 'Missing fields' });
 
@@ -90,19 +158,22 @@ app.post('/api/login-by-phone', smslimit, async (req, res) => {
   const { phone } = req.body;
   if (!phone) return res.status(400).json({ error: 'Phone number required' });
 
-  const e164 = normalisePhone(phone);
+  const e164 = normalisePhone(String(phone));
   const { hashPhone } = require('./db');
   const user = db.findByPhoneHash(hashPhone(e164));
   if (!user) return res.status(404).json({ error: 'No account found for that phone number' });
 
+  const blocked = smsAllowed(e164);
+  if (blocked) return res.status(400).json({ error: blocked });
   const result = await sendOtp(e164);
   if (result.error) return res.status(500).json(result);
-  // Return the masked username so the UI can say "Logging in as ___"
-  res.json({ ok: true, username: user.username, dev: result.dev || false });
+  // Don't reveal the username until the code is verified (privacy: anyone
+  // could otherwise look up who owns a phone number).
+  res.json({ ok: true, dev: result.dev || false });
 });
 
 // Verify OTP sent via login-by-phone → return JWT
-app.post('/api/login-by-phone/verify', async (req, res) => {
+app.post('/api/login-by-phone/verify', verifyLimit, async (req, res) => {
   const { phone, code } = req.body;
   if (!phone || !code) return res.status(400).json({ error: 'Missing fields' });
 
@@ -129,6 +200,8 @@ app.post('/api/login-by-username', smslimit, async (req, res) => {
 
   try {
     const e164   = decryptPhone(user.phone_encrypted);
+    const blocked = smsAllowed(e164);
+    if (blocked) return res.status(400).json({ error: blocked });
     const result = await sendOtp(e164);
     if (result.error) return res.status(500).json(result);
     res.json({ ok: true, dev: result.dev || false });
@@ -140,7 +213,7 @@ app.post('/api/login-by-username', smslimit, async (req, res) => {
 
 // Login step 2: verify OTP → return JWT
 // Accepts { username, code } (username-based login)
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', verifyLimit, async (req, res) => {
   const { username, code } = req.body;
   if (!username || !code) return res.status(400).json({ error: 'Missing fields' });
 
@@ -205,7 +278,7 @@ app.post('/api/admin/promote', (req, res) => {
 });
 
 // Submit user feedback (public — no auth required)
-const feedbackLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, message: { error: 'Too many submissions. Try again later.' } });
+const feedbackLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 10, keyGenerator: byVisitor, message: { error: 'Too many submissions. Try again later.' } });
 app.post('/api/feedback', feedbackLimit, async (req, res) => {
   const { type, message, name, page } = req.body;
   if (!message || message.trim().length < 5) return res.status(400).json({ error: 'Message too short' });
@@ -327,8 +400,8 @@ app.get('/api/stats/total-games', (_req, res) => {
 
 /* ── News banner ───────────────────────────────────────────────
  * Admins post updates; anyone (guest or logged in) can reply. */
-const newsReplyLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, message: { error: 'Too many replies — try again later.' } });
-const newsPostLimit  = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, message: { error: 'Too many posts — try again later.' } });
+const newsReplyLimit = rateLimit({ windowMs: 60 * 60 * 1000, max: 20, keyGenerator: byVisitor, message: { error: 'Too many replies — try again later.' } });
+const newsPostLimit  = rateLimit({ windowMs: 60 * 60 * 1000, max: 30, keyGenerator: byVisitor, message: { error: 'Too many posts — try again later.' } });
 const cleanText = (v, max) => String(v == null ? '' : v).replace(/\r\n/g, '\n').trim().slice(0, max);
 
 app.get('/api/news', (_req, res) => {
@@ -375,6 +448,14 @@ for (const route of clientRoutes) {
 // Legacy: bare 4-digit code still works
 app.get('/:code([0-9]{4})', (req, res) => {
   res.redirect(`/multiplayer/${req.params.code}`);
+});
+
+// Last-resort error handler: log it, never send stack traces to visitors.
+app.use((err, req, res, _next) => {
+  if (err && err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid request' });
+  if (err && err.type === 'entity.too.large')   return res.status(413).json({ error: 'Request too large' });
+  console.error('[http]', req.method, req.path, err && (err.stack || err.message));
+  res.status(500).json({ error: 'Something went wrong' });
 });
 
 /* ── Room store ────────────────────────────────────────────── */
@@ -806,9 +887,41 @@ function playBotMove(code, game, botPlayer, searchAction) {
 }
 
 /* ── Socket events ─────────────────────────────────────────── */
+/* Player-chosen display names: 1–20 chars, no HTML/quote/control characters. */
+function cleanName(raw) {
+  const s = String(raw == null ? '' : raw).normalize('NFC')
+    .replace(/[\u0000-\u001f\u007f<>"'`\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
+  return s || 'Player';
+}
+function uniqueName(room, name) {
+  const taken = new Set(room.players.map(p => p.name.toLowerCase()).concat(room.spectators.map(s => s.name.toLowerCase())));
+  if (!taken.has(name.toLowerCase())) return name;
+  for (let i = 2; i < 100; i++) { const n = `${name.slice(0, 17)} ${i}`; if (!taken.has(n.toLowerCase())) return n; }
+  return name;
+}
+
 io.on('connection', (socket) => {
   let currentRoom = null;
   let playerName = null;
+
+  // Every handler is wrapped: a malformed or missing payload used to throw an
+  // uncaught exception and crash the whole server (all games lost). Now the
+  // payload defaults to {} and any error is logged, not fatal.
+  const rawOn = socket.on.bind(socket);
+  socket.on = (event, handler) => rawOn(event, (...args) => {
+    if (args.length === 0 || args[0] == null || typeof args[0] !== 'object') {
+      if (typeof args[0] === 'function') args.unshift({}); else args[0] = {};
+    }
+    const cbIdx = args.findIndex(a => typeof a === 'function');
+    if (cbIdx === -1) args.push(() => {});          // handlers may call cb()
+    try {
+      const r = handler(...args);
+      if (r && typeof r.catch === 'function') r.catch(e => console.error(`[socket ${event}]`, e.stack || e.message));
+    } catch (e) {
+      console.error(`[socket ${event}]`, e.stack || e.message);
+    }
+  });
+  let chatTimes = [];
 
   // Game actions from a browser the server can't match to a live game used to
   // be ignored silently — the board then looked frozen (the "turn 73" reports).
@@ -822,6 +935,7 @@ io.on('connection', (socket) => {
 
   /* ── Multiplayer: create room ── */
   socket.on('createRoom', ({ name, maxPlayers, quickstart, authToken }, cb) => {
+    name = cleanName(name);
     const code = generateCode();
     currentRoom = code;
     playerName = name;
@@ -844,6 +958,9 @@ io.on('connection', (socket) => {
 
   /* ── Solo: create & start a solo game ── */
   socket.on('createSoloGame', ({ name, botCount, quickstart, botConfigs, mode, authToken }, cb) => {
+    name = cleanName(name);
+    if (BOT_ROSTER.some(b => b.name.toLowerCase() === name.toLowerCase())) name = name.slice(0, 17) + ' (you)';
+    if (!Array.isArray(botConfigs)) botConfigs = [];
     const code = generateCode();
     currentRoom = code;
     playerName = name;
@@ -901,6 +1018,7 @@ io.on('connection', (socket) => {
   socket.on('joinRoom', ({ name, code, spectate, authToken }, cb) => {
     const room = rooms[code];
     if (!room) return cb({ error: 'Room not found' });
+    name = uniqueName(room, cleanName(name));
 
     currentRoom = code;
     playerName = name;
@@ -926,8 +1044,10 @@ io.on('connection', (socket) => {
     const room = rooms[code];
     if (!room) return cb({ error: 'Room not found' });
 
-    const p = room.players.find(p => p.token === token && p.name === name);
+    // The seat token is a random UUID only this player's browser has — enough on its own.
+    const p = typeof token === 'string' && token ? room.players.find(p => p.token === token) : null;
     if (!p) return cb({ error: 'Session not found' });
+    name = p.name;
 
     p.socketId = socket.id;
     p.disconnected = false;
@@ -1061,7 +1181,11 @@ io.on('connection', (socket) => {
   /* ── Chat ───────────────────────────────────────── */
 
   socket.on('chatMessage', ({ message }) => {
-    if (!currentRoom || !message || !message.trim()) return;
+    if (!currentRoom || typeof message !== 'string' || !message.trim()) return;
+    const now = Date.now();
+    chatTimes = chatTimes.filter(t => now - t < 10000);
+    if (chatTimes.length >= 8) return;               // max 8 messages per 10 seconds
+    chatTimes.push(now);
     const room = rooms[currentRoom];
     if (!room) return;
     const name = playerName || 'Anonymous';
@@ -1153,7 +1277,8 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, '0.0.0.0', () => {
+// HOST=127.0.0.1 in production (only nginx needs to reach it); 0.0.0.0 locally for LAN play
+server.listen(PORT, process.env.HOST || '0.0.0.0', () => {
   console.log(`Acquire server running on http://localhost:${PORT}`);
   restoreRooms();
   // Replays are kept REPLAY_DAYS days, then deleted (checked at startup and every 6h)
