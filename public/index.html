@@ -1200,6 +1200,24 @@
   }
   .chip-rank { font-size: 10px; color: var(--text-muted); }
   .chip-rank-1 { color: var(--gold); font-weight: 700; }
+  .name-link { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+  .name-link:hover { color: var(--gold); }
+  .pc-overlay { z-index: 650; }                       /* above the replay viewer */
+  .pc-overlay.slid .pc-drawer { transform: translateX(0); }
+  .pc-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+  .pc-avatar { width: 46px; height: 46px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-family: 'Playfair Display', serif; font-size: 22px; font-weight: 700; color: #1a1a1a; background: linear-gradient(135deg, #f5d27a, #d97706); }
+  .pc-name { font-family: 'Playfair Display', serif; font-size: 20px; }
+  .pc-sub { font-size: 11px; color: var(--text-muted); }
+  .pc-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+  .pc-stat { background: var(--bg-dark); border: 1px solid var(--border); border-radius: 8px; padding: 8px; text-align: center; }
+  .pc-stat b { display: block; font-size: 16px; color: var(--gold); font-family: 'JetBrains Mono', monospace; }
+  .pc-stat span { font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+  .pc-section { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin: 6px 0 6px; }
+  .pc-game { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .pc-game:last-child { border-bottom: none; }
+  .pc-game .pc-vs { color: var(--text-muted); font-size: 11px; }
+  .pc-replay { background: none; border: 1px solid var(--border); color: var(--gold); font-size: 10px; border-radius: 5px; padding: 2px 7px; cursor: pointer; white-space: nowrap; }
   .chip-name-member { cursor: pointer; color: var(--green); text-decoration: underline; text-underline-offset: 2px; }
   .chip-cash { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-muted); }
   .session-date { font-size: 11px; color: var(--text-muted); flex-shrink: 0; margin-left: auto; }
@@ -1416,6 +1434,16 @@
 </div>
 
 <!-- ═══ FEEDBACK MODAL ═══ -->
+<!-- Another player's profile: slides in from the side like your own -->
+<div id="playerCardOverlay" class="profile-overlay pc-overlay" onclick="if(event.target===this) closePlayerCard()">
+  <div class="profile-drawer pc-drawer" role="dialog" aria-modal="true" aria-labelledby="pcName">
+    <div class="drawer-header">
+      <div class="drawer-title">Player Profile</div>
+      <button class="drawer-close" onclick="closePlayerCard()" aria-label="Close">✕</button>
+    </div>
+    <div id="pcBody"></div>
+  </div>
+</div>
 <div id="feedbackOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:400;backdrop-filter:blur(4px);align-items:center;justify-content:center;">
   <div style="background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:28px;width:min(480px,92vw);display:flex;flex-direction:column;gap:14px;">
     <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -4373,14 +4401,65 @@ function fmtDuration(secs) {
 function escH(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
 
 /* ── Profile mini-modal (click member name in Recent Games) ──── */
-function openProfileModal(userId, username) {
-  // For now, just open the profile drawer if it's the logged-in user,
-  // otherwise show a simple alert. Full public profile page is a future feature.
-  if (currentUser && currentUser.id === userId) {
-    openProfileDrawer();
-  } else {
-    alert(`Public profiles coming soon!\n\n${username}'s profile is not yet viewable.`);
-  }
+/* ── Player card: anyone's public stats, opened by clicking a name ── */
+function openProfileModal(userId, username) { openPlayerCard(userId, username); }
+function closePlayerCard() {
+  const o = document.getElementById('playerCardOverlay');
+  if (!o.classList.contains('open')) return;
+  o.classList.remove('slid');
+  setTimeout(() => o.classList.remove('open'), 250);
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayerCard(); });
+
+async function openPlayerCard(userId, username) {
+  const overlay = document.getElementById('playerCardOverlay');
+  const body = document.getElementById('pcBody');
+  body.innerHTML = `<div class="pc-sub">Loading ${escapeHtml(username || 'player')}…</div>`;
+  overlay.classList.add('open');
+  requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('slid')));
+  try {
+    const headers = authToken ? { Authorization: 'Bearer ' + authToken } : {};
+    const res = await fetch(`${API_BASE}/users/${Number(userId)}/profile`, { headers });
+    const p = await res.json();
+    if (p.error) { body.innerHTML = `<div class="pc-sub">${escapeHtml(p.error)}</div>`; return; }
+    const joined = p.joined ? new Date(p.joined * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '';
+    let h = `<div class="pc-head">
+        <div class="pc-avatar">${escapeHtml((p.username || '?')[0].toUpperCase())}</div>
+        <div><div class="pc-name" id="pcName">${escapeHtml(p.username)}${p.isAdmin ? ADMIN_TAG : ''}</div>
+        <div class="pc-sub">${joined ? 'Member since ' + joined : ''}${p.elo ? ' · ' + p.elo + ' ELO' : ''}</div></div>
+      </div>`;
+    if (p.private) {
+      h += `<div class="pc-sub" style="padding:10px 0">🔒 ${escapeHtml(p.username)} keeps their stats private.</div>`;
+      body.innerHTML = h; return;
+    }
+    const st = p.stats || {};
+    const pct = st.games ? Math.round(st.wins / st.games * 100) + '%' : '—';
+    const money = n => '$' + Number(n || 0).toLocaleString();
+    h += `<div class="pc-stats">
+        <div class="pc-stat"><b>${st.games}</b><span>Games</span></div>
+        <div class="pc-stat"><b>${st.wins}</b><span>Wins</span></div>
+        <div class="pc-stat"><b>${pct}</b><span>Win rate</span></div>
+        <div class="pc-stat"><b>${st.avgPlace ?? '—'}</b><span>Avg place</span></div>
+        <div class="pc-stat"><b>${st.games ? money(st.bestCash) : '—'}</b><span>Best finish</span></div>
+        <div class="pc-stat"><b>${st.multi ? st.multiWins + '/' + st.multi : '—'}</b><span>Multi wins</span></div>
+      </div>`;
+    const places = ['1st', '2nd', '3rd', '4th', '5th', '6th'];
+    if (p.recent && p.recent.length) {
+      h += `<div class="pc-section">Recent games</div>` + p.recent.map(g => {
+        const d = new Date(g.played_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const vs = g.opponents.map(o => escapeHtml(o.name)).join(', ') || '—';
+        const col = g.rank === 0 ? 'var(--green)' : 'var(--text)';
+        return `<div class="pc-game">
+          <div><b style="color:${col}">${places[g.rank] || (g.rank + 1) + 'th'}</b> <span class="pc-vs">vs ${vs} · ${g.is_solo ? 'solo' : 'multi'} · ${d}</span></div>
+          <div style="display:flex;align-items:center;gap:6px"><span style="font-family:'JetBrains Mono',monospace;font-size:11px">${money(g.cash)}</span>
+          ${g.replay ? `<button class="pc-replay" onclick="closePlayerCard(); openReplay(${Number(g.id)})">▶ Replay</button>` : ''}</div>
+        </div>`;
+      }).join('');
+    } else {
+      h += `<div class="pc-sub">No recorded games yet.</div>`;
+    }
+    body.innerHTML = h;
+  } catch { body.innerHTML = '<div class="pc-sub">Could not load this player.</div>'; }
 }
 
 /* ── Game Replay ─────────────────────────────────────────────── */
@@ -4424,6 +4503,7 @@ async function openReplay(sessionId, event) {
     const data = await res.json();
     replaySnapshots = data.snapshots || [];
     replayAdminNames = data.adminNames || [];
+    replayMembers = Object.fromEntries((data.members || []).map(m => [m.name, m.userId]));
     // Restore step from URL hash if present (e.g. /replay/45#23)
     const hashStep = parseInt(location.hash.replace('#', ''), 10);
     replayIdx = (hashStep >= 1 && hashStep <= replaySnapshots.length) ? hashStep - 1 : 0;
@@ -4523,6 +4603,13 @@ function renderReplayBoard(snap) {
 
 // "Bot · Hard" for bots (difficulty recorded since Nov 2026), "Player" for humans
 let replayAdminNames = [];
+let replayMembers = {};   // name → userId for signed-in players in this replay
+function replayNameHtml(name) {
+  const uid = replayMembers[name];
+  return uid
+    ? `<span class="name-link" title="See ${escapeHtml(name)}'s stats" data-name="${escapeHtml(name)}" onclick="openPlayerCard(${Number(uid)}, this.dataset.name)">${escapeHtml(name)}</span>`
+    : escapeHtml(name);
+}
 function replayIsAdmin(snap, name) {
   return replayAdminNames.includes(name) || adminNamesOf(snap.playerList).includes(name);
 }
@@ -4543,7 +4630,7 @@ function renderReplayScore(snap) {
       .map(([ch, v]) => `<span class="stock-badge" style="background:${REPLAY_CHAIN_COLORS[ch]}22;color:${REPLAY_CHAIN_COLORS[ch]}">${ch.slice(0,3)} ${v}</span>`).join('');
     return `<div class="score-player" style="margin-bottom:6px">
       <div class="score-player-header">
-        <span class="score-player-name${cur ? ' current' : ''}">${cur ? '▸ ' : ''}${escapeHtml(p.name)}${replayPlayerBadge(snap, p.name)}</span>
+        <span class="score-player-name${cur ? ' current' : ''}">${cur ? '▸ ' : ''}${replayNameHtml(p.name)}${replayPlayerBadge(snap, p.name)}</span>
         <span class="score-cash">$${p.cash.toLocaleString()}</span>
       </div>
       <div class="score-stocks">${badges || '<span style="color:var(--text-muted);font-size:10px">No stock</span>'}</div>
@@ -4561,11 +4648,22 @@ function renderReplayStock(snap) {
   }).join('');
 }
 
+// Makes signed-in players' names in a replay log line clickable
+function linkMembersInText(html) {
+  let out = html;
+  for (const [name, uid] of Object.entries(replayMembers)) {
+    const e = escapeHtml(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    out = out.replace(new RegExp(`(^|[^\\w>"])(${e})(?![\\w"])`, 'g'),
+      (m, pre, n) => `${pre}<span class="name-link" data-name="${n}" onclick="openPlayerCard(${Number(uid)}, this.dataset.name)">${n}</span>`);
+  }
+  return out;
+}
+
 function renderReplayLog(snap) {
   const el = document.getElementById('replayLog');
   const log = snap.log || [];
   const admins = [...new Set([...replayAdminNames, ...adminNamesOf(snap.playerList)])];
-  el.innerHTML = [...log].reverse().map(l => `<div class="log-entry">${tagAdminsInText(escapeHtml(l), admins)}</div>`).join('');
+  el.innerHTML = [...log].reverse().map(l => `<div class="log-entry">${linkMembersInText(tagAdminsInText(escapeHtml(l), admins))}</div>`).join('');
 }
 
 /* ── Feedback modal ──────────────────────────────────────────── */

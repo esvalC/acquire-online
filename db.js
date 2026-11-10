@@ -325,6 +325,23 @@ module.exports = {
     `).all(userId, limit);
   },
 
+  // Public stats for a player's profile card
+  getUserStats(userId) {
+    const t = db.prepare(`
+      SELECT COUNT(*) AS games, SUM(rank = 0) AS wins, AVG(rank) AS avgRank,
+             MAX(cash) AS bestCash, ROUND(AVG(cash)) AS avgCash,
+             SUM(gs.is_solo = 1) AS solo, SUM(gs.is_solo = 0) AS multi,
+             SUM(gs.is_solo = 0 AND rank = 0) AS multiWins
+      FROM game_participants gp JOIN game_sessions gs ON gs.id = gp.session_id
+      WHERE gp.user_id = ?`).get(userId);
+    return {
+      games: t.games || 0, wins: t.wins || 0,
+      avgPlace: t.games ? Math.round((t.avgRank + 1) * 10) / 10 : null,
+      bestCash: t.bestCash || 0, avgCash: t.avgCash || 0,
+      solo: t.solo || 0, multi: t.multi || 0, multiWins: t.multiWins || 0,
+    };
+  },
+
   // Returns { id, played_at, expired, snapshots }
   getAdminIds() { return db.prepare('SELECT id FROM users WHERE is_admin = 1').all().map(r => r.id); },
 

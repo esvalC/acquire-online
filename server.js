@@ -426,13 +426,40 @@ app.get('/api/recent-games', (req, res) => {
   res.json({ sessions });
 });
 
+// Public profile card (stats + recent games). Respects the "Public Profile" setting.
+app.get('/api/users/:id/profile', (req, res) => {
+  const id = Number(req.params.id);
+  const user = Number.isInteger(id) && id > 0 ? db.findById(id) : null;
+  if (!user) return res.status(404).json({ error: 'Player not found' });
+  const header = req.headers.authorization || '';
+  const viewer = header.startsWith('Bearer ') ? verifyToken(header.slice(7)) : null;
+  const isSelf = viewer && viewer.sub === id;
+  const base = { id: user.id, username: user.username, isAdmin: !!user.is_admin, joined: user.created_at };
+  if (!user.public_profile && !isSelf && !(viewer && isAdminUser(viewer.sub))) {
+    return res.json({ ...base, private: true });
+  }
+  const cutoff = Math.floor(Date.now() / 1000) - db.REPLAY_DAYS * 86400;
+  const recent = db.getUserSessions(id, 10).map(s => {
+    let standings = [];
+    try { standings = JSON.parse(s.standings || '[]'); } catch {}
+    return {
+      id: s.id, played_at: s.played_at, is_solo: !!s.is_solo, rank: s.rank, cash: s.my_cash,
+      players: s.player_count, turns: s.turn_count,
+      opponents: standings.filter(p => p.userId !== id).map(p => ({ name: p.name, isBot: !!p.isBot, userId: p.userId || null })),
+      replay: s.played_at >= cutoff,
+    };
+  });
+  res.json({ ...base, elo: user.elo, stats: db.getUserStats(id), recent });
+});
+
 // Replay data for a specific session (public)
 app.get('/api/sessions/:id/replay', (req, res) => {
   const row = db.getSessionReplay(Number(req.params.id));
   if (!row) return res.status(404).json({ error: 'Session not found' });
   // Works for older replays too: admin names come from the saved standings
   const adminNames = (row.standings || []).filter(p => isAdminUser(p.userId)).map(p => p.name);
-  res.json({ sessionId: row.id, snapshots: row.snapshots, expired: row.expired, replayDays: db.REPLAY_DAYS, adminNames });
+  const members = (row.standings || []).filter(p => p.userId && !p.isBot).map(p => ({ name: p.name, userId: p.userId }));
+  res.json({ sessionId: row.id, snapshots: row.snapshots, expired: row.expired, replayDays: db.REPLAY_DAYS, adminNames, members });
 });
 
 // Plan dashboard data (admin only)
