@@ -1045,6 +1045,9 @@
   }
 
   /* ── Leaderboard ─────────────────────────────── */
+  .resume-banner { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.6); color: #fde68a; border-radius: 12px; padding: 12px 20px; font-size: 15px; cursor: pointer; margin-bottom: -8px; }
+  .resume-banner:hover { background: rgba(245,158,11,0.25); }
+  .resume-banner b { color: #fff; }
   .home-feedback-link { background: none; border: none; color: rgba(255,255,255,0.6); font-size: 13px; cursor: pointer; padding: 4px 8px; margin-top: -12px; }
   .home-feedback-link:hover { color: #fff; text-decoration: underline; }
   #leaderboardPage { flex-direction: column; align-items: center; min-height: 100vh; padding: 40px 24px 60px; gap: 24px; }
@@ -1583,6 +1586,7 @@
     <div id="newsList"></div>
   </div>
 
+  <button id="resumeBanner" class="resume-banner" hidden>▶ You have a solo game in progress — <b>Resume</b></button>
   <div class="mode-cards">
     <div class="mode-card mode-card-featured" onclick="goFinanceRoad()">
       <div class="mode-card-icon">📈</div>
@@ -2603,7 +2607,7 @@ function goHome() {
   gameState = null;
   prevBoard = null;
   recentTiles = new Set();
-  if (isSoloGame) { activeSession = null; socket.emit('leaveRoom'); }
+  if (isSoloGame) { activeSession = null; socket.emit('leaveRoom'); clearLastSolo(); }
   isSoloGame = false;
   currentFinanceRoadTier  = null;
   currentFinanceRoadLevel = null;
@@ -2779,6 +2783,7 @@ function startSoloGame() {
     // Give the game its own URL so a refresh / reopened tab can rejoin it
     const base = window.location.pathname.startsWith('/beta') ? '/beta' : '';
     history.replaceState({}, '', `${base}/game/${res.code}`);
+    saveLastSolo(res.code, `${base}/game/${res.code}`);
     showScreen('game');
     startTurnClock();
   });
@@ -2901,7 +2906,7 @@ function attemptReconnect(code, name, token) {
     showScreen('landing');
     return;
   }
-  // /game/XXXX — rejoin a solo game (works within 5 min of everyone leaving)
+  // /game/XXXX — rejoin a solo game (kept for 24 h after you leave the page)
   const gameMatch = path.match(/\/game\/(\d{4})$/);
   if (gameMatch) {
     const code  = gameMatch[1];
@@ -5025,7 +5030,21 @@ async function deleteNewsReply(id) {
 }
 
 /* ── Recent Games (home page) ────────────────────────────────── */
+// A solo game you walked away from (tab closed, browser restarted) is kept on
+// the server for a day: offer to jump back in.
+function checkResumeGame() {
+  const el = document.getElementById('resumeBanner');
+  if (!el) return;
+  const saved = (() => { try { return JSON.parse(localStorage.getItem('acquire_last_solo')); } catch { return null; } })();
+  if (!saved || !saved.code || !localStorage.getItem('acquire_token_' + saved.code)) { el.hidden = true; return; }
+  socket.emit('getRoomStatus', { code: saved.code }, (st) => {
+    if (!st || !st.exists || !st.gameInProgress || st.over) { el.hidden = true; clearLastSolo(); return; }
+    el.hidden = false;
+    el.onclick = () => { window.location.href = saved.resumePath || ('/game/' + saved.code); };
+  });
+}
 async function loadRecentGames() {
+  checkResumeGame();
   // Deferred: on first page load this runs before the rest of the script
   // (API_BASE, currentUser, news state) has been initialized.
   setTimeout(() => { loadNews(); loadGamesCounter(); loadLiveGames(); }, 0);

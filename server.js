@@ -901,7 +901,11 @@ function forceDefaultBotMove(game, idx) {
 }
 
 // How long a game survives with no human connected before it's thrown away.
-const RECONNECT_GRACE_MS = 5 * 60 * 1000;
+// Solo games wait a full day, so you can walk away (laptop asleep, phone
+// locked, tab closed) and pick up where you left off.
+const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS) || 5 * 60 * 1000;   // env override is for tests
+const SOLO_GRACE_MS = Number(process.env.SOLO_GRACE_MS) || 24 * 3600 * 1000;
+const graceFor = room => room && room.isSolo && room.game && room.game.phase !== 'gameOver' ? SOLO_GRACE_MS : RECONNECT_GRACE_MS;
 
 /* A player gives up their seat in a game in progress (Leave, or gone too long).
  * Members take a loss once the game is underway; a Medium bot plays the seat
@@ -937,16 +941,17 @@ function scheduleAbandonedRoomCleanup(code) {
   const room = rooms[code];
   if (!room) return;
   clearTimeout(room.cleanupTimer);
+  const grace = graceFor(room);
   room.cleanupTimer = setTimeout(() => {
     const r = rooms[code];
     if (!r) return;
     const humansGone = r.players.every(p => p.isBot || p.disconnected || !p.socketId);
     if (humansGone) {
-      console.log(`Room ${code} abandoned for ${RECONNECT_GRACE_MS / 60000} min — deleting`);
+      console.log(`Room ${code} abandoned for ${Math.round(grace / 60000)} min — deleting`);
       if (r.game && r.game.phase !== 'gameOver') for (const p of r.players) if (!p.isBot && !p.forfeited) { try { ratings.recordQuit(db, r, p); } catch {} }
       deleteRoom(code);
     }
-  }, RECONNECT_GRACE_MS);
+  }, grace);
 }
 
 /* A player leaves a table that hasn't started (Leave button, closed tab,
@@ -1256,6 +1261,7 @@ io.on('connection', (socket) => {
     cb({
       exists: true,
       gameInProgress: !!room.game,
+      over: !!(room.game && room.game.phase === 'gameOver'),
       playerCount: room.players.length,
       maxPlayers: room.config.maxPlayers,
     });

@@ -40,7 +40,7 @@ Open `http://localhost:3000`. Share your local IP (e.g. `http://192.168.1.x:3000
 - Admins can issue a one-time temporary password from `/plan` → Users
 - Older phone-verified accounts keep working; text-code sign-in switches off automatically once `TWILIO_*` is removed from `.env`
 - JWT authentication (stored in localStorage)
-- Rating + leaderboard (`/leaderboard`, `ratings.js`) — members only, everyone started at 1000 (Nov 2026 reset). Each game compares you with every other member/bot seat (K=32, averaged): 70% who finished ahead, 30% money margin (capped at $30k). Bots are fixed opponents: Easy 900, Medium 1050, Hard 1200, Master 1400. Finished games (41-tile chain, all safe, no moves) rate normally; games ended early by vote can only lower a rating; quitting (Leave button, back button, or gone 5 min) once everyone has had a turn is a loss, and in multiplayer a Medium bot takes the seat
+- Rating + leaderboard (`/leaderboard`, `ratings.js`) — members only, everyone started at 1000 (Nov 2026 reset). Each game compares you with every other member/bot seat (K=32, averaged): 70% who finished ahead, 30% money margin (capped at $30k). Bots are fixed opponents: Easy 900, Medium 1050, Hard 1200, Master 1400. Finished games (41-tile chain, all safe, no moves) rate normally; games ended early by vote can only lower a rating; quitting (Leave button, back button, or gone 5 min in multiplayer / 24 h in solo) once everyone has had a turn is a loss, and in multiplayer a Medium bot takes the seat
 - Career stats kept per member in `user_stats` (added to after every game, independent of game records): finished/multiplayer/solo wins, places, money records, streaks, chains founded, mergers, favorite chains, record vs each bot level, Quick Master and Finance Road, rating history; member-vs-member records in `user_h2h`
 - Full game history in your profile with rank, opponents, ELO delta, and date
 - Clickable replay button on every game in your history
@@ -106,6 +106,7 @@ acquire-online/
 
 - **Server owns all game state.** Clients send actions; server validates and broadcasts new state to the room. Clients cannot cheat.
 - **SQLite, single file.** No external database to manage. WAL mode handles concurrent reads from two server processes.
+- **Solo games wait for you.** Walk away (tab closed, laptop asleep) and the game is kept for 24 hours; the home page offers a Resume button.
 - **Games survive restarts.** In-progress games are saved to SQLite as they're played and reloaded on startup; browsers rejoin automatically.
 - **Replays expire.** Replays are stored gzip-compressed and deleted after 5 days.
 - **Phone privacy by design.** Raw phone numbers are never written to disk. Only a salted HMAC hash (for uniqueness enforcement) and an AES-256-GCM encrypted value (for masked display) are stored.
