@@ -2292,6 +2292,7 @@ function showScreen(id) {
 }
 
 function goHome() {
+  leaveLobbyIfIn();
   activeSession = null;
   document.getElementById('gameOverOverlay').style.display = 'none';
   stopTurnClock();
@@ -2330,6 +2331,7 @@ function goRules() {
 /* ── Browser back/forward button support ──────── */
 window.addEventListener('popstate', () => {
   const path = window.location.pathname.replace(/^\/beta/, '');
+  if (!/^\/multiplayer\/\d{4}$/.test(path)) leaveLobbyIfIn();   // backed out of a table
   // Close replay overlay whenever navigating away from a replay URL
   if (!path.match(/\/replay\/(\d+)$/)) {
     document.getElementById('replayOverlay').style.display = 'none';
@@ -2644,7 +2646,7 @@ socket.on('lobbyUpdate', (data) => {
   lastLobby = data;
   document.getElementById('lobbyCode').textContent = data.code;
   const isHost = !!data.host && data.host === myName;
-  document.getElementById('lobbyLeaveBtn').textContent = isHost ? 'Cancel Table' : 'Leave Table';
+
   const list = document.getElementById('lobbyPlayers');
   list.innerHTML = data.players.map(p => `
     <li class="player-item">
@@ -2658,22 +2660,20 @@ socket.on('lobbyUpdate', (data) => {
   document.getElementById('lobbyAddBot').style.display =
     isHost && !data.gameInProgress && data.players.length < data.maxPlayers ? 'flex' : 'none';
 });
-// Host: closes the table for everyone. Anyone else: gives up their seat.
-function leaveTable() {
-  const d = lastLobby;
-  const isHost = d && d.host === myName;
-  const others = d ? d.players.filter(p => !p.isBot && p.name !== myName).length : 0;
-  if (isHost && others > 0 && !confirm(`Cancel this table? The ${others === 1 ? 'other player' : others + ' other players'} will be sent back to the home screen.`)) return;
+// Gives up your seat; the next player becomes host. The table closes by
+// itself once nobody is left (also when people close the tab or go back).
+function leaveLobbyIfIn() {
+  if (!lastLobby || !document.getElementById('lobby').classList.contains('active')) return;
   socket.emit('leaveRoom');
-  if (d) clearSession(d.code);
+  clearSession(lastLobby.code);
   lastLobby = null;
-  goHome();
 }
-socket.on('tableClosed', ({ by }) => {
+function leaveTable() { leaveLobbyIfIn(); goHome(); }
+socket.on('tableClosed', () => {
   if (lastLobby) clearSession(lastLobby.code);
+  const wasHere = document.getElementById('lobby').classList.contains('active');
   lastLobby = null;
-  goHome();
-  showToast(`${by || 'The host'} cancelled the table`);
+  if (wasHere) { goHome(); showToast('Everyone left, so the table was closed'); }
 });
 function addLobbyBot() {
   const difficulty = document.getElementById('lobbyBotDifficulty').value;

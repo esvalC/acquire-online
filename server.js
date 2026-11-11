@@ -889,11 +889,29 @@ function scheduleAbandonedRoomCleanup(code) {
     const r = rooms[code];
     if (!r) return;
     const humansGone = r.players.every(p => p.isBot || p.disconnected || !p.socketId);
-    if (humansGone && r.spectators.length === 0) {
+    if (humansGone) {
       console.log(`Room ${code} abandoned for ${RECONNECT_GRACE_MS / 60000} min — deleting`);
       deleteRoom(code);
     }
   }, RECONNECT_GRACE_MS);
+}
+
+/* A player leaves a table that hasn't started (Leave button, closed tab,
+ * back button, lost connection). The next person in line becomes host; when
+ * the last person leaves, the table is wiped (bots and watchers sent home). */
+function leaveLobbySeat(code, player) {
+  const room = rooms[code];
+  if (!room) return;
+  room.players = room.players.filter(p => p !== player);
+  room.players.forEach((p, i) => { p.idx = i; });
+  if (!roomHost(room)) {
+    io.to(code).emit('tableClosed', { reason: 'empty' });
+    for (const id of io.sockets.adapter.rooms.get(code) || []) io.sockets.sockets.get(id)?.leave(code);
+    deleteRoom(code);
+    console.log(`Table ${code} closed — everyone left`);
+  } else {
+    broadcastLobby(code);
+  }
 }
 
 /* ── Bot scheduling ─────────────────────────────────────────── */
@@ -1416,15 +1434,7 @@ io.on('connection', (socket) => {
       if (room.players.every(q => q.isBot || q.disconnected)) scheduleAbandonedRoomCleanup(code);
       return;
     }
-    if (roomHost(room) === me) {
-      io.to(code).emit('tableClosed', { by: me.name });
-      for (const id of io.sockets.adapter.rooms.get(code) || []) io.sockets.sockets.get(id)?.leave(code);
-      deleteRoom(code);
-      return;
-    }
-    room.players = room.players.filter(p => p !== me);
-    room.players.forEach((p, i) => { p.idx = i; });
-    broadcastLobby(code);
+    leaveLobbySeat(code, me);
   });
 
   /* ── Disconnect ───────────────────────────────── */
@@ -1454,13 +1464,9 @@ io.on('connection', (socket) => {
         if (room.players.every(q => q.isBot || q.disconnected)) scheduleAbandonedRoomCleanup(currentRoom);
       }
     } else {
-      room.players = room.players.filter(p => p.socketId !== socket.id);
-      room.players.forEach((p, i) => { p.idx = i; });
-      if (!roomHost(room) && room.spectators.length === 0) {
-        deleteRoom(currentRoom);
-      } else {
-        broadcastLobby(currentRoom);
-      }
+      const me = room.players.find(p => p.socketId === socket.id);
+      if (me) leaveLobbySeat(currentRoom, me);
+      else broadcastLobby(currentRoom);
     }
   });
 });
