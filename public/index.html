@@ -1986,7 +1986,7 @@
         <div class="profile-avatar" id="profileAvatar">?</div>
         <div>
           <div><span class="profile-username" id="profileUsername">—</span><span class="role-badge" id="profileRoleBadge"></span></div>
-          <div style="font-size:11px;color:var(--text-muted);">Member since <span id="profileSince">—</span></div>
+          <div style="font-size:11px;color:var(--text-muted);">Joined <span id="profileSince">—</span></div>
         </div>
       </div>
       <div style="text-align:center;margin-bottom:16px;">
@@ -4096,7 +4096,7 @@ function renderDrawerLoggedIn(user, history, sessions = []) {
   roleBadge.className = 'role-badge ' + role;
   document.getElementById('profileElo').textContent       = user.elo;
   const since = user.created_at
-    ? new Date(user.created_at * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    ? new Date(user.created_at * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : '—';
   document.getElementById('profileSince').textContent   = since;
   // Sessions have rank directly from game_participants join
@@ -4646,11 +4646,11 @@ async function openPlayerCard(userId, username) {
     const res = await fetch(`${API_BASE}/users/${Number(userId)}/profile`, { headers });
     const p = await res.json();
     if (p.error) { body.innerHTML = `<div class="pc-sub">${escapeHtml(p.error)}</div>`; return; }
-    const joined = p.joined ? new Date(p.joined * 1000).toLocaleDateString('en-US', { month: 'short', year: 'numeric' }) : '';
+    const joined = p.joined ? new Date(p.joined * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
     let h = `<div class="pc-head">
         <div class="pc-avatar">${escapeHtml((p.username || '?')[0].toUpperCase())}</div>
         <div><div class="pc-name" id="pcName">${escapeHtml(p.username)}${p.isAdmin ? ADMIN_TAG : ''}</div>
-        <div class="pc-sub">${joined ? 'Member since ' + joined : ''}${p.elo ? ' · ' + p.elo + ' ELO' : ''}</div></div>
+        <div class="pc-sub">${joined ? 'Joined ' + joined : ''}${p.elo ? ' · ' + p.elo + ' ELO' : ''}</div></div>
       </div>`;
     if (p.private) {
       h += `<div class="pc-sub" style="padding:10px 0">🔒 ${escapeHtml(p.username)} keeps their stats private.</div>`;
