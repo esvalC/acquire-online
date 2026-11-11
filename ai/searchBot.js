@@ -31,6 +31,7 @@ function clone(game) {
   const c = {};
   for (const k in game) {
     const v = game[k];
+    if (k === 'pstats') continue;          // real-game stats only
     if (k === 'log') c.log = [];
     else if (k === 'board') c.board = v.map(r => r.slice());
     else if (k === 'players') c.players = v.map(p => ({ ...p, stocks: { ...p.stocks }, tiles: p.tiles.slice() }));

@@ -40,7 +40,8 @@ Open `http://localhost:3000`. Share your local IP (e.g. `http://192.168.1.x:3000
 - Admins can issue a one-time temporary password from `/plan` → Users
 - Older phone-verified accounts keep working; text-code sign-in switches off automatically once `TWILIO_*` is removed from `.env`
 - JWT authentication (stored in localStorage)
-- ELO rating — pairwise K=32, normalized across opponents; solo games compare vs 1000 baseline
+- Rating + leaderboard (`/leaderboard`, `ratings.js`) — members only, everyone started at 1000 (Nov 2026 reset). Each game compares you with every other member/bot seat (K=32, averaged): 70% who finished ahead, 30% money margin (capped at $30k). Bots are fixed opponents: Easy 900, Medium 1050, Hard 1200, Master 1400. Finished games (41-tile chain, all safe, no moves) rate normally; games ended early by vote can only lower a rating; quitting (Leave button, back button, or gone 5 min) once everyone has had a turn is a loss, and in multiplayer a Medium bot takes the seat
+- Career stats kept per member in `user_stats` (added to after every game, independent of game records): finished/multiplayer/solo wins, places, money records, streaks, chains founded, mergers, favorite chains, record vs each bot level, Quick Master and Finance Road, rating history; member-vs-member records in `user_h2h`
 - Full game history in your profile with rank, opponents, ELO delta, and date
 - Clickable replay button on every game in your history
 
@@ -81,7 +82,8 @@ All bots run server-side using the same validated game engine as human players.
 
 ```
 acquire-online/
-├── server.js              # Express + Socket.IO — routes, game rooms, ELO
+├── server.js              # Express + Socket.IO — routes, game rooms
+├── ratings.js             # Rating + career stats after each game / quit
 ├── gameEngine.js          # Pure game logic (stateless, no I/O)
 ├── botAI.js               # Bot personalities and decision logic
 ├── auth.js                # JWT sessions, password hashing, legacy Twilio OTP
@@ -113,7 +115,9 @@ acquire-online/
 | Table | Purpose |
 |---|---|
 | `users` | Accounts — username, phone hash, ELO, games played/won |
-| `game_history` | Per-user ELO-tracked game records (logged-in players only) |
+| `game_history` | Per-user rated game records (logged-in players only) |
+| `user_stats` | Rating + career stats per member, updated after every game |
+| `user_h2h` | Member-vs-member win/loss records |
 | `game_sessions` | Every completed game — standings, metadata, replay snapshots |
 | `game_participants` | Junction table `(session_id, user_id, rank, cash)` — indexed on `user_id` for fast per-user lookups |
 | `feedback` | In-app bug reports and suggestions |

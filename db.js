@@ -166,6 +166,133 @@ db.exec(`
     db.pragma('user_version = 1');
   }
 }
+/* ── Ratings + career stats ───────────────────────────────────
+ * One row per member, added to after every game (games themselves can be
+ * deleted without losing anyone's stats). user_h2h holds member-vs-member
+ * records. Ratings restarted at 1000 when this was introduced (user_version 2). */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS user_stats (
+    user_id        INTEGER PRIMARY KEY REFERENCES users(id),
+    rating         INTEGER NOT NULL DEFAULT 1000,
+    peak_rating    INTEGER NOT NULL DEFAULT 1000,
+    games          INTEGER NOT NULL DEFAULT 0,
+    wins           INTEGER NOT NULL DEFAULT 0,
+    fin_games      INTEGER NOT NULL DEFAULT 0,
+    fin_wins       INTEGER NOT NULL DEFAULT 0,
+    early_games    INTEGER NOT NULL DEFAULT 0,
+    early_wins     INTEGER NOT NULL DEFAULT 0,
+    quits          INTEGER NOT NULL DEFAULT 0,
+    multi_games    INTEGER NOT NULL DEFAULT 0,
+    multi_wins     INTEGER NOT NULL DEFAULT 0,
+    solo_games     INTEGER NOT NULL DEFAULT 0,
+    solo_wins      INTEGER NOT NULL DEFAULT 0,
+    place_sum      INTEGER NOT NULL DEFAULT 0,
+    cash_sum       INTEGER NOT NULL DEFAULT 0,
+    best_cash      INTEGER NOT NULL DEFAULT 0,
+    margin_sum     INTEGER NOT NULL DEFAULT 0,
+    streak         INTEGER NOT NULL DEFAULT 0,
+    best_streak    INTEGER NOT NULL DEFAULT 0,
+    chains_founded INTEGER NOT NULL DEFAULT 0,
+    mergers        INTEGER NOT NULL DEFAULT 0,
+    chain_counts   TEXT    NOT NULL DEFAULT '{}',
+    bot_record     TEXT    NOT NULL DEFAULT '{}',
+    qm_games       INTEGER NOT NULL DEFAULT 0,
+    qm_wins        INTEGER NOT NULL DEFAULT 0,
+    fr_best        INTEGER NOT NULL DEFAULT 0,
+    history        TEXT    NOT NULL DEFAULT '[]',
+    last_played    INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_stats_rating ON user_stats(rating DESC);
+  CREATE TABLE IF NOT EXISTS user_h2h (
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    opp_id  INTEGER NOT NULL REFERENCES users(id),
+    wins    INTEGER NOT NULL DEFAULT 0,
+    losses  INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (user_id, opp_id)
+  );
+`);
+{
+  const sc = db.prepare(`PRAGMA table_info(game_sessions)`).all().map(r => r.name);
+  if (!sc.includes('mode'))     db.exec(`ALTER TABLE game_sessions ADD COLUMN mode TEXT`);
+  if (!sc.includes('end_type')) db.exec(`ALTER TABLE game_sessions ADD COLUMN end_type TEXT`);
+  if (db.pragma('user_version', { simple: true }) < 2) {
+    db.exec(`UPDATE users SET elo = 1000`);          // fresh start for the new rating
+    db.pragma('user_version = 2');
+  }
+}
+const HISTORY_KEEP = 100;
+const STAT_INT_FIELDS = ['games','wins','fin_games','fin_wins','early_games','early_wins','quits','multi_games','multi_wins',
+  'solo_games','solo_wins','place_sum','cash_sum','margin_sum','chains_founded','mergers','qm_games','qm_wins'];
+const stats = {
+  get(userId) {
+    const r = db.prepare('SELECT * FROM user_stats WHERE user_id = ?').get(userId);
+    if (!r) return null;
+    for (const k of ['chain_counts', 'bot_record', 'history']) { try { r[k] = JSON.parse(r[k]); } catch { r[k] = k === 'history' ? [] : {}; } }
+    return r;
+  },
+  rating(userId) { const r = db.prepare('SELECT rating FROM user_stats WHERE user_id = ?').get(userId); return r ? r.rating : 1000; },
+  /* u: { rating, inc: {field: n}, bestCash, streak: 'win'|'loss'|null, founded: {chain:n}, bought: {chain:n},
+   *      bots: {difficulty: won(bool)}, frLevel, won, result, opponents } */
+  apply: db.transaction((userId, u) => {
+    db.prepare('INSERT OR IGNORE INTO user_stats (user_id) VALUES (?)').run(userId);
+    const cur = stats.get(userId);
+    const now = Math.floor(Date.now() / 1000);
+    const set = {};
+    for (const k of STAT_INT_FIELDS) set[k] = cur[k] + ((u.inc && u.inc[k]) || 0);
+    set.rating = Math.round(u.rating);
+    set.peak_rating = Math.max(cur.peak_rating, set.rating);
+    set.best_cash = Math.max(cur.best_cash, u.bestCash || 0);
+    set.streak = u.streak === 'win' ? cur.streak + 1 : u.streak === 'loss' ? 0 : cur.streak;
+    set.best_streak = Math.max(cur.best_streak, set.streak);
+    const cc = cur.chain_counts;
+    for (const [ch, n] of Object.entries(u.founded || {})) { cc[ch] = cc[ch] || { f: 0, b: 0 }; cc[ch].f += n; set.chains_founded += n; }
+    for (const [ch, n] of Object.entries(u.bought || {})) { cc[ch] = cc[ch] || { f: 0, b: 0 }; cc[ch].b += n; }
+    set.chain_counts = JSON.stringify(cc);
+    const br = cur.bot_record;
+    for (const [d, won] of Object.entries(u.bots || {})) { br[d] = br[d] || { g: 0, w: 0 }; br[d].g++; if (won) br[d].w++; }
+    set.bot_record = JSON.stringify(br);
+    set.fr_best = Math.max(cur.fr_best, u.frLevel || 0);
+    const hist = cur.history; hist.push([now, set.rating]);
+    set.history = JSON.stringify(hist.slice(-HISTORY_KEEP));
+    set.last_played = now;
+    const cols = Object.keys(set);
+    db.prepare(`UPDATE user_stats SET ${cols.map(c => `${c} = @${c}`).join(', ')} WHERE user_id = @user_id`).run({ ...set, user_id: userId });
+    db.prepare('UPDATE users SET elo = ?, games_played = games_played + 1, games_won = games_won + ? WHERE id = ?').run(set.rating, u.won ? 1 : 0, userId);
+    db.prepare('INSERT INTO game_history (user_id, result, elo_change, opponents) VALUES (?, ?, ?, ?)')
+      .run(userId, u.won ? 'win' : 'loss', set.rating - cur.rating, JSON.stringify(u.opponents || []));
+    return set.rating - cur.rating;
+  }),
+  h2h(userId, oppId, won) {
+    db.prepare(`INSERT INTO user_h2h (user_id, opp_id, wins, losses) VALUES (?, ?, ?, ?)
+      ON CONFLICT(user_id, opp_id) DO UPDATE SET wins = wins + excluded.wins, losses = losses + excluded.losses`)
+      .run(userId, oppId, won ? 1 : 0, won ? 0 : 1);
+  },
+  h2hFor(userId, oppIds) {
+    if (!oppIds.length) return [];
+    return db.prepare(`SELECT h.opp_id, u.username, h.wins, h.losses FROM user_h2h h JOIN users u ON u.id = h.opp_id
+      WHERE h.user_id = ? AND h.opp_id IN (${oppIds.map(() => '?').join(',')}) ORDER BY h.wins + h.losses DESC`).all(userId, ...oppIds);
+  },
+  SORTS: {
+    rating: 's.rating DESC, s.fin_wins DESC',
+    finished: 'CAST(s.fin_wins AS REAL) / MAX(s.fin_games, 1) DESC, s.fin_wins DESC, s.rating DESC',
+    multi: 's.multi_wins DESC, s.multi_games ASC, s.rating DESC',
+    solo: 's.solo_wins DESC, s.solo_games ASC, s.rating DESC',
+  },
+  leaderboard(sort = 'rating', limit = 100) {
+    const order = stats.SORTS[sort] || stats.SORTS.rating;
+    return db.prepare(`SELECT u.id, u.username, u.is_admin, s.rating, s.games, s.wins, s.fin_games, s.fin_wins,
+        s.multi_games, s.multi_wins, s.solo_games, s.solo_wins, s.early_games, s.quits
+      FROM user_stats s JOIN users u ON u.id = s.user_id
+      WHERE u.public_profile = 1 AND s.games > 0 ORDER BY ${order} LIMIT ?`).all(limit);
+  },
+  rankOf(userId) {
+    const me = db.prepare('SELECT rating FROM user_stats WHERE user_id = ?').get(userId);
+    const total = db.prepare('SELECT COUNT(*) AS n FROM user_stats s JOIN users u ON u.id = s.user_id WHERE u.public_profile = 1 AND s.games > 0').get().n;
+    if (!me) return { rank: null, total };
+    const above = db.prepare('SELECT COUNT(*) AS n FROM user_stats s JOIN users u ON u.id = s.user_id WHERE u.public_profile = 1 AND s.games > 0 AND s.rating > ?').get(me.rating).n;
+    return { rank: above + 1, total };
+  },
+};
 const MESSAGE_DAYS = 90;
 const pair = (a, b) => (a < b ? [a, b] : [b, a]);
 const social = {
@@ -331,7 +458,7 @@ function deleteNewsReply(id) {
 }
 
 module.exports = {
-  social,
+  social, stats,
   REPLAY_DAYS, pruneReplays, saveActiveRoom, deleteActiveRoom, loadActiveRooms,
   getTotalGames, listNews, createNewsPost, deleteNewsPost, newsPostExists, createNewsReply, deleteNewsReply,
   hashPhone,
@@ -387,9 +514,9 @@ module.exports = {
   setFeedbackIssue(id, ghIssue) {
     db.prepare('UPDATE feedback SET gh_issue=? WHERE id=?').run(ghIssue, id);
   },
-  recordSession(isSolo, playerCount, humanCount, durationSeconds, turnCount, standings, replaySnapshots) {
+  recordSession(isSolo, playerCount, humanCount, durationSeconds, turnCount, standings, replaySnapshots, mode, endType) {
     const insertSession = db.prepare(
-      'INSERT INTO game_sessions (is_solo, player_count, human_count, duration_seconds, turn_count, standings, replay_gz) VALUES (?,?,?,?,?,?,?)'
+      'INSERT INTO game_sessions (is_solo, player_count, human_count, duration_seconds, turn_count, standings, replay_gz, mode, end_type) VALUES (?,?,?,?,?,?,?,?,?)'
     );
     const insertParticipant = db.prepare(
       'INSERT OR IGNORE INTO game_participants (session_id, user_id, rank, cash) VALUES (?,?,?,?)'
@@ -398,7 +525,8 @@ module.exports = {
       const r = insertSession.run(
         isSolo ? 1 : 0, playerCount, humanCount, durationSeconds ?? null, turnCount ?? null,
         JSON.stringify(standings || []),
-        replaySnapshots && replaySnapshots.length ? zlib.gzipSync(Buffer.from(JSON.stringify(replaySnapshots))) : null
+        replaySnapshots && replaySnapshots.length ? zlib.gzipSync(Buffer.from(JSON.stringify(replaySnapshots))) : null,
+        mode || null, endType || null
       );
       const sessionId = r.lastInsertRowid;
       (standings || []).forEach((p, rank) => {

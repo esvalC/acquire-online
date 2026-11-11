@@ -818,7 +818,7 @@
     animation: fadeInUp 0.5s ease-out 0.1s both;
   }
   #newLanding .mode-cards {
-    display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
+    display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 760px;
     animation: fadeInUp 0.5s ease-out 0.2s both;
   }
   #newLanding .mode-card {
@@ -1042,6 +1042,61 @@
     background: rgba(59,130,246,0.1); color: var(--blue);
     border: 1px solid rgba(59,130,246,0.2); border-radius: 10px;
     padding: 1px 5px; font-weight: 600; margin-left: 4px;
+  }
+
+  /* ── Leaderboard ─────────────────────────────── */
+  .home-feedback-link { background: none; border: none; color: rgba(255,255,255,0.6); font-size: 13px; cursor: pointer; padding: 4px 8px; margin-top: -12px; }
+  .home-feedback-link:hover { color: #fff; text-decoration: underline; }
+  #leaderboardPage { flex-direction: column; align-items: center; min-height: 100vh; padding: 40px 24px 60px; gap: 24px; }
+  .lb-wrap { max-width: 900px; width: 100%; display: flex; flex-direction: column; gap: 14px; }
+  .lb-title { font-family: 'Playfair Display', serif; font-size: 30px; color: var(--gold); }
+  .lb-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; }
+  .lb-cta { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-color: rgba(245,158,11,0.45); }
+  .lb-cta .lb-cta-text { flex: 1; min-width: 220px; }
+  .lb-cta b { font-size: 16px; color: var(--gold); display: block; margin-bottom: 3px; }
+  .lb-cta span { font-size: 13px; color: var(--text-dim); }
+  .lb-me-head { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 14px; }
+  .lb-me-rating { font-size: 40px; font-weight: 800; color: var(--gold); line-height: 1; }
+  .lb-me-rating small { display: block; font-size: 11px; font-weight: 600; color: var(--text-muted); letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }
+  .lb-me-meta { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+  .lb-me-meta b { color: var(--text); }
+  .lb-up { color: var(--green); } .lb-down { color: #f87171; }
+  .lb-spark { margin-left: auto; }
+  .lb-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+  .lb-tile { background: rgba(255,255,255,0.03); border: 1px solid var(--border); border-radius: 10px; padding: 9px 11px; }
+  .lb-tile .v { font-size: 17px; font-weight: 700; color: var(--text); }
+  .lb-tile .k { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+  .lb-sub { font-size: 11px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); margin: 16px 0 8px; }
+  .lb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .lb-chip { font-size: 12px; border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; color: var(--text-dim); }
+  .lb-chip i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: 0; }
+  .lb-note { font-size: 12px; color: var(--text-muted); margin-top: 12px; }
+  .lb-sorts { display: flex; gap: 6px; flex-wrap: wrap; }
+  .lb-sorts button { background: none; border: 1px solid var(--border); color: var(--text-dim); border-radius: 20px; padding: 6px 13px; font-size: 12px; cursor: pointer; }
+  .lb-sorts button.active { border-color: var(--gold); color: var(--gold); background: rgba(245,158,11,0.08); }
+  .lb-table-wrap { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
+  .lb-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .lb-table th { text-align: left; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: var(--text-muted); padding: 10px 12px; border-bottom: 1px solid var(--border); font-weight: 700; }
+  .lb-table td { padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,0.04); color: var(--text-dim); white-space: nowrap; }
+  .lb-table tbody tr { cursor: pointer; }
+  .lb-table tbody tr:hover td { background: rgba(255,255,255,0.03); }
+  .lb-table td.lb-rank { color: var(--text-muted); width: 36px; }
+  .lb-table td.lb-name { color: var(--text); font-weight: 600; white-space: normal; }
+  .lb-table td.lb-rating { color: var(--gold); font-weight: 700; }
+  .lb-table tr.lb-mine td { background: rgba(245,158,11,0.07); }
+  .lb-table tr.lb-pinned td { border-top: 2px dashed var(--border); }
+  .lb-table td small { color: var(--text-muted); }
+  .lb-empty { text-align: center; padding: 22px !important; color: var(--text-muted) !important; cursor: default; }
+  .lb-how { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+  .lb-how summary { cursor: pointer; color: var(--text-muted); font-size: 12px; }
+  .lb-how p { margin-top: 8px; }
+  .gameover-rating { font-size: 13px; color: var(--text-dim); margin: 6px 0 2px; }
+  @media (max-width: 600px) {
+    #leaderboardPage { padding: 24px 12px 48px; }
+    .lb-wide { display: none; }
+    .lb-table td, .lb-table th { padding: 8px 8px; }
+    .lb-spark { margin-left: 0; }
+    .lb-tiles { grid-template-columns: repeat(2, 1fr); }
   }
 
   /* ── Rules Page ──────────────────────────────── */
@@ -1549,17 +1604,18 @@
       <div class="mode-card-title">Multiplayer</div>
       <div class="mode-card-desc">Create or join a table with friends using a 4-digit code</div>
     </div>
+    <div class="mode-card" onclick="goLeaderboard()">
+      <div class="mode-card-icon">🏆</div>
+      <div class="mode-card-title">Leaderboard</div>
+      <div class="mode-card-desc">Member rankings by rating — wins, finished games and more</div>
+    </div>
     <div class="mode-card" onclick="goRules()">
       <div class="mode-card-icon">📖</div>
       <div class="mode-card-title">Rules</div>
       <div class="mode-card-desc">Complete guide to Acquire — strategy, mergers, and more</div>
     </div>
-    <div class="mode-card" onclick="openFeedbackModal()">
-      <div class="mode-card-icon">💬</div>
-      <div class="mode-card-title">Feedback</div>
-      <div class="mode-card-desc">Still in beta — report bugs or share suggestions</div>
-    </div>
   </div>
+  <button class="home-feedback-link" onclick="openFeedbackModal()">💬 Still in beta — report a bug or share a suggestion</button>
 
   <div class="recent-games-section live-games-section" id="liveGamesBox" hidden>
     <div class="recent-games-title"><span class="live-dot"></span>Live Games <span id="liveGamesNote" class="live-note"></span></div>
@@ -1709,6 +1765,31 @@
 </div>
 
 <!-- ═══ RULES PAGE ═══ -->
+<div id="leaderboardPage" class="screen">
+  <div style="display:flex;align-items:center;gap:16px;flex-shrink:0;">
+    <div class="logo-title" style="font-size:36px;">ACQUIRE</div>
+    <button class="btn btn-sm btn-secondary" onclick="goHome()">← Home</button>
+  </div>
+  <div class="lb-wrap">
+    <h2 class="lb-title">🏆 Leaderboard</h2>
+    <div id="lbTop"></div>
+    <div class="lb-sorts" id="lbSorts">
+      <button data-sort="rating" class="active" onclick="loadLeaderboard('rating')">Rating</button>
+      <button data-sort="finished" onclick="loadLeaderboard('finished')">Finished win %</button>
+      <button data-sort="multi" onclick="loadLeaderboard('multi')">Multiplayer wins</button>
+      <button data-sort="solo" onclick="loadLeaderboard('solo')">Solo wins</button>
+    </div>
+    <div class="lb-table-wrap"><table class="lb-table">
+      <thead><tr><th>#</th><th>Player</th><th>Rating</th><th title="Wins / games that played to the real end">Finished</th><th class="lb-wide" title="Finished multiplayer games">Multiplayer</th><th class="lb-wide" title="Finished solo games">Solo</th><th class="lb-wide" title="Every game, including ones ended early or quit">All games</th></tr></thead>
+      <tbody id="lbBody"><tr><td colspan="7" class="lb-empty">Loading…</td></tr></tbody>
+    </table></div>
+    <details class="lb-how"><summary>How ratings work</summary>
+      <p>Everyone starts at 1000. After each game you're compared with every other player at the table: finishing ahead of someone matters most, and winning by more money earns a bit more. Bots count as opponents with a fixed rating — Easy 900, Medium 1050, Hard 1200, Master 1400 — so beating Masters is worth far more than beating Easy bots.</p>
+      <p><b>Finished</b> games are ones that played to the real end (a chain reached 41, every chain was safe, or no moves were left). Games <b>ended early by vote</b> can lower your rating but never raise it. <b>Quitting</b> a game once everyone has had a turn counts as a loss.</p>
+    </details>
+  </div>
+</div>
+
 <div id="rulesPage" class="screen">
   <div style="display:flex;align-items:center;gap:16px;flex-shrink:0;">
     <div class="logo-title" style="font-size:36px;">ACQUIRE</div>
@@ -1860,6 +1941,7 @@
     <div style="display:flex; gap:6px;">
       <button class="btn btn-sm btn-secondary" id="btnDeclareEnd" onclick="declareEnd()" style="display:none;">End Game</button>
       <button class="btn btn-sm btn-danger" id="btnVoteEnd" onclick="initiateConcedeVote()">Vote End</button>
+      <button class="btn btn-sm btn-secondary" id="btnLeaveGame" onclick="leaveGame()" title="Leave this game">Leave</button>
       <button class="btn btn-sm btn-secondary" id="btnStopWatching" style="display:none" onclick="stopWatching()">Stop Watching</button>
       <button class="btn btn-sm btn-secondary" id="btnRestartSolo" onclick="restartSoloGame()" style="display:none;" title="Restart this game">↺ Restart</button>
     </div>
@@ -2427,6 +2509,7 @@ function _launchFinanceRoadLevel(tierIdx, levelIdx, name) {
     quickstart: true,
     botConfigs: level.bots,
     mode: `Finance Road — ${tier.name} L${levelIdx + 1}: ${level.name}`,
+    frLevel: FINANCE_ROAD_TIERS.slice(0, tierIdx).reduce((n, t) => n + t.levels.length, 0) + levelIdx + 1,
     authToken,
   }, (res) => {
     if (res.error) { showError(res.error); return; }
@@ -2510,6 +2593,8 @@ function showScreen(id) {
 
 function goHome() {
   leaveLobbyIfIn();
+  document.getElementById('yourTurnBanner').classList.remove('show');
+  try { clearHint(); hintKey = null; } catch {}
   // Watching a game: going home stops watching (the players' "watching" count drops)
   if (gameState && myIdx === -1) socket.emit('leaveRoom');
   activeSession = null;
@@ -2546,10 +2631,22 @@ function goRules() {
   history.pushState({}, '', '/rules');
   showScreen('rulesPage');
 }
+function goLeaderboard() {
+  history.pushState({}, '', '/leaderboard');
+  showScreen('leaderboardPage');
+  loadLeaderboard();
+}
 
 /* ── Browser back/forward button support ──────── */
 window.addEventListener('popstate', () => {
   const path = window.location.pathname.replace(/^\/beta/, '');
+  // Backing out of a game you're playing: same warning as the Leave button
+  if (gameState && myIdx >= 0 && gameState.phase !== 'gameOver' && document.getElementById('game').classList.contains('active')
+      && !/^\/(game|multiplayer)\/\d{4}$|^\/finance-road\/\d+\/\d+$/.test(path)) {
+    if (!confirm(leaveGameWarning())) { history.pushState({}, '', window._gameUrl || location.href); return; }
+    if (!isSoloGame) { socket.emit('leaveRoom'); if (gameState.code) clearSession(gameState.code); }
+    goHome(); return;
+  }
   if (!/^\/multiplayer\/\d{4}$/.test(path)) leaveLobbyIfIn();   // backed out of a table
   // Close replay overlay whenever navigating away from a replay URL
   if (!path.match(/\/replay\/(\d+)$/)) {
@@ -2557,6 +2654,7 @@ window.addEventListener('popstate', () => {
     replaySnapshots = []; replayIdx = 0; currentReplaySessionId = null;
   }
   if (path === '/rules')       { showScreen('rulesPage'); return; }
+  if (path === '/leaderboard') { showScreen('leaderboardPage'); loadLeaderboard(); return; }
   if (path === '/solo')        { showScreen('soloSetup'); return; }
   if (path === '/multiplayer') { showScreen('landing');   return; }
   if (path === '/quick-master') { showScreen('newLanding'); loadRecentGames(); return; }
@@ -2793,6 +2891,11 @@ function attemptReconnect(code, name, token) {
     showScreen('rulesPage');
     return;
   }
+  if (path === '/leaderboard') {
+    showScreen('leaderboardPage');
+    loadLeaderboard();
+    return;
+  }
   // /multiplayer
   if (path === '/multiplayer') {
     showScreen('landing');
@@ -2976,6 +3079,7 @@ socket.on('connect', () => {
 socket.on('gameState', (state) => {
   // Don't update live game state while replay overlay is open — prevents "(you)" bleed-through
   if (document.getElementById('replayOverlay').style.display !== 'none') return;
+  window._gameUrl = location.href;
 
   const prevIdx = prevCurrentPlayerIdx;
   const savedPrevPhase = prevPhase;
@@ -3908,6 +4012,7 @@ function renderHeader() {
   // Spectator badge
   document.getElementById('spectatorBadge').style.display = myIdx === -1 ? '' : 'none';
   document.getElementById('btnVoteEnd').style.display = myIdx === -1 ? 'none' : '';
+  document.getElementById('btnLeaveGame').style.display = myIdx === -1 || gameState.phase === 'gameOver' ? 'none' : '';
   document.getElementById('btnStopWatching').style.display = myIdx === -1 ? '' : 'none';
   // Last action strip (most recent log entry)
   const log = gameState.log || [];
@@ -3931,6 +4036,8 @@ function renderConcedeBanner() {
 
 /* ── Game Over ─────────────────────────────────── */
 function restartSoloGame() {
+  if (gameState && myIdx >= 0 && gameState.phase !== 'gameOver' && currentUser && gameUnderway()
+      && !confirm('Restart? Quitting this game counts as a loss and lowers your rating.')) return;
   if (currentFinanceRoadTier !== null && currentFinanceRoadLevel !== null) {
     // Finance Road: restart same level
     const ti = currentFinanceRoadTier, li = currentFinanceRoadLevel;
@@ -3951,7 +4058,12 @@ function renderGameOver() {
   const places = ['🥇','🥈','🥉','4th','5th','6th'];
   document.getElementById('standingsDisplay').innerHTML = (gameState.standings||[]).map((s,i)=>
     `<div class="standing-row"><span class="place">${places[i]||''}</span><span class="sname">${escapeHtml(s.name)}${isAdminName(s.name) ? ADMIN_TAG : ''}</span><span class="scash">$${s.cash.toLocaleString()}</span></div>`
-  ).join('');
+  ).join('') + (gameState.myRating ? (() => {
+    const r = gameState.myRating, ch = r.change;
+    const sign = ch > 0 ? `<span class="lb-up">+${ch}</span>` : ch < 0 ? `<span class="lb-down">${ch}</span>` : '±0';
+    const why = r.kind === 'early' && ch === 0 ? ' · ended early, so no rating gain' : '';
+    return `<div class="gameover-rating">Your rating: <b>${r.rating}</b> (${sign})${why} · <a href="#" onclick="event.preventDefault(); document.getElementById('gameOverOverlay').style.display='none'; goLeaderboard()">Leaderboard</a></div>`;
+  })() : '');
 
   const title = document.getElementById('gameOverTitle');
   const btns  = document.getElementById('gameOverButtons');
@@ -4007,8 +4119,8 @@ function chooseMergerSurvivor(chain) { socket.emit('chooseMergerSurvivor', { cha
 function declareEnd() {
   if (confirm('End the game? You still finish this turn (place your tile, buy stock), then final bonuses are paid and all stock is sold.')) socket.emit('declareGameEnd');
 }
-function initiateConcedeVote() { socket.emit('initiateConcedeVote'); }
-function submitVote(vote) { socket.emit('submitConcedeVote', { vote }); }
+function initiateConcedeVote() { if (earlyEndOk()) socket.emit('initiateConcedeVote'); }
+function submitVote(vote) { if (vote && !earlyEndOk()) return; socket.emit('submitConcedeVote', { vote }); }
 function playAgain() {
   if (isSoloGame) {
     goSolo(); // back to solo setup to configure and start fresh
@@ -4432,7 +4544,7 @@ function renderDrawerLoggedOut() {
 function renderDrawerLoggedIn(user, history, sessions = []) {
   const firstTime = !currentUser || currentUser.id !== user.id;
   currentUser = user;
-  if (firstTime) { loadFriends(); startLiveGames(); }
+  if (firstTime) { loadFriends(); startLiveGames(); if (document.getElementById('leaderboardPage').classList.contains('active')) loadLeaderboard(); }
   document.querySelector('.menu-btn')?.classList.add('logged-in');
   document.getElementById('drawerLoggedOut').style.display = 'none';
   document.getElementById('drawerLoggedIn').style.display  = 'flex';
@@ -4784,6 +4896,7 @@ function logOut() {
   updateNameInputs(null);
   renderDrawerLoggedOut();
   renderNews();
+  if (document.getElementById('leaderboardPage').classList.contains('active')) loadLeaderboard();
 }
 
 /* ── Total games counter (home page) ────────────────────────── */
@@ -5037,6 +5150,120 @@ async function openPlayerCard(userId, username, refresh) {
     }
     body.innerHTML = h;
   } catch { body.innerHTML = '<div class="pc-sub">Could not load this player.</div>'; }
+}
+
+/* ══ Leaderboard ════════════════════════════════════════════════ */
+let lbSort = 'rating', lbSeq = 0;
+const lbPct = (w, g) => g ? Math.round((w / g) * 100) + '%' : '—';
+const lbWG = (w, g) => g ? `${w}/${g} <small>${lbPct(w, g)}</small>` : '<small>—</small>';
+const lbMoney = n => n == null ? '—' : '$' + Number(n).toLocaleString();
+async function loadLeaderboard(sort) {
+  if (sort) lbSort = sort;
+  document.querySelectorAll('#lbSorts button').forEach(b => b.classList.toggle('active', b.dataset.sort === lbSort));
+  const seq = ++lbSeq;
+  const [board, me] = await Promise.all([
+    fetch('/api/leaderboard?sort=' + lbSort).then(r => r.json()).catch(() => null),
+    authToken ? fetch('/api/my-stats', { headers: authHeaders() }).then(r => r.ok ? r.json() : null).catch(() => null) : Promise.resolve(null),
+  ]);
+  if (seq !== lbSeq) return;
+  renderLbTop(me);
+  const body = document.getElementById('lbBody');
+  if (!board) { body.innerHTML = '<tr><td colspan="7" class="lb-empty">Couldn\'t load the leaderboard.</td></tr>'; return; }
+  const rows = board.rows || [];
+  const myId = currentUser && currentUser.id;
+  const row = (r, i, extra = '') => `<tr class="${r.id === myId ? 'lb-mine' : ''} ${extra}" onclick="openPlayerCard(${Number(r.id)}, '${escapeHtml(r.username).replace(/'/g, '&#39;')}')">
+      <td class="lb-rank">${i}</td>
+      <td class="lb-name">${escapeHtml(r.username)}${r.is_admin ? ' ' + ADMIN_TAG : ''}</td>
+      <td class="lb-rating">${r.rating}</td>
+      <td>${lbWG(r.fin_wins, r.fin_games)}</td>
+      <td class="lb-wide">${lbWG(r.multi_wins, r.multi_games)}</td>
+      <td class="lb-wide">${lbWG(r.solo_wins, r.solo_games)}</td>
+      <td class="lb-wide">${lbWG(r.wins, r.games)}</td></tr>`;
+  let html = rows.length ? rows.map((r, i) => row(r, i + 1)).join('')
+    : '<tr><td colspan="7" class="lb-empty">No ranked members yet — finish a game to be the first!</td></tr>';
+  if (me && !me.empty && me.isPublic && myId && !rows.some(r => r.id === myId)) {
+    html += row({ id: myId, username: me.username, is_admin: currentUser.role === 'admin', rating: me.rating,
+      fin_wins: me.finWins, fin_games: me.finGames, multi_wins: me.multiWins, multi_games: me.multiGames,
+      solo_wins: me.soloWins, solo_games: me.soloGames, wins: me.wins, games: me.games }, lbSort === 'rating' ? me.rank : '…', 'lb-pinned');
+  }
+  body.innerHTML = html;
+}
+function lbSpark(vals) {
+  if (!vals || vals.length < 2) return '';
+  const w = 160, h = 44, lo = Math.min(...vals), hi = Math.max(...vals), span = Math.max(hi - lo, 1);
+  const pts = vals.map((v, i) => `${(i / (vals.length - 1) * (w - 4) + 2).toFixed(1)},${(h - 4 - (v - lo) / span * (h - 8)).toFixed(1)}`).join(' ');
+  const last = pts.split(' ').pop().split(',');
+  return `<svg class="lb-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" aria-label="Rating over your last ${vals.length} games">
+    <polyline points="${pts}" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    <circle cx="${last[0]}" cy="${last[1]}" r="3" fill="var(--gold)"/></svg>`;
+}
+function renderLbTop(me) {
+  const top = document.getElementById('lbTop');
+  if (!authToken || !currentUser) {
+    top.innerHTML = `<div class="lb-card lb-cta"><div class="lb-cta-text"><b>Create an account to join the leaderboard</b>
+      <span>It's free — just a username and password. Your rating, wins and stats are saved from your first game.</span></div>
+      <button class="btn btn-primary" style="width:auto" onclick="lbJoin()">Create account</button></div>`;
+    return;
+  }
+  if (!me) { top.innerHTML = ''; return; }
+  if (me.empty) {
+    top.innerHTML = `<div class="lb-card"><div class="lb-me-head"><div class="lb-me-rating">1000<small>Your rating</small></div>
+      <div class="lb-me-meta">Play a game to get on the board — everyone starts at 1000.${me.isPublic ? '' : '<br>Your profile is private, so you won\'t be listed.'}</div></div></div>`;
+    return;
+  }
+  const wk = me.week ? `<span class="${me.week > 0 ? 'lb-up' : 'lb-down'}">${me.week > 0 ? '▲' : '▼'} ${Math.abs(me.week)}</span> this week` : 'No change this week';
+  const tile = (v, k) => `<div class="lb-tile"><div class="v">${v}</div><div class="k">${k}</div></div>`;
+  const BOT_ORDER = ['Easy', 'Medium', 'Hard', 'Master'];
+  const bots = BOT_ORDER.filter(d => me.bots && me.bots[d]).map(d => `<span class="lb-chip">vs ${d} bots: <b>${me.bots[d].w}</b>/${me.bots[d].g} won</span>`).join('');
+  const favs = (me.favorites || []).map((f, i) => `<span class="lb-chip"><i style="background:${chainColors[f.chain] || '#888'}"></i>${i + 1}. ${f.chain} · ${f.shares} shares${f.founded ? ` · founded ${f.founded}×` : ''}</span>`).join('');
+  const friends = (me.friends || []).map(f => `<span class="lb-chip">vs ${escapeHtml(f.username)}: <b>${f.wins}</b>–${f.losses}</span>`).join('');
+  top.innerHTML = `<div class="lb-card">
+    <div class="lb-me-head">
+      <div class="lb-me-rating">${me.rating}<small>Your rating</small></div>
+      <div class="lb-me-meta">${me.isPublic && me.rank ? `Rank <b>#${me.rank}</b> of ${me.total}` : 'Private profile — hidden from the list'}<br>
+        Highest ever <b>${me.peak}</b> · ${wk}</div>
+      ${lbSpark(me.history)}
+    </div>
+    <div class="lb-tiles">
+      ${tile(`${me.finWins}/${me.finGames} <small style="font-size:12px;color:var(--text-muted)">${lbPct(me.finWins, me.finGames)}</small>`, 'Finished games won')}
+      ${tile(`${me.multiWins}/${me.multiGames}`, 'Multiplayer won')}
+      ${tile(`${me.soloWins}/${me.soloGames}`, 'Solo won')}
+      ${tile(me.avgPlace ?? '—', 'Average place')}
+      ${tile(lbMoney(me.bestCash), 'Most money in one game')}
+      ${tile(lbMoney(me.avgCash), 'Average final money')}
+      ${tile(lbMoney(me.avgMargin), 'Average winning margin')}
+      ${tile(`${me.streak} <small style="font-size:12px;color:var(--text-muted)">best ${me.bestStreak}</small>`, 'Win streak')}
+      ${tile(me.chainsFounded, 'Chains founded')}
+      ${tile(me.mergers, 'Mergers triggered')}
+      ${tile(me.qmGames ? `${me.qmWins}/${me.qmGames}` : '—', 'Quick Master won')}
+      ${tile(me.frBest ? `Level ${me.frBest}` : '—', 'Finance Road best')}
+      ${tile(`${me.earlyWins}/${me.earlyGames}`, 'Ended early (won)')}
+      ${tile(me.quits, 'Games quit')}
+    </div>
+    ${favs ? `<div class="lb-sub">Favorite chains</div><div class="lb-chips">${favs}</div>` : ''}
+    ${bots ? `<div class="lb-sub">Against the bots (finished games)</div><div class="lb-chips">${bots}</div>` : ''}
+    ${friends ? `<div class="lb-sub">Against your friends</div><div class="lb-chips">${friends}</div>` : ''}
+  </div>`;
+}
+function lbJoin() { openProfileDrawer(); switchAuthTab('register'); }
+
+/* ── Leaving a game / ending early: say what it does to your rating ── */
+function gameUnderway() { return !!(gameState && gameState.turnNumber > (gameState.players || []).length); }
+function leaveGameWarning() {
+  if (!currentUser) return 'Leave this game?';
+  if (!gameUnderway()) return 'Leave this game? It hasn\'t really started yet, so it won\'t count against you.';
+  return 'Leave this game? It will count as a loss and lower your rating — even if you\'re winning right now.'
+    + (isSoloGame ? '' : ' A bot will take over your seat.');
+}
+function leaveGame() {
+  if (!gameState || myIdx < 0 || gameState.phase === 'gameOver') { goHome(); return; }
+  if (!confirm(leaveGameWarning())) return;
+  if (!isSoloGame) { socket.emit('leaveRoom'); if (gameState.code) clearSession(gameState.code); }
+  goHome();
+}
+function earlyEndOk() {
+  if (!currentUser) return true;
+  return confirm('End the game early? Games ended early can only lower your rating: if you\'re winning you gain nothing, and if you\'re behind it still counts as a loss.');
 }
 
 /* ══ Suggested moves (regular solo games only) ═══════════════════
@@ -5378,7 +5605,7 @@ socket.on('invite', (inv) => {
   dec.onclick = () => { socket.emit('inviteResponse', { id: inv.id, accept: false }); done(); };
   join.onclick = () => {
     if (gameState && myIdx >= 0 && gameState.phase !== 'gameOver' && document.getElementById('game').classList.contains('active')
-        && !confirm('Leave the game you are in and join this table?')) return;
+        && !confirm('Leave the game you are in and join this table?' + (currentUser && gameUnderway() ? ' Leaving counts as a loss.' : ''))) return;
     socket.emit('inviteResponse', { id: inv.id, accept: true }, (r) => {
       done();
       if (r && r.error) return showError(r.error);

@@ -237,6 +237,7 @@ app.post('/api/register', verifyLimit, smsOnly, async (req, res) => {
   if (username.length < 2 || username.length > 20 || !/^[a-zA-Z0-9_]+$/.test(username)) {
     return res.status(400).json({ error: 'Invalid username' });
   }
+  if (!isClean(username)) return res.status(400).json({ error: 'Please pick a different username' });
 
   const e164 = normalisePhone(phone);
   const check = await verifyOtp(e164, code);
@@ -427,6 +428,45 @@ app.get('/api/recent-games', (req, res) => {
   res.json({ sessions });
 });
 
+/* ── Leaderboard + your stats ───────────────────────────────── */
+const lbName = n => isClean(n) ? n : censor(n);
+app.get('/api/leaderboard', (req, res) => {
+  const sort = ['rating', 'finished', 'multi', 'solo'].includes(req.query.sort) ? req.query.sort : 'rating';
+  const rows = db.stats.leaderboard(sort, 100).map(r => ({ ...r, username: lbName(r.username), is_admin: !!r.is_admin }));
+  res.json({ sort, rows });
+});
+app.get('/api/my-stats', requireAuth, (req, res) => {
+  const user = db.findById(req.userId);
+  if (!user) return res.status(404).json({ error: 'User not found' });
+  const s = db.stats.get(req.userId);
+  const { rank, total } = db.stats.rankOf(req.userId);
+  const base = { id: user.id, username: user.username, isPublic: !!user.public_profile, rank, total };
+  if (!s) return res.json({ ...base, empty: true, rating: 1000 });
+  const now = Math.floor(Date.now() / 1000);
+  const hist = s.history || [];
+  const weekAgo = [...hist].reverse().find(h => h[0] <= now - 7 * 86400);
+  const firstThisWeek = hist.find(h => h[0] > now - 7 * 86400);
+  const weekStart = weekAgo ? weekAgo[1] : firstThisWeek ? (hist[hist.indexOf(firstThisWeek) - 1] || [0, 1000])[1] : s.rating;
+  const favorites = Object.entries(s.chain_counts || {})
+    .map(([chain, c]) => ({ chain, founded: c.f || 0, shares: c.b || 0, score: (c.b || 0) + 3 * (c.f || 0) }))
+    .filter(c => c.score > 0).sort((a, b) => b.score - a.score).slice(0, 3);
+  const friendIds = db.social.friendIds(req.userId);
+  res.json({
+    ...base, rating: s.rating, peak: s.peak_rating, week: s.rating - weekStart,
+    games: s.games, wins: s.wins, finGames: s.fin_games, finWins: s.fin_wins,
+    earlyGames: s.early_games, earlyWins: s.early_wins, quits: s.quits,
+    multiGames: s.multi_games, multiWins: s.multi_wins, soloGames: s.solo_games, soloWins: s.solo_wins,
+    avgPlace: s.fin_games ? Math.round((s.place_sum / s.fin_games) * 10) / 10 : null,
+    avgCash: s.fin_games ? Math.round(s.cash_sum / s.fin_games / 100) * 100 : null,
+    bestCash: s.best_cash, avgMargin: s.fin_wins ? Math.round(s.margin_sum / s.fin_wins / 100) * 100 : null,
+    streak: s.streak, bestStreak: s.best_streak,
+    chainsFounded: s.chains_founded, mergers: s.mergers, favorites,
+    bots: s.bot_record, qmGames: s.qm_games, qmWins: s.qm_wins, frBest: s.fr_best,
+    history: hist.slice(-30).map(h => h[1]),
+    friends: db.stats.h2hFor(req.userId, friendIds),
+  });
+});
+
 // Public profile card (stats + recent games). Respects the "Public Profile" setting.
 app.get('/api/users/:id/profile', (req, res) => {
   const id = Number(req.params.id);
@@ -591,7 +631,7 @@ app.delete('/api/news/replies/:id', requireAdmin, (req, res) => {
   res.json({ ok: db.deleteNewsReply(Number(req.params.id)) > 0 });
 });
 
-const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/feedback', '/finance-road', '/finance-road/:tier/:level', '/quick-master', '/replay/:id', '/game/:code([0-9]{4})'];
+const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/leaderboard', '/feedback', '/finance-road', '/finance-road/:tier/:level', '/quick-master', '/replay/:id', '/game/:code([0-9]{4})'];
 app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
 app.get('/training', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'training.html')));
 for (const route of clientRoutes) {
@@ -615,6 +655,7 @@ const rooms = {};
 
 /* Friends, invites, live games, friend chat, reports — see social.js */
 const { censor, isClean } = require('./filter');
+const ratings = require('./ratings');
 const socialApi = require('./social')({
   app, io, db, getRooms: () => rooms, verifyToken, requireAuth, requireAdmin, byVisitor, isAdminUser,
 });
@@ -667,6 +708,9 @@ function broadcastState(code) {
       clientState.hintsAllowed = hintsAllowed(room);
       clientState.code = code;
       if (room.sessionId) clientState.sessionId = room.sessionId;
+      if (room.ratingResult && p.userId && room.ratingResult.changes[p.name] !== undefined) {
+        clientState.myRating = { change: room.ratingResult.changes[p.name], rating: db.stats.rating(p.userId), kind: room.ratingResult.kind };
+      }
       io.to(p.socketId).emit('gameState', clientState);
     }
   }
@@ -716,7 +760,7 @@ function persistRoom(code) {
 
 function deleteRoom(code) {
   const room = rooms[code];
-  if (room) { clearTimeout(room.cleanupTimer); clearTimeout(room._saveTimer); }
+  if (room) { clearTimeout(room.cleanupTimer); clearTimeout(room._saveTimer); room.players.forEach(p => clearDropTimer(code, p.name)); }
   delete rooms[code];
   try { db.deleteActiveRoom(code); } catch {}
 }
@@ -732,6 +776,7 @@ function restoreRooms() {
     room.botScheduled = false;
     rooms[code] = room;
     scheduleAbandonedRoomCleanup(code);   // deleted if nobody rejoins in time
+    room.players.forEach(p => scheduleDropTimer(code, p));
     scheduleBotTurn(code);                // resume if a bot was mid-turn
   }
   if (restored.length) console.log(`[persist] restored ${restored.length} game(s) in progress`);
@@ -779,12 +824,6 @@ function broadcastLobby(code) {
 }
 
 /* ── ELO + game recording ───────────────────────────────────── */
-const ELO_K = 32;
-
-function expectedScore(myElo, oppElo) {
-  return 1 / (1 + Math.pow(10, (oppElo - myElo) / 400));
-}
-
 function recordGameEnd(code) {
   const room = rooms[code];
   if (!room || !room.game || room.gameRecorded) return;
@@ -803,52 +842,18 @@ function recordGameEnd(code) {
     return { name: s.name, cash: s.cash, isBot: rp?.isBot || false, userId: rp?.userId || null };
   });
   try {
-    const sessionId = db.recordSession(room.isSolo, room.players.length, humanCount, durationSeconds, turnCount, sessionStandings, room.replaySnapshots || []);
+    const endType = room.game.endReason && room.game.endReason.type || null;
+    const sessionId = db.recordSession(room.isSolo, room.players.length, humanCount, durationSeconds, turnCount, sessionStandings, room.replaySnapshots || [],
+      room.mode || (room.isSolo ? 'Solo' : 'Multiplayer'), endType);
     console.log(`[session] recorded: solo=${room.isSolo} players=${room.players.length} turns=${turnCount} id=${sessionId} snapshots=${(room.replaySnapshots||[]).length}`);
     room.sessionId = sessionId; // store so broadcastState can include it in gameOver state
   } catch (err) {
     console.error('[session] recordSession failed:', err.message);
   }
 
-  const humanPlayers = room.players.filter(p => !p.isBot && p.userId);
-  if (humanPlayers.length === 0) return;
-
-  // Snapshot current ELO for all participants before any updates
-  const eloMap = {};
-  for (const p of humanPlayers) {
-    const user = db.findById(p.userId);
-    if (user) eloMap[p.userId] = user.elo;
-  }
-
-  for (const p of humanPlayers) {
-    const myRank  = standings.findIndex(s => s.name === p.name);
-    const myElo   = eloMap[p.userId] || 1000;
-    let delta = 0;
-
-    const otherHumans = humanPlayers.filter(o => o.userId !== p.userId);
-    if (otherHumans.length > 0) {
-      // Pairwise ELO vs other logged-in humans
-      for (const opp of otherHumans) {
-        const oppRank = standings.findIndex(s => s.name === opp.name);
-        const oppElo  = eloMap[opp.userId] || 1000;
-        const actual  = myRank < oppRank ? 1 : 0; // lower index = better place
-        delta += ELO_K * (actual - expectedScore(myElo, oppElo));
-      }
-      delta /= otherHumans.length; // normalize
-    } else {
-      // Solo game — compare vs fixed bot ELO 1000
-      const actual = myRank === 0 ? 1 : 0;
-      delta = ELO_K * (actual - expectedScore(myElo, 1000));
-    }
-
-    const eloChange = Math.round(delta);
-    const result    = myRank === 0 ? 'win' : 'loss';
-    const opponents = standings
-      .filter(s => s.name !== p.name)
-      .map(s => ({ name: s.name, cash: s.cash }));
-
-    db.recordGameResult(p.userId, result, eloChange, opponents);
-  }
+  // Ratings + career stats (see ratings.js)
+  try { room.ratingResult = ratings.recordGameOver(db, room); }
+  catch (err) { console.error('[ratings] recordGameOver failed:', err.message); }
 }
 
 /* ── Game start ─────────────────────────────────────────────── */
@@ -898,6 +903,36 @@ function forceDefaultBotMove(game, idx) {
 // How long a game survives with no human connected before it's thrown away.
 const RECONNECT_GRACE_MS = 5 * 60 * 1000;
 
+/* A player gives up their seat in a game in progress (Leave, or gone too long).
+ * Members take a loss once the game is underway; a Medium bot plays the seat
+ * from here so everyone else can finish. */
+const dropTimers = new Map();          // `${code}|${name}` → timer
+function clearDropTimer(code, name) { const k = `${code}|${name}`; clearTimeout(dropTimers.get(k)); dropTimers.delete(k); }
+function forfeitSeat(code, p, why) {
+  const room = rooms[code];
+  if (!room || !room.game || room.game.phase === 'gameOver' || p.isBot) return;
+  clearDropTimer(code, p.name);
+  const change = ratings.recordQuit(db, room, p);
+  if (change !== null) console.log(`[ratings] ${p.name} forfeited ${code} (${why}): ${change >= 0 ? '+' : ''}${change}`);
+  p.forfeited = true;
+  if (room.isSolo) return;
+  Object.assign(p, { isBot: true, difficulty: 'expert', personality: 'balanced', socketId: null, disconnected: false, token: null,
+    leftUserId: p.userId || null, userId: null });
+  room.game.log.push(`${p.name} ${why === 'left' ? 'left the game' : 'didn\'t come back'} — a bot plays their seat`);
+  if (!room.players.some(q => !q.isBot)) { deleteRoom(code); return; }
+  broadcastState(code);
+}
+function scheduleDropTimer(code, p) {
+  const room = rooms[code];
+  if (!room || room.isSolo || !room.game || p.isBot) return;
+  clearDropTimer(code, p.name);
+  dropTimers.set(`${code}|${p.name}`, setTimeout(() => {
+    dropTimers.delete(`${code}|${p.name}`);
+    const r = rooms[code];
+    if (r && r.players.includes(p) && p.disconnected && !p.socketId) forfeitSeat(code, p, 'gone');
+  }, RECONNECT_GRACE_MS));
+}
+
 function scheduleAbandonedRoomCleanup(code) {
   const room = rooms[code];
   if (!room) return;
@@ -908,6 +943,7 @@ function scheduleAbandonedRoomCleanup(code) {
     const humansGone = r.players.every(p => p.isBot || p.disconnected || !p.socketId);
     if (humansGone) {
       console.log(`Room ${code} abandoned for ${RECONNECT_GRACE_MS / 60000} min — deleting`);
+      if (r.game && r.game.phase !== 'gameOver') for (const p of r.players) if (!p.isBot && !p.forfeited) { try { ratings.recordQuit(db, r, p); } catch {} }
       deleteRoom(code);
     }
   }, RECONNECT_GRACE_MS);
@@ -1166,7 +1202,7 @@ io.on('connection', (socket) => {
   });
 
   /* ── Solo: create & start a solo game ── */
-  socket.on('createSoloGame', ({ name, botCount, quickstart, botConfigs, mode, authToken }, cb) => {
+  socket.on('createSoloGame', ({ name, botCount, quickstart, botConfigs, mode, authToken, frLevel }, cb) => {
     name = cleanName(name);
     if (BOT_ROSTER.some(b => b.name.toLowerCase() === name.toLowerCase())) name = name.slice(0, 17) + ' (you)';
     if (!Array.isArray(botConfigs)) botConfigs = [];
@@ -1205,6 +1241,7 @@ io.on('connection', (socket) => {
       game: null,
       isSolo: true,
       mode: typeof mode === 'string' && mode.trim() ? mode.trim().slice(0, 60) : 'Solo',
+      frLevel: Number.isInteger(frLevel) && frLevel >= 1 && frLevel <= 15 && /^Finance Road/.test(mode || '') ? frLevel : null,
       config: { maxPlayers: players.length, quickstart: quickstart !== false },
     };
 
@@ -1260,6 +1297,7 @@ io.on('connection', (socket) => {
     p.socketId = socket.id;
     p.disconnected = false;
     clearTimeout(room.cleanupTimer);
+    clearDropTimer(code, p.name);
     enter(code);
     playerName = name;
 
@@ -1471,6 +1509,7 @@ io.on('connection', (socket) => {
         p.disconnected = true;
         room.game.log.push(`${p.name} disconnected`);
         broadcastState(currentRoomCode);
+        scheduleDropTimer(currentRoomCode, p);
         if (room.players.every(q => q.isBot || q.disconnected)) scheduleAbandonedRoomCleanup(currentRoomCode);
       }
     } else {
@@ -1523,12 +1562,13 @@ io.on('connection', (socket) => {
       if (!room.game) broadcastLobby(code); else io.to(code).emit('watching', { n: room.spectators.length, names: room.spectators.map(s => s.name) });
       return;
     }
-    if (room.isSolo) { deleteRoom(code); return; }
+    if (room.isSolo) {
+      if (room.game && room.game.phase !== 'gameOver') forfeitSeat(code, me, 'left');
+      deleteRoom(code); return;
+    }
     if (room.game) {
-      me.socketId = null; me.disconnected = true;
-      room.game.log.push(`${me.name} left the game`);
-      broadcastState(code);
-      if (room.players.every(q => q.isBot || q.disconnected)) scheduleAbandonedRoomCleanup(code);
+      if (room.game.phase === 'gameOver') { me.socketId = null; me.disconnected = true; return; }
+      forfeitSeat(code, me, 'left');
       return;
     }
     leaveLobbySeat(code, me);

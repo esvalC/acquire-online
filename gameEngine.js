@@ -164,7 +164,17 @@ function createGame(playerNames, options = {}) {
     concedeVotes: {},
     concedeActive: false,
     concedeInitiator: null,
+    // Per-seat career stats for this game (chains founded, mergers set off,
+    // shares bought). Search-bot copies of the game leave this out, so only
+    // real moves are counted.
+    pstats: orderedNames.map(() => ({ founded: {}, mergers: 0, bought: {} })),
   };
+}
+
+function bumpStat(state, idx, key, chain, n = 1) {
+  const ps = state.pstats && state.pstats[idx];
+  if (!ps) return;
+  if (chain) ps[key][chain] = (ps[key][chain] || 0) + n; else ps[key] += n;
 }
 
 /* ── Tile-playability check ────────────────────────────────── */
@@ -295,11 +305,13 @@ function chooseChain(state, playerIdx, chainName) {
   const totalIssued = state.players.reduce((s, p) => s + (p.stocks[chainName] || 0), 0);
   if (totalIssued < MAX_STOCK) {
     player.stocks[chainName] = (player.stocks[chainName] || 0) + 1;
+    bumpStat(state, playerIdx, 'bought', chainName);
     state.log.push(`${player.name} founded ${chainName} and received 1 free share`);
   } else {
     state.log.push(`${player.name} founded ${chainName} (no shares available)`);
   }
 
+  bumpStat(state, playerIdx, 'founded', chainName);
   state.pendingChainChoice = null;
   state.phase = 'buyStock';
   return { ok: true };
@@ -307,6 +319,7 @@ function chooseChain(state, playerIdx, chainName) {
 
 /* ── Initiate a merger ─────────────────────────────────────── */
 function initiateMerger(state, playerIdx, tile, row, col, involvedChains) {
+  bumpStat(state, playerIdx, 'mergers');
   const chainSizes = involvedChains.map(ch => ({
     name: ch,
     size: state.chains[ch].tiles.length,
@@ -563,6 +576,7 @@ function buyStock(state, playerIdx, purchases) {
 
     player.cash -= cost;
     player.stocks[chain] = (player.stocks[chain] || 0) + count;
+    bumpStat(state, playerIdx, 'bought', chain, count);
     state.log.push(`${player.name} buys ${count} ${chain} share(s) for $${cost}`);
   }
 
