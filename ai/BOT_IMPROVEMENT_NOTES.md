@@ -173,3 +173,24 @@ strong at both 1 s and 3 s and is the same setting that lifted Medium and Hard.
 
 Benchmark tip: `bench/**` branches run on 20 GitHub shards; artifact downloads may be
 blocked from some environments — the per-shard job logs contain the same tables.
+
+### After shipping
+Ladder with the new levels (120 games each unless noted):
+| Matchup | Before | After |
+|---|---|---|
+| Medium vs 3× Easy | 56% (200) | 49.2% (400; old Medium re-measured 55.5% on 400) |
+| Hard vs 3× Medium | 56% | 67.5% |
+| Master vs 3× Hard | 35% (1.5 s Master) | 45.8% |
+| Master vs 3× Easy | 94% | 96.7% |
+
+New Medium is stronger than old Medium head-to-head (34.5%) but slightly weaker against a
+table of Easy bots (49% vs 55.5%): its futures now assume thoughtful opponents. Kept, since
+human players aren't Easy bots; revert = drop `...QUICK` from `expert` in SEARCH_LEVELS.
+
+Tried and rejected after shipping (vs shipped config at 1 s, 200 games):
+softer quick-thinking (softmax temp 1500 / 4000): 27% / 25.5%; calmer cut-off scoring
+(evalScale 10000): 22.5%; quick-thinking for the whole 24-turn future: 21%.
+
+Ideas not yet tried: tune the Easy heuristic's constants for use inside futures only
+(previous attempt with the 'expert' heuristic as playout policy showed no gain); a learned
+evaluation for cut-off positions instead of worth-if-ended-now.
