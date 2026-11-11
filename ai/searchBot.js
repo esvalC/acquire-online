@@ -458,7 +458,7 @@ function decideSearchAction(game, me, opts = {}) {
 // uses "quick-thinking" tile choices for its first 16 turns (every player picks
 // the tile that best improves their worth-if-the-game-ended-now) and is scored
 // directly after 24 turns. Live levels vs the previous versions:
-//   new Master vs 3x old Master, 3 s: 38.6% (114 games); at 1 s: 38% (200)
+//   new Master vs 3x old Master, 3 s: 37.9% (354 games); at 1 s: 38% (200)
 //   new Hard vs 3x old Hard: 35% (200)   new Medium vs 3x old Medium: 34.5% (200)
 const QUICK = { horizon: 24, greedyTurns: 16 };
 const SEARCH_LEVELS = {

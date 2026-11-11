@@ -194,3 +194,6 @@ softer quick-thinking (softmax temp 1500 / 4000): 27% / 25.5%; calmer cut-off sc
 Ideas not yet tried: tune the Easy heuristic's constants for use inside futures only
 (previous attempt with the 'expert' heuristic as playout policy showed no gain); a learned
 evaluation for cut-off positions instead of worth-if-ended-now.
+
+**Final confirmation (06:28 UTC):** live Master vs 3× previous Master (both 3 s, both with
+speedups): 90/240 = 37.5% (95%: 31–44%). With the earlier 44/114 → **134/354 = 37.9%**.

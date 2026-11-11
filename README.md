@@ -64,7 +64,7 @@ Open `http://localhost:3000`. Share your local IP (e.g. `http://192.168.1.x:3000
 Since Nov 2026 each imagined future uses "quick-thinking" tile choices for its first
 16 turns (every player picks the tile that most improves their worth if the game ended
 now) and is scored directly after 24 turns. New vs previous version, head-to-head:
-Master 38.6%, Hard 35%, Medium 34.5%. Details: `ai/BOT_IMPROVEMENT_NOTES.md`.
+Master 37.9% (354 games at 3 s), Hard 35%, Medium 34.5%. Details: `ai/BOT_IMPROVEMENT_NOTES.md`.
 
 The search bots (`ai/searchBot.js`) re-deal every tile they can't see before each
 simulated game, so they never peek at opponents' hands or the bag. They run in a
