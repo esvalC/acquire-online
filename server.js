@@ -428,6 +428,15 @@ app.get('/api/recent-games', (req, res) => {
   res.json({ sessions });
 });
 
+/* ── Site version: pages reload themselves after an update ─────
+ * A fingerprint of the page the server is handing out. Browsers compare it
+ * with the one they loaded and refresh at the next safe moment. */
+const SITE_VERSION = (() => {
+  try { return crypto.createHash('sha1').update(require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'))).digest('hex').slice(0, 12); }
+  catch { return String(Date.now()); }
+})();
+app.get('/api/version', (_req, res) => { res.set('Cache-Control', 'no-store'); res.json({ version: SITE_VERSION }); });
+
 /* ── Leaderboard + your stats ───────────────────────────────── */
 const lbName = n => isClean(n) ? n : censor(n);
 app.get('/api/leaderboard', (req, res) => {
@@ -631,7 +640,7 @@ app.delete('/api/news/replies/:id', requireAdmin, (req, res) => {
   res.json({ ok: db.deleteNewsReply(Number(req.params.id)) > 0 });
 });
 
-const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/leaderboard', '/feedback', '/finance-road', '/finance-road/:tier/:level', '/quick-master', '/replay/:id', '/game/:code([0-9]{4})'];
+const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '/rules', '/leaderboard', '/tutorial', '/feedback', '/finance-road', '/finance-road/:tier/:level', '/quick-master', '/replay/:id', '/game/:code([0-9]{4})'];
 app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
 app.get('/training', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'training.html')));
 for (const route of clientRoutes) {
@@ -656,6 +665,7 @@ const rooms = {};
 /* Friends, invites, live games, friend chat, reports — see social.js */
 const { censor, isClean } = require('./filter');
 const ratings = require('./ratings');
+const tutorial = require('./tutorial');
 const socialApi = require('./social')({
   app, io, db, getRooms: () => rooms, verifyToken, requireAuth, requireAdmin, byVisitor, isAdminUser,
 });
@@ -706,6 +716,7 @@ function broadcastState(code) {
       clientState.watching = room.spectators.length;
       clientState.watchers = room.spectators.map(s => s.name);
       clientState.hintsAllowed = hintsAllowed(room);
+      if (room.tutorial) clientState.tutorial = { chapter: room.tutorial.chapter, pos: room.tutorial.pos, total: tutorial.CHAPTERS[room.tutorial.chapter].script.length };
       clientState.code = code;
       if (room.sessionId) clientState.sessionId = room.sessionId;
       if (room.ratingResult && p.userId && room.ratingResult.changes[p.name] !== undefined) {
@@ -828,6 +839,7 @@ function recordGameEnd(code) {
   const room = rooms[code];
   if (!room || !room.game || room.gameRecorded) return;
   room.gameRecorded = true;
+  if (room.tutorial) return;                       // tutorials are never recorded or rated
 
   const standings = room.game.standings; // [{ name, cash }] sorted desc
   console.log(`[recordGameEnd] code=${code} standings=${JSON.stringify(standings)}`);
@@ -861,7 +873,7 @@ function recordSessionRow(room, standings, endType) {
 }
 // A game that never reached its end: everyone quit or walked away.
 function recordUnfinishedGame(room) {
-  if (!room || !room.game || room.gameRecorded || room.game.phase === 'gameOver' || !ratings.underway(room)) return;
+  if (!room || room.tutorial || !room.game || room.gameRecorded || room.game.phase === 'gameOver' || !ratings.underway(room)) return;
   room.gameRecorded = true;
   const worth = engine.worthIfEndedNow(room.game);
   const standings = room.game.players.map((p, i) => ({ name: p.name, cash: worth[i] })).sort((a, b) => b.cash - a.cash);
@@ -917,7 +929,7 @@ function forceDefaultBotMove(game, idx) {
 // locked, tab closed) and pick up where you left off.
 const RECONNECT_GRACE_MS = Number(process.env.RECONNECT_GRACE_MS) || 5 * 60 * 1000;   // env override is for tests
 const SOLO_GRACE_MS = Number(process.env.SOLO_GRACE_MS) || 24 * 3600 * 1000;
-const graceFor = room => room && room.isSolo && room.game && room.game.phase !== 'gameOver' ? SOLO_GRACE_MS : RECONNECT_GRACE_MS;
+const graceFor = room => room && room.isSolo && !room.tutorial && room.game && room.game.phase !== 'gameOver' ? SOLO_GRACE_MS : RECONNECT_GRACE_MS;
 
 /* A player gives up their seat in a game in progress (Leave, or gone too long).
  * Members take a loss once the game is underway; a Medium bot plays the seat
@@ -926,7 +938,7 @@ const dropTimers = new Map();          // `${code}|${name}` → timer
 function clearDropTimer(code, name) { const k = `${code}|${name}`; clearTimeout(dropTimers.get(k)); dropTimers.delete(k); }
 function forfeitSeat(code, p, why) {
   const room = rooms[code];
-  if (!room || !room.game || room.game.phase === 'gameOver' || p.isBot) return;
+  if (!room || !room.game || room.game.phase === 'gameOver' || p.isBot || room.tutorial) return;
   clearDropTimer(code, p.name);
   const change = ratings.recordQuit(db, room, p);
   if (change !== null) console.log(`[ratings] ${p.name} forfeited ${code} (${why}): ${change >= 0 ? '+' : ''}${change}`);
@@ -960,7 +972,7 @@ function scheduleAbandonedRoomCleanup(code) {
     const humansGone = r.players.every(p => p.isBot || p.disconnected || !p.socketId);
     if (humansGone) {
       console.log(`Room ${code} abandoned for ${Math.round(grace / 60000)} min — deleting`);
-      if (r.game && r.game.phase !== 'gameOver') {
+      if (r.game && r.game.phase !== 'gameOver' && !r.tutorial) {
         for (const p of r.players) if (!p.isBot && !p.forfeited) { try { ratings.recordQuit(db, r, p); } catch {} }
         recordUnfinishedGame(r);
       }
@@ -990,7 +1002,7 @@ function leaveLobbySeat(code, player) {
 /* ── Bot scheduling ─────────────────────────────────────────── */
 function scheduleBotTurn(code) {
   const room = rooms[code];
-  if (!room || !room.game || !roomHasBots(room)) return;
+  if (!room || !room.game || !roomHasBots(room) || room.tutorial) return;   // tutorial bots follow the script
   if (room.botScheduled) return;
   if (room.game.phase === 'gameOver') return;
 
@@ -1198,6 +1210,57 @@ io.on('connection', (socket) => {
     return { room, p };
   }
 
+  /* ── Tutorial ─────────────────────────────────── */
+  // The player's move must be the next one in the chapter's script.
+  function tutorialMove(room, p, type, args) {
+    const t = room.tutorial, script = tutorial.CHAPTERS[t.chapter].script, step = script[t.pos];
+    if (!tutorial.matches(step, type, args)) {
+      const want = step && step.p === tutorial.ME ? tutorial.describe(step) : 'wait for the bubble';
+      return socket.emit('actionError', `Tutorial: ${want}`);
+    }
+    const result = tutorial.apply(room.game, step);
+    if (result.error) return socket.emit('actionError', result.error);
+    t.pos++;
+    broadcastState(currentRoom);
+  }
+  socket.on('startTutorial', ({ chapter, name } = {}, cb = () => {}) => {
+    const ch = Number.isInteger(chapter) && tutorial.CHAPTERS[chapter] ? chapter : 0;
+    name = cleanName(name || 'You');
+    if (['aria', 'rex'].includes(name.toLowerCase())) name = 'You';
+    detach();
+    const code = generateCode();
+    enter(code);
+    playerName = name;
+    const token = randomUUID();
+    rooms[code] = {
+      players: [
+        { name, socketId: socket.id, ready: true, idx: 0, token, isBot: false, userId: null },
+        { name: 'Aria', socketId: null, ready: true, idx: 1, token: null, isBot: true, personality: 'balanced', difficulty: 'hard' },
+        { name: 'Rex',  socketId: null, ready: true, idx: 2, token: null, isBot: true, personality: 'focused',  difficulty: 'hard' },
+      ],
+      spectators: [], isSolo: true, mode: 'Tutorial', tutorial: { chapter: ch, pos: 0 },
+      config: { maxPlayers: 3, quickstart: true },
+      game: tutorial.build(name, tutorial.CHAPTERS[ch].setup),
+      startedAt: Date.now(), replaySnapshots: [],
+    };
+    socket.join(code);
+    cb({ ok: true, code, token, chapter: ch, chapters: tutorial.CHAPTERS.length });
+    broadcastState(code);
+  });
+  // The tutorial on screen says "go": play the next scripted bot move.
+  socket.on('tutorialBot', (_d, cb = () => {}) => {
+    const room = rooms[currentRoom];
+    if (!room || !room.tutorial || !room.game) return cb({ error: 'No tutorial' });
+    if (!room.players.some(p => p.socketId === socket.id)) return cb({ error: 'Not your tutorial' });
+    const t = room.tutorial, step = tutorial.CHAPTERS[t.chapter].script[t.pos];
+    if (!step || step.p === tutorial.ME) return cb({ error: 'Not a bot move' });
+    const result = tutorial.apply(room.game, step);
+    if (result.error) { console.error('[tutorial] scripted move failed', t.chapter, t.pos, result.error); return cb({ error: result.error }); }
+    t.pos++;
+    broadcastState(currentRoom);
+    cb({ ok: true, pos: t.pos });
+  });
+
   /* ── Multiplayer: create room ── */
   socket.on('createRoom', ({ name, maxPlayers, quickstart, authToken }, cb) => {
     name = cleanName(name);
@@ -1379,6 +1442,7 @@ io.on('connection', (socket) => {
   socket.on('placeTile', ({ tile }) => {
     const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
+    if (room.tutorial) return tutorialMove(room, p, 'placeTile', { tile });
     const result = engine.placeTile(room.game, p.idx, tile);
     if (result.error) return socket.emit('actionError', result.error);
     broadcastState(currentRoom);
@@ -1387,6 +1451,7 @@ io.on('connection', (socket) => {
   socket.on('chooseChain', ({ chain }) => {
     const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
+    if (room.tutorial) return tutorialMove(room, p, 'chooseChain', { chain });
     const result = engine.chooseChain(room.game, p.idx, chain);
     if (result.error) return socket.emit('actionError', result.error);
     broadcastState(currentRoom);
@@ -1395,6 +1460,7 @@ io.on('connection', (socket) => {
   socket.on('chooseMergerSurvivor', ({ chain }) => {
     const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
+    if (room.tutorial) return tutorialMove(room, p, 'chooseMergerSurvivor', { chain });
     const result = engine.chooseMergerSurvivor(room.game, p.idx, chain);
     if (result.error) return socket.emit('actionError', result.error);
     broadcastState(currentRoom);
@@ -1403,6 +1469,7 @@ io.on('connection', (socket) => {
   socket.on('mergerDecision', ({ sell, trade }) => {
     const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
+    if (room.tutorial) return tutorialMove(room, p, 'mergerDecision', { sell, trade });
     const result = engine.mergerDecision(room.game, p.idx, { sell, trade });
     if (result.error) return socket.emit('actionError', result.error);
     broadcastState(currentRoom);
@@ -1411,6 +1478,7 @@ io.on('connection', (socket) => {
   socket.on('buyStock', ({ purchases }) => {
     const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
+    if (room.tutorial) return tutorialMove(room, p, 'buyStock', { purchases });
     const result = engine.buyStock(room.game, p.idx, purchases || {});
     if (result.error) return socket.emit('actionError', result.error);
     broadcastState(currentRoom);
@@ -1419,6 +1487,7 @@ io.on('connection', (socket) => {
   socket.on('declareGameEnd', () => {
     const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
+    if (room.tutorial) return tutorialMove(room, p, 'declareGameEnd', {});
     const result = engine.declareGameEnd(room.game, p.idx);
     if (result.error) return socket.emit('actionError', result.error);
     broadcastState(currentRoom);
@@ -1429,6 +1498,7 @@ io.on('connection', (socket) => {
   socket.on('initiateConcedeVote', () => {
     const { room, p } = actorFor(socket, currentRoom);
     if (!p) return;
+    if (room.tutorial) return socket.emit('actionError', 'Not in the tutorial — use Exit at the top to leave.');
     const result = engine.initiateConcedeVote(room.game, p.idx);
     if (result.error) return socket.emit('actionError', result.error);
     botsJoinConcede(room);

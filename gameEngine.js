@@ -890,15 +890,45 @@ function getClientState(state, forPlayerIdx) {
   };
 }
 
+/* Nothing to buy (no chain on the board has shares left that you can afford):
+ * skip the buy step instead of waiting for a click. Not when the player could
+ * end the game right now — End Game is offered during the buy step. */
+function canBuyAny(state, idx) {
+  const cash = state.players[idx].cash;
+  for (const ch of HOTEL_CHAINS) {
+    const c = state.chains[ch];
+    if (!c.active) continue;
+    if (stockPrice(ch, c.tiles.length) > cash) continue;
+    let issued = 0;
+    for (const p of state.players) issued += p.stocks[ch] || 0;
+    if (issued < MAX_STOCK) return true;
+  }
+  return false;
+}
+function autoSkipBuy(state) {
+  if (state.phase !== 'buyStock') return;
+  const idx = state.currentPlayerIdx;
+  if (canBuyAny(state, idx)) return;
+  if (!state.endDeclared && canDeclareGameEnd(state)) return;
+  if (HOTEL_CHAINS.some(ch => state.chains[ch].active)) state.log.push(`${state.players[idx].name} has nothing to buy`);
+  buyStock(state, idx, {});
+}
+const withAutoSkip = fn => function (state, ...args) {
+  const r = fn(state, ...args);
+  if (r && !r.error) autoSkipBuy(state);
+  return r;
+};
+
 module.exports = {
+  canBuyAny,
   standingsIfEndedNow, worthIfEndedNow,
   tileToCoord, coordToTile,
   createGame,
-  placeTile,
-  passTile,
-  chooseChain,
-  chooseMergerSurvivor,
-  mergerDecision,
+  placeTile: withAutoSkip(placeTile),
+  passTile: withAutoSkip(passTile),
+  chooseChain: withAutoSkip(chooseChain),
+  chooseMergerSurvivor: withAutoSkip(chooseMergerSurvivor),
+  mergerDecision: withAutoSkip(mergerDecision),
   buyStock,
   declareGameEnd,
   canDeclareGameEnd,

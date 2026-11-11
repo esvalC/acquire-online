@@ -84,6 +84,7 @@ All bots run server-side using the same validated game engine as human players.
 acquire-online/
 ├── server.js              # Express + Socket.IO — routes, game rooms
 ├── ratings.js             # Rating + career stats after each game / quit
+├── tutorial.js            # Tutorial chapters: prepared boards + scripted moves
 ├── gameEngine.js          # Pure game logic (stateless, no I/O)
 ├── botAI.js               # Bot personalities and decision logic
 ├── auth.js                # JWT sessions, password hashing, legacy Twilio OTP
@@ -106,6 +107,9 @@ acquire-online/
 
 - **Server owns all game state.** Clients send actions; server validates and broadcasts new state to the room. Clients cannot cheat.
 - **SQLite, single file.** No external database to manage. WAL mode handles concurrent reads from two server processes.
+- **Tutorial** (`/tutorial`, `tutorial.js` + `TUT_CHAPTERS` in index.html) — four prepared chapters (first hotel & buying, mergers, safe hotels & stuck tiles, ending the game). Boards, hands, draws and bot moves are scripted, so it's the same for everyone; the server only accepts the move the bubble asks for. Never rated or recorded.
+- **Nothing to buy → no click needed.** If a player can't buy any share (no hotel on the board with shares left at a price they can afford), the buy step is skipped automatically — except when they could end the game right then.
+- **Pages update themselves.** `/api/version` is a fingerprint of index.html; when it changes (a deploy), browsers reload the next time someone goes to a menu screen — never in the middle of a game or a table.
 - **Solo games wait for you.** Walk away (tab closed, laptop asleep) and the game is kept for 24 hours; the home page offers a Resume button.
 - **Games survive restarts.** In-progress games are saved to SQLite as they're played and reloaded on startup; browsers rejoin automatically.
 - **Replays expire.** Replays are stored gzip-compressed and deleted after 5 days.

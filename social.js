@@ -298,7 +298,7 @@ module.exports = function setupSocial({ app, io, db, getRooms, verifyToken, requ
     const friends = viewerId ? new Set(S.friendIds(viewerId)) : new Set();
     const out = [];
     for (const [code, room] of Object.entries(getRooms())) {
-      if (!room.game || room.game.phase === 'gameOver') continue;
+      if (!room.game || room.game.phase === 'gameOver' || room.tutorial) continue;
       const humans = room.players.filter(p => !p.isBot);
       if (!humans.some(p => p.socketId)) continue;                  // abandoned
       const friendIn = humans.some(p => p.userId && friends.has(p.userId));

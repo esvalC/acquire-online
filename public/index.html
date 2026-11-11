@@ -376,6 +376,18 @@
   .stock-panel .buy-strip { flex: 1; }
   .buy-card.off { opacity: .35; }
   .buy-card .buy-own { font-size: 10px; color: var(--text-dim); }
+  .compact-merger .mg-head { font-size: 13px; color: var(--text); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .compact-merger .mg-bar { display: inline-flex; gap: 3px; flex-wrap: wrap; }
+  .compact-merger .mg-row { display: grid; grid-template-columns: 38px 1fr auto; align-items: center; gap: 6px; font-size: 11px; color: var(--text-dim); }
+  .compact-merger .mg-row .mg-val { white-space: nowrap; min-width: 64px; text-align: right; }
+  .compact-merger .mg-row .mg-val b { color: var(--text); }
+  .compact-merger .mg-s { width: 13px; height: 13px; border-radius: 3px; border: 1.5px solid var(--c); background: var(--c); }
+  .compact-merger .mg-s.sold { background: transparent; border-color: #f87171; position: relative; }
+  .compact-merger .mg-s.sold::after { content: '$'; position: absolute; inset: 0; font-size: 9px; line-height: 11px; text-align: center; color: #f87171; font-weight: 800; }
+  .compact-merger .mg-s.traded { background: var(--s); border-color: var(--s); opacity: .85; }
+  .compact-merger .mg-left { font-size: 12px; color: var(--gold); margin: 2px 0; }
+  .compact-merger .mg-left b { font-size: 15px; }
+  .compact-merger .mg-left span { color: var(--text-muted); font-size: 11px; }
   .compact-merger label { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-dim); margin: 2px 0 0; }
   .compact-merger input[type=range] { width: 100%; accent-color: var(--gold); margin: 0; padding: 0; height: 16px; border: none; background: none; box-shadow: none; }
   .action-panel .chain-choice-grid { grid-template-columns: repeat(2, 1fr); gap: 4px; }
@@ -818,7 +830,7 @@
     animation: fadeInUp 0.5s ease-out 0.1s both;
   }
   #newLanding .mode-cards {
-    display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 760px;
+    display: flex; gap: 20px; flex-wrap: wrap; justify-content: center; max-width: 960px;
     animation: fadeInUp 0.5s ease-out 0.2s both;
   }
   #newLanding .mode-card {
@@ -1054,6 +1066,34 @@
     .game-header-btns .btn { flex: 1; min-width: 0; padding: 7px 4px; font-size: 11px; letter-spacing: .5px; white-space: nowrap; }
     #btnDeclareEnd { background: linear-gradient(135deg, #f59e0b, #d97706); color: #1a1a1a; border: none; font-weight: 800; }
   }
+  /* ── Tutorial ── */
+  #tutorialPage { flex-direction: column; align-items: center; min-height: 100vh; padding: 40px 24px 60px; gap: 24px; }
+  .tut-page { max-width: 640px; width: 100%; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+  .tut-intro { font-size: 14px; line-height: 1.7; color: var(--text-dim); }
+  .tut-chapters { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+  .tut-chapter { display: flex; align-items: center; gap: 12px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; color: var(--text); font-size: 14px; cursor: pointer; text-align: left; }
+  .tut-chapter:hover { border-color: var(--gold); }
+  .tut-ch-n { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: rgba(245,158,11,0.15); color: var(--gold); font-weight: 700; font-size: 13px; flex-shrink: 0; }
+  .tut-ch-go { margin-left: auto; color: var(--gold); font-size: 12px; }
+  .tut-dim { position: fixed; z-index: 2500; pointer-events: none; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); transition: all .25s ease; }
+  .tut-dim.tut-dim-full { inset: 0; width: auto !important; height: auto !important; border-radius: 0; box-shadow: none; background: rgba(0,0,0,0.6); }
+  .tut-target { outline: 3px solid #f59e0b !important; outline-offset: 3px; border-radius: 6px; animation: tutGlow 1.6s ease-in-out infinite; }
+  @keyframes tutGlow { 0%,100% { outline-color: #f59e0b; } 50% { outline-color: #fde68a; } }
+  .tut-bubble { position: fixed; z-index: 3000; max-width: 340px; background: #fffbeb; color: #1f2937; border: 2.5px solid #d97706; border-radius: 14px; padding: 12px 14px; font-size: 13.5px; line-height: 1.5; box-shadow: 0 10px 30px rgba(0,0,0,0.35); animation: bubbleIn .18s ease-out; }
+  .tut-bubble b { color: #92400e; }
+  .tut-bubble.tut-card { max-width: 420px; padding: 18px 20px; }
+  .tut-bubble h3 { font-family: 'Playfair Display', serif; font-size: 22px; color: #92400e; margin-bottom: 8px; }
+  .tut-bubble p { margin-bottom: 8px; } .tut-bubble ul { margin: 0 0 8px 18px; }
+  .tut-bubble .tut-btns { display: flex; gap: 8px; justify-content: flex-end; margin-top: 10px; flex-wrap: wrap; }
+  .tut-bubble .tut-next { background: #d97706; color: #fff; border: none; border-radius: 8px; padding: 7px 18px; font-weight: 700; cursor: pointer; font-size: 13px; }
+  .tut-bubble .tut-back { background: #fff; color: #92400e; border: 1px solid #f59e0b; border-radius: 8px; padding: 7px 14px; font-weight: 600; cursor: pointer; font-size: 13px; }
+  .tut-bubble .tut-wait { margin-top: 8px; font-size: 12px; font-weight: 700; color: #b45309; text-align: right; }
+  .tut-bubble.tail-down::after { content: ''; position: absolute; bottom: -12px; left: var(--tail-x, 50%); transform: translateX(-50%); border: 9px solid transparent; border-top: 12px solid #d97706; }
+  .tut-bubble.tail-up::after { content: ''; position: absolute; top: -12px; left: var(--tail-x, 50%); transform: translateX(-50%); border: 9px solid transparent; border-bottom: 12px solid #d97706; }
+  .tut-controls { display: inline-flex; align-items: center; gap: 6px; }
+  .tut-controls[hidden] { display: none; }
+  .tut-progress { font-size: 11px; color: var(--gold); font-weight: 700; white-space: nowrap; }
+  @media (max-width: 600px) { .tut-bubble { max-width: calc(100vw - 16px); font-size: 13px; } .tut-controls { width: 100%; } .tut-progress { flex: 1; } }
   .end-panel { flex-shrink: 0; margin-top: 12px; border: 1px solid rgba(245,158,11,0.55); background: rgba(245,158,11,0.08); border-radius: 12px; padding: 14px; text-align: center; }
   .end-panel .end-why { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-top: 8px; }
   .end-panel .end-big { width: 100%; font-size: 18px; font-weight: 800; letter-spacing: 1px; padding: 14px 10px; border-radius: 10px; border: none; cursor: pointer;
@@ -1630,6 +1670,11 @@
       <div class="mode-card-title">Leaderboard</div>
       <div class="mode-card-desc">Member rankings by rating — wins, finished games and more</div>
     </div>
+    <div class="mode-card" onclick="goTutorial()">
+      <div class="mode-card-icon">🎓</div>
+      <div class="mode-card-title">Tutorial</div>
+      <div class="mode-card-desc">New to Acquire? Learn every rule in a 10-minute guided game</div>
+    </div>
     <div class="mode-card" onclick="goRules()">
       <div class="mode-card-icon">📖</div>
       <div class="mode-card-title">Rules</div>
@@ -1786,6 +1831,20 @@
 </div>
 
 <!-- ═══ RULES PAGE ═══ -->
+<div id="tutorialPage" class="screen">
+  <div style="display:flex;align-items:center;gap:16px;flex-shrink:0;">
+    <div class="logo-title" style="font-size:36px;">ACQUIRE</div>
+    <button class="btn btn-sm btn-secondary" onclick="goHome()">← Home</button>
+  </div>
+  <div class="tut-page">
+    <h2 class="lb-title">🎓 Tutorial</h2>
+    <p class="tut-intro">Learn Acquire by playing a short, guided game against two bots. Gold bubbles walk you through every important rule — founding hotels, buying stock, mergers, safe hotels and ending the game. About 10 minutes.</p>
+    <button class="btn" style="width:auto;padding:12px 32px" onclick="tutStart(0)">Start the tutorial</button>
+    <div class="lb-sub">Or jump to a chapter</div>
+    <div id="tutChapterList" class="tut-chapters"></div>
+  </div>
+</div>
+
 <div id="leaderboardPage" class="screen">
   <div style="display:flex;align-items:center;gap:16px;flex-shrink:0;">
     <div class="logo-title" style="font-size:36px;">ACQUIRE</div>
@@ -1964,6 +2023,7 @@
       <button class="btn btn-sm btn-danger" id="btnVoteEnd" onclick="initiateConcedeVote()">Vote End</button>
       <button class="btn btn-sm btn-secondary" id="btnLeaveGame" onclick="leaveGame()" title="Leave this game">Leave</button>
       <button class="btn btn-sm btn-secondary" id="btnStopWatching" style="display:none" onclick="stopWatching()">Stop Watching</button>
+      <span id="tutControls" class="tut-controls" hidden></span>
       <button class="btn btn-sm btn-secondary" id="btnRestartSolo" onclick="restartSoloGame()" style="display:none;" title="Restart this game">↺ Restart</button>
     </div>
   </div>
@@ -2612,10 +2672,33 @@ const chainColors = {
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  if (id !== 'game' && id !== 'lobby') checkForUpdate();
+}
+
+/* After an update is deployed, pages pick up the new version the next time
+ * someone moves to a menu screen (never in the middle of a game or a table). */
+let loadedVersion = null, lastVersionCheck = 0, updatePending = false;
+fetch('/api/version', { cache: 'no-store' }).then(r => r.json()).then(d => { loadedVersion = d.version; }).catch(() => {});
+function reloadIfSafe() {
+  const scr = document.querySelector('.screen.active');
+  if (scr && (scr.id === 'game' || scr.id === 'lobby')) return;        // never mid-game or at a table
+  setTimeout(() => location.reload(), 300);
+}
+function checkForUpdate(force) {
+  if (!loadedVersion) return;
+  if (updatePending) return reloadIfSafe();
+  if (!force && Date.now() - lastVersionCheck < 10000) return;
+  lastVersionCheck = Date.now();
+  fetch('/api/version', { cache: 'no-store' }).then(r => r.json()).then(d => {
+    if (!d || !d.version || d.version === loadedVersion) return;
+    updatePending = true;
+    reloadIfSafe();
+  }).catch(() => {});
 }
 
 function goHome() {
   leaveLobbyIfIn();
+  if (tut) { tut = null; tutClear(); renderTutControls(); }
   document.getElementById('yourTurnBanner').classList.remove('show');
   try { clearHint(); hintKey = null; } catch {}
   // Watching a game: going home stops watching (the players' "watching" count drops)
@@ -2678,6 +2761,7 @@ window.addEventListener('popstate', () => {
   }
   if (path === '/rules')       { showScreen('rulesPage'); return; }
   if (path === '/leaderboard') { showScreen('leaderboardPage'); loadLeaderboard(); return; }
+  if (path === '/tutorial')    { renderTutorialPage(); showScreen('tutorialPage'); return; }
   if (path === '/solo')        { showScreen('soloSetup'); return; }
   if (path === '/multiplayer') { showScreen('landing');   return; }
   if (path === '/quick-master') { showScreen('newLanding'); loadRecentGames(); return; }
@@ -2920,6 +3004,11 @@ function attemptReconnect(code, name, token) {
     loadLeaderboard();
     return;
   }
+  if (path === '/tutorial') {
+    renderTutorialPage();
+    showScreen('tutorialPage');
+    return;
+  }
   // /multiplayer
   if (path === '/multiplayer') {
     showScreen('landing');
@@ -3083,6 +3172,7 @@ socket.on('sessionLost', () => {
 socket.on('connect', () => {
   if (!lostConnection) return;          // first connect on page load
   lostConnection = false;
+  checkForUpdate(true);                 // the server restarted — maybe with an update
   if (!activeSession) return;
   const { code, name, token } = activeSession;
   socket.emit('rejoinRoom', { code, token, name }, (res) => {
@@ -3184,6 +3274,7 @@ socket.on('gameState', (state) => {
   renderConcedeBanner();
   renderQuickstart();
   maybeHint();
+  tutOnState();
   if (state.phase === 'gameOver') renderGameOver();
 
   detectBotCommentary(savedPrevPhase, prevIdx, savedPrevBoard, savedPrevStocks, state);
@@ -3271,7 +3362,7 @@ function showAnnotationBubble(anchorEl, mainText, subText) {
 }
 
 function detectBotCommentary(savedPrevPhase, savedPrevIdx, savedPrevBoard, savedPrevStocks, newState) {
-  if (!botCommentaryEnabled) return;
+  if (!botCommentaryEnabled || tut) return;
   if (savedPrevIdx < 0 || !newState.players || !newState.playerList) return;
   const prevPlayer = newState.players[savedPrevIdx]; // game-ordered — correct after quickstart shuffle
   if (!prevPlayer) return;
@@ -3600,17 +3691,19 @@ function renderActionPanel() {
       const survivorRoom = 25 - survivorIssued;
       const maxTrade = survivorRoom > 0 ? Math.min(Math.floor(held / 2) * 2, survivorRoom * 2) : 0;
       let h = `<div class="compact-merger">
-        <div style="font-size:11px;color:var(--text-muted)">You hold <b style="color:${chainColors[dc]}">${held} ${dc}</b> · sell $${dcPrice} · trade 2→1 <span style="color:${chainColors[pm.survivor]}">${pm.survivor}</span></div>
-        <label>Sell <span id="sellVal">0</span></label><input type="range" id="sellSlider" min="0" max="${held}" value="0" oninput="updateMergerSliders()"/>
+        <div class="mg-head"><span>You have <b style="color:${chainColors[dc]}">${held} ${dc}</b></span><span class="mg-bar" id="mergerBar"></span></div>
+        <div class="mg-left" id="mergerLeft"></div>
+        <div class="mg-row"><span>Sell</span><input type="range" id="sellSlider" min="0" max="${held}" value="0" oninput="updateMergerSliders()"/><span class="mg-val"><b id="sellVal">0</b> × $${dcPrice}</span></div>
         ${maxTrade > 0
-          ? `<label>Trade <span id="tradeVal">0</span></label><input type="range" id="tradeSlider" min="0" max="${maxTrade}" value="0" step="2" oninput="updateMergerSliders()"/>`
+          ? `<div class="mg-row"><span>Trade</span><input type="range" id="tradeSlider" min="0" max="${maxTrade}" value="0" step="2" oninput="updateMergerSliders()"/><span class="mg-val"><b id="tradeVal">0</b> → <span id="tradeGet">0</span> <span style="color:${chainColors[pm.survivor]}">${pm.survivor.slice(0, 4)}</span></span></div>`
           : `<div style="font-size:10px;color:var(--text-muted)">No ${pm.survivor} shares left to trade for</div><input type="hidden" id="tradeSlider" value="0"/>`}
         <div style="display:flex;gap:6px;align-items:center;margin-top:4px">
-          <div class="merger-preview" id="mergerSummary" style="flex:1;margin:0;font-size:10px">Keep all ${held}</div>
+          <div class="merger-preview" id="mergerSummary" style="flex:1;margin:0;font-size:11px">Keep all ${held}</div>
           <button class="btn btn-sm" style="width:auto" onclick="submitMergerDecision(${held})">Confirm</button>
         </div>
       </div>`;
       content.innerHTML = h;
+      updateMergerSliders();
       return;
     } else {
       const deciding = st.players[pm?.decidingPlayer];
@@ -3843,7 +3936,19 @@ function updateMergerSliders() {
   }
   document.getElementById('sellVal').textContent = sell;
   const tv = document.getElementById('tradeVal'); if (tv) tv.textContent = trade;
-  document.getElementById('mergerSummary').textContent = `Sell ${sell} · Trade ${trade}→${Math.floor(trade/2)} · Keep ${held - sell - trade}`;
+  const tg = document.getElementById('tradeGet'); if (tg) tg.textContent = Math.floor(trade / 2);
+  const keep = held - sell - trade;
+  const price = gameState.chains[dc]?.price || 0;
+  document.getElementById('mergerSummary').innerHTML =
+    `Sell ${sell}${sell ? ` (+$${(sell * price).toLocaleString()})` : ''} · Trade ${trade}→${Math.floor(trade / 2)} · Keep ${keep}`;
+  // One block per share: sold / traded / kept — so it's obvious what's left
+  const bar = document.getElementById('mergerBar');
+  if (bar) bar.innerHTML = Array.from({ length: held }, (_, i) =>
+    `<span class="mg-s ${i < sell ? 'sold' : i < sell + trade ? 'traded' : 'kept'}" style="--c:${chainColors[dc]};--s:${chainColors[pm.survivor]}"></span>`).join('');
+  const left = document.getElementById('mergerLeft');
+  if (left) left.innerHTML = keep
+    ? `<b>${keep}</b> of ${held} left to sell or trade <span>(any left over are kept)</span>`
+    : `All ${held} shares are being ${trade && sell ? 'sold or traded' : trade ? 'traded' : 'sold'}`;
 }
 
 function submitMergerDecision(held) {
@@ -4023,7 +4128,7 @@ function renderHeader() {
     showToast('End game conditions met — the player whose turn it is may end the game');
   }
   // Someone declared the end: the game finishes when their turn does.
-  if (gameState.endDeclared) {
+  if (gameState.endDeclared && gameState.phase !== 'gameOver') {
     const key = `${gameState.endDeclared.by}-${gameState.turnNumber}`;
     if (window._endDeclaredToast !== key) {
       window._endDeclaredToast = key;
@@ -4033,12 +4138,13 @@ function renderHeader() {
         : `${who} ended the game — it finishes after their turn.`);
     }
   }
-  document.getElementById('btnRestartSolo').style.display = isSoloGame ? 'inline-block' : 'none';
+  document.getElementById('btnRestartSolo').style.display = isSoloGame && !tut ? 'inline-block' : 'none';
   // Spectator badge
   document.getElementById('spectatorBadge').style.display = myIdx === -1 ? '' : 'none';
   // No Vote End once the game can be finished for real (End Game does that properly)
-  document.getElementById('btnVoteEnd').style.display = myIdx === -1 || ((gameState.canDeclareEnd || gameState.endDeclared) && !gameState.concedeActive) ? 'none' : '';
-  document.getElementById('btnLeaveGame').style.display = myIdx === -1 || gameState.phase === 'gameOver' ? 'none' : '';
+  document.getElementById('btnVoteEnd').style.display = tut || myIdx === -1 || ((gameState.canDeclareEnd || gameState.endDeclared) && !gameState.concedeActive) ? 'none' : '';
+  document.getElementById('btnLeaveGame').style.display = tut || myIdx === -1 || gameState.phase === 'gameOver' ? 'none' : '';
+  renderTutControls();
   document.getElementById('btnStopWatching').style.display = myIdx === -1 ? '' : 'none';
   // Last action strip (most recent log entry)
   const log = gameState.log || [];
@@ -4093,6 +4199,7 @@ function renderGameOver() {
 
   const title = document.getElementById('gameOverTitle');
   const btns  = document.getElementById('gameOverButtons');
+  if (tut) { title.textContent = '🎓 Tutorial complete'; btns.innerHTML = ''; return; }
 
   if (currentFinanceRoadTier !== null && currentFinanceRoadLevel !== null) {
     const ti  = currentFinanceRoadTier;
@@ -4171,6 +4278,7 @@ function renderEndPanel(canEnd, myTurnToEnd) {
   if (panel.dataset.key !== key) { panel.dataset.key = key; panel.innerHTML = html; }
 }
 function declareEnd() {
+  if (tut) { socket.emit('declareGameEnd'); return; }
   if (confirm('End the game? You still finish this turn (place your tile, buy stock), then final bonuses are paid and all stock is sold.')) socket.emit('declareGameEnd');
 }
 function initiateConcedeVote() { if (earlyEndOk()) socket.emit('initiateConcedeVote'); }
@@ -5220,6 +5328,246 @@ async function openPlayerCard(userId, username, refresh) {
   } catch { body.innerHTML = '<div class="pc-sub">Could not load this player.</div>'; }
 }
 
+/* ══ Interactive tutorial ═════════════════════════════════════════
+ * A prepared game against Aria and Rex, split into four chapters. Every
+ * step is the same for everyone: gold bubbles point at the screen; "me"
+ * steps wait for the exact move the bubble asks for (the server refuses
+ * anything else); "bot" steps play the next scripted bot move(s). */
+const tutHand = t => () => [...document.querySelectorAll('#tileHand .hand-tile')].find(e => e.textContent.trim() === t);
+const tutCell = t => () => getBoardCellEl(t);
+const tutBtn = (text, scope = '#actionContent') => () => [...document.querySelectorAll(scope + ' button')].find(b => b.textContent.includes(text));
+const tutEnd = () => window.innerWidth > 900 ? document.querySelector('#endPanel .end-big') : document.getElementById('btnDeclareEnd');
+const tutSkip = () => [...document.querySelectorAll('#actionContent .btn')].find(b => /Skip|Continue/.test(b.textContent));
+const TUT_CHAPTERS = [
+  { title: 'Your first hotel', steps: [
+    { card: `<h3>🎓 Welcome to Acquire!</h3><p>Acquire is about building <b>hotel chains</b> and owning their <b>stock</b>. Whoever has the most money at the end wins.</p><p>You'll play a short, prepared game against two bots, <b>Aria</b> and <b>Rex</b>. Follow the gold bubbles — it takes about 10 minutes.</p>`, btn: 'Start' },
+    { at: '#board', t: `This is the board: 12 columns × 9 rows. Every square has a name like <b>6C</b> — column 6, row C.` },
+    { at: '#quickstartBanner', t: `To start, everyone drew a tile — closest to 1A goes first. Those tiles stay on the board as <b>loose tiles</b>.` },
+    { at: '#tileHand', t: `These are your <b>6 tiles</b>. Each one matches a square on the board. Hover over a tile to preview where it goes.` },
+    { at: tutHand('6C'), me: true, t: `Play <b>6C</b>. It's next to the loose tile at 5C — two touching loose tiles <b>found a new hotel</b>!` },
+    { at: tutBtn('American'), me: true, t: `Name your hotel. Names come in three price levels:<br>• <b>Cheap:</b> Tower, Luxor — $200 a share at 2 tiles<br>• <b>Middle:</b> American, Worldwide, Festival — $300<br>• <b>Expensive:</b> Imperial, Continental — $400<br>Expensive hotels cost more per share but pay bigger bonuses, and every share's price rises as its hotel grows.<br><br>Choose <b>American</b>.` },
+    { at: '#stockMatrix', t: `Founders get <b>1 free share</b>. This table shows who owns what in every hotel.` },
+    { at: () => document.getElementById('buycard-American'), me: true, t: `Now buy stock: up to <b>3 shares a turn</b>, in any hotels on the board. Each hotel has only 25 shares. You start with $6,000, and cash only comes back from bonuses and selling — so spend wisely.<br><br>Click <b>3</b> on the American card, then press <b>Buy</b>.` },
+    { bot: 3, at: tutCell('9E'), t: `<b>Aria:</b> “My turn to build!” She played 9E next to her loose tile, named it <b>Luxor</b> and bought 2 shares. Now there are two hotels to invest in.` },
+    { bot: 2, at: tutCell('12A'), t: `<b>Rex</b> played 12A — it touches nothing, so it just sits there. Then he bought 2 shares of <b>your</b> American. Rex: “I'll take a piece of yours.”` },
+    { at: tutHand('11H'), me: true, t: `Your turn. Not every turn builds something. Play <b>11H</b> — it touches nothing, so it's a loose tile that may connect to something later.` },
+    { at: '#stockMatrix', t: `<b>Who gets paid?</b> When a hotel is bought out in a merger, or when the game ends, its <b>biggest shareholder gets the 1st-place bonus</b> (10× the share price) and the <b>second biggest gets the 2nd-place bonus</b> (5×). Aim to be 1st or a solid 2nd — shares where you finish 3rd only pay their sale price.` },
+    { at: '#stockMatrix', t: `<b>Ties:</b> if two players tie for 1st, they add the 1st and 2nd bonuses together and split them, and nobody else gets 2nd. If players tie for 2nd, they split the 2nd bonus.` },
+    { at: () => document.getElementById('buycard-Luxor'), me: true, t: `Aria has 3 Luxor. Buy <b>3 Luxor</b> to tie her for 1st — click <b>3</b> on the Luxor card, then <b>Buy</b>.` },
+    { at: '#stockMatrix', t: `Now you lead <b>American 4–2</b> over Rex, and you're <b>tied 3–3 with Aria in Luxor</b>. If Luxor were bought out right now, you two would split its bonuses.` },
+    { bot: 2, at: tutCell('7C'), t: `Aria played <b>7C</b> next to your hotel — tiles that touch a hotel join it. American grew to 3 tiles and its price went from $300 to <b>$400</b>, so every share you own is worth more. Then she bought 1 more Luxor to lead it 4–3. The race is on!` },
+    { card: `<h3>⏩ A few turns later…</h3><p>Next up: <b>mergers</b>, the heart of the game.</p>`, btn: 'Continue' },
+  ] },
+  { title: 'Mergers', steps: [
+    { at: tutCell('4E'), t: `A few turns have passed. You lead <b>American</b> (6 tiles). <b>Tower</b> has 3 tiles: you own 5 of its shares, Rex 3 and Aria 1.` },
+    { at: tutHand('6E'), t: `Look at <b>6E</b>: it touches American <i>and</i> Tower. Playing it causes a <b>merger</b>. The <b>bigger hotel survives</b> and buys out the smaller one — American (6) takes over Tower (3), and Tower closes.` },
+    { at: tutHand('6E'), me: true, t: `Play <b>6E</b>.` },
+    { at: '#actionPanel', t: `Tower's shareholders are paid right away. You were the biggest holder: <b>$3,000</b> 1st-place bonus. Rex was 2nd: <b>$1,500</b>. Aria, in 3rd, gets nothing.` },
+    { at: '#actionPanel', me: true, preset: { sell: 1, trade: 4 }, t: `Now choose what to do with your 5 Tower shares — any mix of:<br>• <b>Sell</b> them at Tower's price now ($300 each)<br>• <b>Trade</b> 2 Tower for 1 American<br>• <b>Keep</b> them<br><br>We've set <b>Sell 1, Trade 4</b> for you — press <b>Confirm</b>.` },
+    { bot: 1, at: '#stockMatrix', t: `Everyone holding Tower decides in turn, starting with whoever caused the merger. <b>Aria:</b> “I'll keep my Tower share — maybe it comes back.”` },
+    { bot: 1, at: '#stockMatrix', t: `<b>Rex:</b> “Selling all 3 — I need the cash.”` },
+    { at: tutCell('8E'), t: `<b>Tower has closed.</b> Its tiles now belong to American, and the Tower name is free again. If someone founds Tower later, Aria's kept share is worth something again — until then it's worth nothing.` },
+    { at: () => document.getElementById('buycard-Festival'), me: true, t: `Your buy. Festival is about to matter — click <b>2</b> on the Festival card, then <b>Buy</b>.` },
+    { bot: 2, at: tutCell('11B'), t: `Aria played a loose tile and kept her cash. <b>Aria:</b> “Saving up.”` },
+    { bot: 2, at: tutCell('1A'), t: `Rex played a loose tile and bought 1 Worldwide.` },
+    { at: tutHand('7H'), t: `<b>7H</b> touches Festival and Worldwide, and both have <b>4 tiles</b>. When the hotels are the same size, the player who caused the merger <b>chooses which one survives</b>.` },
+    { at: tutHand('7H'), me: true, t: `Play <b>7H</b>.` },
+    { at: tutBtn('Festival'), me: true, t: `You lead Festival 5–1, so keep it alive: choose <b>Festival</b>.` },
+    { bot: 1, at: '#stockMatrix', t: `Worldwide's shareholders were paid: Aria $5,000 (1st), Rex $2,500 (2nd). You owned none, so you have nothing to decide. <b>Aria:</b> “Trading 4 Worldwide for 2 Festival.”` },
+    { bot: 1, at: '#stockMatrix', t: `<b>Rex:</b> “Selling mine.”` },
+    { at: tutSkip, me: true, t: `Good to know: a tile can touch 3 or even 4 hotels. Then they're bought out from biggest to smallest, one at a time.<br><br>Press <b>Skip</b> to end your turn without buying.` },
+    { card: `<h3>⏩ Later in the game…</h3><p>Next: <b>safe hotels</b> and tiles you can't play.</p>`, btn: 'Continue' },
+  ] },
+  { title: 'Safe hotels & stuck tiles', steps: [
+    { at: tutCell('3B'), t: `All 7 hotels are on the board now. A hotel with <b>11 or more tiles is safe</b>: it can still buy out smaller hotels, but it can never be bought out. Continental (12) and Imperial (11) are safe.` },
+    { at: tutHand('3C'), t: `<b>3C</b> is crossed out: it would join Continental and Imperial — two safe hotels. That's never allowed, so it's a <b>dead tile</b>. It's swapped for a new one at the end of your turn.` },
+    { at: tutHand('7H'), t: `<b>7H</b> is crossed out for a different reason: it would found a new hotel, but all 7 are already on the board. It's <b>blocked</b> — you keep it, and it becomes playable once a hotel closes in a merger.` },
+    { at: tutHand('7A'), me: true, t: `Play <b>7A</b> — it grows Continental.` },
+    { at: () => document.getElementById('buycard-Continental'), me: true, t: `Click <b>2</b> on the Continental card, then <b>Buy</b>.` },
+    { at: '#tileHand', t: `Your dead tile 3C was swapped for a new one. The blocked 7H stays in your hand.` },
+    { card: `<h3>⏩ Near the end…</h3><p>Last chapter: <b>ending the game</b>.</p>`, btn: 'Continue' },
+  ] },
+  { title: 'Ending the game', steps: [
+    { at: tutCell('4D'), t: `Continental has <b>40 tiles</b>. You may end the game on your turn when any hotel has <b>41 or more tiles</b>, or when <b>every hotel on the board is safe</b>. It also ends by itself when all 7 hotels are safe, or when nobody can play a tile.` },
+    { at: tutHand('5D'), me: true, t: `Play <b>5D</b> to take Continental to 41.` },
+    { at: tutEnd, me: true, t: `The <b>End Game</b> button appeared. Ending is optional, only the player whose turn it is can do it, and you still finish your turn. Press <b>End Game</b>.` },
+    { at: tutSkip, me: true, t: `Finish your turn: press <b>Skip</b>.` },
+    { at: '#standingsDisplay', t: `Every hotel pays its 1st and 2nd bonuses, then all stock is sold at current prices. <b>Most money wins — that's you!</b>` },
+    { at: '#standingsDisplay', t: `One more thing: <b>Vote End</b> is only for stopping a game early, and it can only lower your rating. Leaving a game before it ends counts as a loss.` },
+    { card: `<h3>🎉 You're ready to play!</h3><p>A few tips:</p><ul><li>Lead a few hotels instead of owning a little of many.</li><li>Founding a hotel gives you a free share.</li><li>Watch for mergers coming — be 1st or 2nd when they happen.</li><li>Don't spend down to $0.</li><li>Safe hotels lock in their value.</li></ul><p style="font-size:12px;opacity:.8">Tip: in Solo you can turn on <b>Suggested moves</b> for a hint every turn while you practice.</p>`,
+      buttons: [['Play Solo', "tutExit('solo')"], ['Tutorial menu', "tutExit('menu')"], ['Home', "tutExit('home')"]] },
+  ] },
+];
+
+let tut = null;           // { ch, i, busy }
+let tutBubbleEl = null, tutDimEl = null, tutTargetEl = null;
+const tutDone = () => { try { return JSON.parse(localStorage.getItem('acquire_tutorial_done') || '[]'); } catch { return []; } };
+function tutMarkDone(ch) { const d = new Set(tutDone()); d.add(ch); try { localStorage.setItem('acquire_tutorial_done', JSON.stringify([...d])); } catch {} }
+function tutMovesBefore(ch, i) { return TUT_CHAPTERS[ch].steps.slice(0, i).reduce((n, s) => n + (s.me ? 1 : s.bot || 0), 0); }
+
+function goTutorial() {
+  history.pushState({}, '', '/tutorial');
+  renderTutorialPage();
+  showScreen('tutorialPage');
+}
+function renderTutorialPage() {
+  const done = tutDone();
+  document.getElementById('tutChapterList').innerHTML = TUT_CHAPTERS.map((c, i) =>
+    `<button class="tut-chapter" onclick="tutStart(${i})"><span class="tut-ch-n">${done.includes(i) ? '✓' : i + 1}</span><span>${escapeHtml(c.title)}</span><span class="tut-ch-go">Play ›</span></button>`).join('');
+}
+function tutStart(ch) {
+  if (gameState && myIdx >= 0) socket.emit('leaveRoom');
+  tutClear();
+  const name = (currentUser && currentUser.username) || 'You';
+  socket.emit('startTutorial', { chapter: ch, name }, (res) => {
+    if (!res || res.error) return showError((res && res.error) || 'Could not start the tutorial');
+    myName = name; isSoloGame = true; window._endConditionNotified = true;
+    activeSession = { code: res.code, name, token: res.token };
+    tut = { ch: res.chapter, i: 0, busy: false, played: new Set() };
+    document.getElementById('gameOverOverlay').style.display = 'none';
+    history.replaceState({}, '', '/tutorial');
+    showScreen('game');
+    startTurnClock();
+    setTimeout(tutShow, 400);
+  });
+}
+function tutStep() { return tut && TUT_CHAPTERS[tut.ch].steps[tut.i]; }
+function tutResolve(at) {
+  if (!at) return null;
+  try { return typeof at === 'function' ? at() : document.querySelector(at); } catch { return null; }
+}
+function tutClear() {
+  if (tutBubbleEl) tutBubbleEl.remove();
+  if (tutTargetEl) tutTargetEl.classList.remove('tut-target');
+  if (tutDimEl) tutDimEl.remove();
+  tutBubbleEl = tutDimEl = tutTargetEl = null;
+}
+function tutShow() {
+  tutClear();
+  const st = tutStep();
+  if (!tut || !st) return;
+  renderTutControls();
+  if (st.card) return tutCard(st);
+  if (st.bot && !tut.played.has(tut.i)) return tutPlayBots(st);
+  const target = tutResolve(st.at);
+  if (st.preset) tutPreset(st.preset);
+  // dim everything except the target
+  tutDimEl = document.createElement('div');
+  tutDimEl.className = 'tut-dim';
+  document.body.appendChild(tutDimEl);
+  if (target) {
+    target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    tutTargetEl = target; target.classList.add('tut-target');
+  }
+  const b = document.createElement('div');
+  b.className = 'tut-bubble';
+  const backOk = tut.i > 0 && !st.me && !st.bot && !TUT_CHAPTERS[tut.ch].steps[tut.i - 1].me && !TUT_CHAPTERS[tut.ch].steps[tut.i - 1].bot && !TUT_CHAPTERS[tut.ch].steps[tut.i - 1].card;
+  b.innerHTML = `<div class="tut-text">${st.t}</div>`
+    + (st.me ? `<div class="tut-wait">Your move ↑</div>` : `<div class="tut-btns">${backOk ? '<button class="tut-back" onclick="tutBack()">Back</button>' : ''}<button class="tut-next" onclick="tutNext()">Next</button></div>`);
+  document.body.appendChild(b);
+  tutBubbleEl = b;
+  tutPlace();
+}
+function tutPlace() {
+  const b = tutBubbleEl;
+  if (!b) return;
+  const target = tutTargetEl;
+  const r = target ? target.getBoundingClientRect() : null;
+  if (tutDimEl && !tutDimEl.classList.contains('tut-dim-full')) {
+    if (r && r.width) Object.assign(tutDimEl.style, { left: r.left - 6 + 'px', top: r.top - 6 + 'px', width: r.width + 12 + 'px', height: r.height + 12 + 'px' });
+    else Object.assign(tutDimEl.style, { left: '50%', top: '50%', width: '0px', height: '0px' });
+  }
+  const bw = b.offsetWidth, bh = b.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
+  b.classList.remove('tail-up', 'tail-down');
+  if (!r || !r.width) { b.style.left = (vw - bw) / 2 + 'px'; b.style.top = (vh - bh) / 2 + 'px'; return; }
+  const below = vh - r.bottom, above = r.top;
+  let y, tail;
+  if (above >= bh + 18 && (above >= below || below < bh + 18)) { y = r.top - bh - 14; tail = 'tail-down'; }
+  else if (below >= bh + 18) { y = r.bottom + 14; tail = 'tail-up'; }
+  else { y = Math.max(8, Math.min(vh - bh - 8, r.top + r.height / 2 - bh / 2)); tail = null; }   // big target: sit on top of it
+  const x = Math.max(8, Math.min(r.left + r.width / 2 - bw / 2, vw - bw - 8));
+  b.style.left = x + 'px'; b.style.top = y + 'px';
+  if (tail) { b.classList.add(tail); b.style.setProperty('--tail-x', Math.max(18, Math.min(r.left + r.width / 2 - x, bw - 18)) + 'px'); }
+}
+window.addEventListener('resize', () => { if (tutBubbleEl) tutPlace(); });
+window.addEventListener('scroll', () => { if (tutBubbleEl) tutPlace(); }, true);
+function tutCard(st) {
+  tutDimEl = document.createElement('div');
+  tutDimEl.className = 'tut-dim tut-dim-full';
+  document.body.appendChild(tutDimEl);
+  const b = document.createElement('div');
+  b.className = 'tut-bubble tut-card';
+  const last = tut.i === TUT_CHAPTERS[tut.ch].steps.length - 1;
+  const btns = st.buttons || [[st.btn || 'Next', last ? 'tutCardNext()' : 'tutNext()']];
+  b.innerHTML = `<div class="tut-text">${st.card}</div><div class="tut-btns">${btns.map(([label, fn], k) => `<button class="${k ? 'tut-back' : 'tut-next'}" onclick="${fn}">${label}</button>`).join('')}</div>`;
+  document.body.appendChild(b);
+  tutBubbleEl = b;
+  tutPlace();
+}
+function tutNext() {
+  if (!tut || tut.i >= TUT_CHAPTERS[tut.ch].steps.length - 1) return;
+  tut.i++;
+  tutShow();
+}
+// A card at the end of a chapter moves on to the next chapter
+function tutCardNext() { tutMarkDone(tut.ch); tutStart(tut.ch + 1); }
+function tutBack() { if (tut && tut.i > 0) { tut.i--; tutShow(); } }
+function tutPlayBots(st) {
+  if (tut.busy) return;
+  tut.busy = true;
+  let left = st.bot;
+  const playOne = () => socket.emit('tutorialBot', {}, (res) => {
+    if (!tut) return;
+    if (!res || res.error) { tut.busy = false; showError('Tutorial got out of step — restarting this chapter'); return tutStart(tut.ch); }
+    if (--left > 0) return setTimeout(playOne, 750);
+    setTimeout(() => { if (!tut) return; tut.busy = false; tut.played.add(tut.i); tutShow(); }, 650);
+  });
+  setTimeout(playOne, 500);
+}
+function tutPreset(p) {
+  const s = document.getElementById('sellSlider'), t = document.getElementById('tradeSlider');
+  if (s) s.value = p.sell;
+  if (t) t.value = p.trade;
+  try { updateMergerSliders(); } catch {}
+}
+// Called after every game state render
+function tutOnState() {
+  if (!tut || !gameState || !gameState.tutorial) return;
+  const st = tutStep();
+  if (!st) return;
+  if (st.me && gameState.tutorial.pos > tutMovesBefore(tut.ch, tut.i)) { tut.i++; tutClear(); return setTimeout(tutShow, 350); }
+  if (tutBubbleEl && !st.card) {                     // the screen re-rendered: re-attach to the (new) target
+    const target = tutResolve(st.at);
+    if (target !== tutTargetEl) {
+      if (tutTargetEl) tutTargetEl.classList.remove('tut-target');
+      tutTargetEl = target; if (target) target.classList.add('tut-target');
+    }
+    if (st.preset) tutPreset(st.preset);
+    tutPlace();
+  }
+}
+function renderTutControls() {
+  const box = document.getElementById('tutControls');
+  if (!box) return;
+  if (!tut) { box.hidden = true; return; }
+  box.hidden = false;
+  box.innerHTML = `<span class="tut-progress">🎓 ${tut.ch + 1}/${TUT_CHAPTERS.length} · ${escapeHtml(TUT_CHAPTERS[tut.ch].title)}</span>`
+    + (tut.ch < TUT_CHAPTERS.length - 1 ? `<button class="btn btn-sm btn-secondary" onclick="tutStart(${tut.ch + 1})">Skip chapter</button>` : '')
+    + `<button class="btn btn-sm btn-secondary" onclick="tutExit('menu')">Exit</button>`;
+}
+function tutExit(where) {
+  if (tut && tut.ch === TUT_CHAPTERS.length - 1 && gameState && gameState.phase === 'gameOver') tutMarkDone(tut.ch);
+  tut = null;
+  tutClear();
+  renderTutControls();
+  document.getElementById('gameOverOverlay').style.display = 'none';
+  if (gameState) socket.emit('leaveRoom');
+  activeSession = null; isSoloGame = false; gameState = null; stopTurnClock();
+  if (where === 'solo') { goSolo(); return; }
+  if (where === 'menu') { goTutorial(); return; }
+  history.pushState({}, '', '/'); showScreen('newLanding'); loadRecentGames();
+}
+
 /* ══ Leaderboard ════════════════════════════════════════════════ */
 let lbSort = 'rating', lbSeq = 0;
 const lbPct = (w, g) => g ? Math.round((w / g) * 100) + '%' : '—';
@@ -5318,6 +5666,7 @@ function lbJoin() { openProfileDrawer(); switchAuthTab('register'); }
 /* ── Leaving a game / ending early: say what it does to your rating ── */
 function gameUnderway() { return !!(gameState && gameState.turnNumber > (gameState.players || []).length); }
 function leaveGameWarning() {
+  if (tut) return 'Leave the tutorial?';
   if (!currentUser) return 'Leave this game?';
   if (!gameUnderway()) return 'Leave this game? It hasn\'t really started yet, so it won\'t count against you.';
   return 'Leave this game? It will count as a loss and lower your rating — even if you\'re winning right now.'
