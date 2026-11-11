@@ -1,17 +1,18 @@
 #!/bin/bash
-# READ-ONLY diagnostics: what is actually serving ports 3000/3001?
-echo "== host"; date; uptime; free -m
-echo "== listening ports"; ss -ltnp | grep -E ':(3000|3001|8080)\b' || echo none
-echo "== node / pm2 processes"; ps -eo pid,user,lstart,etimes,cmd | grep -E 'node|PM2|pm2' | grep -v grep
-for p in $(ss -ltnp | grep -oE ':(3000|3001)\b.*pid=[0-9]+' | grep -oE 'pid=[0-9]+' | cut -d= -f2 | sort -u); do
-  echo "== pid $p cwd: $(readlink /proc/$p/cwd)  started: $(ps -o lstart= -p $p)"
-done
-echo "== ubuntu pm2"; sudo -u ubuntu pm2 jlist 2>/dev/null | python3 -c 'import json,sys
-for a in json.load(sys.stdin): e=a["pm2_env"]; print(a["name"], "pid", a.get("pid"), e.get("status"), "restarts", e.get("restart_time"), "cwd", e.get("pm_cwd"), "script", e.get("pm_exec_path"))'
-echo "== root pm2"; HOME=/root pm2 jlist 2>/dev/null | python3 -c 'import json,sys
-for a in json.load(sys.stdin): e=a["pm2_env"]; print(a["name"], "pid", a.get("pid"), e.get("status"), "restarts", e.get("restart_time"), "cwd", e.get("pm_cwd"), "script", e.get("pm_exec_path"))' || echo "no root pm2"
-echo "== pm2 systemd units"; systemctl list-units --all | grep -i pm2
-echo "== acquire-main error log (ubuntu)"; tail -n 15 /home/ubuntu/.pm2/logs/acquire-main-error.log 2>/dev/null
-echo "== acquire-main error log (root)"; tail -n 15 /root/.pm2/logs/acquire-main-error.log 2>/dev/null
-echo "== acquire-online error log"; tail -n 10 /home/ubuntu/.pm2/logs/acquire-online-error.log 2>/dev/null
-echo "== code on disk"; git -C /home/ubuntu/acquire-main -c safe.directory='*' log --oneline -1; git -C /home/ubuntu/acquire-online -c safe.directory='*' log --oneline -1
+# READ-ONLY: inspect the latest game with a player named "Player"
+cd /home/ubuntu/acquire-main
+sudo -u ubuntu node -e '
+const Database=require("better-sqlite3"); const zlib=require("zlib");
+const db=new Database("/home/ubuntu/acquire-data/acquire.db",{readonly:true});
+const rows=db.prepare("SELECT id, played_at, is_solo, mode, end_type, turn_count, duration_seconds, standings FROM game_sessions WHERE standings LIKE ? ORDER BY id DESC LIMIT 4").all("%\"name\":\"Player\"%");
+for (const r of rows) console.log(JSON.stringify(r));
+const s=rows[0]; if(!s) process.exit();
+const g=db.prepare("SELECT replay_gz FROM game_sessions WHERE id=?").get(s.id);
+const snaps=JSON.parse(zlib.gunzipSync(g.replay_gz).toString());
+console.log("snapshots", snaps.length);
+for (const sn of snaps.slice(-14)) {
+  const big=Object.entries(sn.chains).filter(([,c])=>c.active).map(([k,c])=>k+":"+c.size+(c.size>=11?"*":"")).join(" ");
+  console.log("turn",sn.turnNumber,"phase",sn.phase,"cur",sn.players[sn.currentPlayerIdx]&&sn.players[sn.currentPlayerIdx].name,"canEnd",sn.canDeclareEnd,"endDeclared",!!sn.endDeclared,"concede",sn.concedeActive,"|",big,"| bag",sn.tileBagCount);
+}
+const last=snaps[snaps.length-1]; console.log("END", JSON.stringify(last.endReason)); console.log((last.log||[]).slice(-25).join("\n"));
+'
