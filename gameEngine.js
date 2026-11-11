@@ -169,53 +169,29 @@ function createGame(playerNames, options = {}) {
 
 /* ── Tile-playability check ────────────────────────────────── */
 function analyzeTilePlacement(state, tile) {
-  const { row, col } = tileToCoord(tile);
-  const adj = neighbors(row, col);
-
-  const adjacentChains = new Set();
-  let adjacentLoneTiles = 0;
-
-  for (const [r, c] of adj) {
-    const cell = state.board[r][c];
-    if (cell === 'lone') adjacentLoneTiles++;
-    else if (cell && cell !== 'lone') adjacentChains.add(cell);
+  // Hot path (called thousands of times per bot decision): plain arrays
+  // instead of Sets, no destructuring. Same results as before.
+  const co = tileToCoord(tile);
+  const adj = _NEIGHBORS[co.row][co.col];
+  const chains = [];
+  let lone = 0;
+  for (let k = 0; k < adj.length; k++) {
+    const cell = state.board[adj[k][0]][adj[k][1]];
+    if (cell === 'lone') lone++;
+    else if (cell && chains.indexOf(cell) === -1) chains.push(cell);
   }
-
-  let activeCount = 0;
-  for (const ch of HOTEL_CHAINS) if (state.chains[ch].active) activeCount++;
-  const allChainsActive = activeCount === 7;
-
-  // Would this tile create a new chain?
-  const wouldCreateChain = adjacentChains.size === 0 && adjacentLoneTiles > 0;
-
-  // If all 7 chains active and this would create a new chain → unplayable
-  if (wouldCreateChain && allChainsActive) {
-    return { legal: false, reason: 'allChainsActive' };
-  }
-
-  // Check if this merges two+ safe chains
-  if (adjacentChains.size >= 2) {
-    const safeChains = [...adjacentChains].filter(
-      ch => state.chains[ch].tiles.length >= SAFE_SIZE
-    );
-    if (safeChains.length >= 2) {
-      return { legal: false, reason: 'mergeSafeChains' };
-    }
-  }
-
-  if (adjacentChains.size === 0 && adjacentLoneTiles === 0) {
-    return { legal: true, type: 'lone' };
-  }
-  if (adjacentChains.size === 0 && adjacentLoneTiles > 0) {
+  if (chains.length === 0) {
+    if (lone === 0) return { legal: true, type: 'lone' };
+    let active = 0;
+    for (let i = 0; i < HOTEL_CHAINS.length; i++) if (state.chains[HOTEL_CHAINS[i]].active) active++;
+    if (active === 7) return { legal: false, reason: 'allChainsActive' };
     return { legal: true, type: 'found' };
   }
-  if (adjacentChains.size === 1) {
-    return { legal: true, type: 'expand', chain: [...adjacentChains][0] };
-  }
-  if (adjacentChains.size >= 2) {
-    return { legal: true, type: 'merge', chains: [...adjacentChains] };
-  }
-  return { legal: true, type: 'lone' };
+  if (chains.length === 1) return { legal: true, type: 'expand', chain: chains[0] };
+  let safe = 0;
+  for (let i = 0; i < chains.length; i++) if (state.chains[chains[i]].tiles.length >= SAFE_SIZE) safe++;
+  if (safe >= 2) return { legal: false, reason: 'mergeSafeChains' };
+  return { legal: true, type: 'merge', chains };
 }
 
 /* ── Get playable tiles for current player ─────────────────── */
