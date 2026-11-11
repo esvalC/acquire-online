@@ -338,6 +338,13 @@
   .compact-merger input[type=range] { width: 100%; accent-color: var(--gold); margin: 0; padding: 0; height: 16px; border: none; background: none; box-shadow: none; }
   .action-panel .chain-choice-grid { grid-template-columns: repeat(2, 1fr); gap: 4px; }
   .action-panel .chain-choice-btn { padding: 3px 6px; }
+  /* Founding a chain: all 7 fit in the box — one line each, name + start price */
+  .action-panel .chain-choice-grid.compact { gap: 4px; }
+  .action-panel .chain-choice-grid.compact .chain-choice-btn {
+    display: flex; flex-direction: row; justify-content: space-between; align-items: center; gap: 4px;
+    padding: 0 8px; height: 26px; font-size: 12px; border-width: 1.5px; border-radius: 6px; }
+  .action-panel .chain-choice-grid.compact .chain-btn-price { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-dim); margin: 0; }
+  @media (max-width: 900px) { .action-panel .chain-choice-grid.compact .chain-choice-btn { height: 36px; font-size: 14px; } }
   .action-row { display: flex; gap: 10px; align-items: stretch; height: 100%; }
   .buy-strip { display: flex; gap: 8px; flex: 1 1 auto; min-width: 0; }
   .buy-card {
@@ -3205,14 +3212,12 @@ function renderActionPanel() {
     return;
   }
   if (st.phase === 'chooseChain' && st.currentPlayerIdx === myIdx) {
-    title.textContent = 'Found a Hotel Chain!';
-    let h = '<div style="font-size:11px;color:var(--text-muted);margin-bottom:8px">Choose a name — you get 1 free share</div><div class="chain-choice-grid">';
+    title.textContent = 'Found a Chain — 1 free share';
+    let h = '<div class="chain-choice-grid compact">';
     for (const ch of st.availableChains) {
-      const ti = CHAIN_TIER_INFO[ch];
-      h += `<button class="chain-choice-btn" style="border-color:${chainColors[ch]}" onclick="chooseChain('${ch}')">
+      h += `<button class="chain-choice-btn" style="border-color:${chainColors[ch]}" onclick="chooseChain('${ch}')" title="Shares start at $${CHAIN_START_PRICE[ch]}">
         <span style="color:${chainColors[ch]};font-weight:600">${ch}</span>
-        <span class="chain-btn-tier">${ti.tier} ${ti.label}</span>
-        <span class="chain-btn-price">from $${CHAIN_START_PRICE[ch]}</span>
+        <span class="chain-btn-price">$${CHAIN_START_PRICE[ch]}</span>
       </button>`;
     }
     h += '</div>';
