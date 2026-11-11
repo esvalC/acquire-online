@@ -24,12 +24,21 @@ const botAI = () => (_botAI || (_botAI = require('../botAI')));
 const PERSONALITY = { Aria: 'balanced', Rex: 'focused', Nova: 'diversified', Colt: 'focused', Vera: 'balanced' };
 const MAX_PLAYOUT_STEPS = 3000;
 
+// Copy a game for simulation. Hand-written for the game's known shape —
+// several times faster than JSON round-tripping, which matters because the
+// search copies the game for every imagined future. Logs aren't copied.
 function clone(game) {
-  // Logs aren't needed inside the search and dominate clone cost late-game.
-  const log = game.log;
-  game.log = [];
-  const c = JSON.parse(JSON.stringify(game));
-  game.log = log;
+  const c = {};
+  for (const k in game) {
+    const v = game[k];
+    if (k === 'log') c.log = [];
+    else if (k === 'board') c.board = v.map(r => r.slice());
+    else if (k === 'players') c.players = v.map(p => ({ ...p, stocks: { ...p.stocks }, tiles: p.tiles.slice() }));
+    else if (k === 'chains') { const o = {}; for (const ch in v) o[ch] = { ...v[ch], tiles: v[ch].tiles.slice() }; c.chains = o; }
+    else if (Array.isArray(v) && (v.length === 0 || typeof v[0] !== 'object')) c[k] = v.slice();
+    else if (v && typeof v === 'object') c[k] = JSON.parse(JSON.stringify(v));
+    else c[k] = v;
+  }
   return c;
 }
 
@@ -46,19 +55,116 @@ function determinize(sim, me) {
   sim.tileBag = unseen;
 }
 
-/* ── Play to the end with the hard heuristic ───────────────────── */
-function playout(sim, policy = 'hard') {
+/* ── What each player would have if the game ended right now ─────
+ * cash + every share sold at today's price + the majority/minority bonuses
+ * each chain on the board would pay (same split rules as the engine).
+ * Direct arithmetic, no copying — fast enough to call inside the search. */
+function worthNow(sim) { return engine.worthIfEndedNow(sim); }
+
+/* Score a position that isn't finished: a smooth "chance I'm ahead" from my
+ * worth-if-it-ended-now versus the best opponent's, on the same 0..1 scale
+ * as score() for finished games. */
+function evalScore(sim, me, scale = 6000) {
+  const w = worthNow(sim);
+  let best = -Infinity;
+  w.forEach((v, i) => { if (i !== me && v > best) best = v; });
+  const d = w[me] - best;
+  const p = 1 / (1 + Math.exp(-d / scale));
+  return 0.75 * p + 0.25 * (Math.tanh(d / 15000) + 1) / 2;
+}
+
+/* "Quick-thinking" tile choice for the next few turns of a future: try each
+ * playable tile, let the heuristic finish whatever it triggers (naming a
+ * chain, merger choices), and keep the tile that leaves this player best off
+ * against the leader. No futures inside futures — just one step ahead. */
+function greedyTile(sim, actor) {
   const { decideBotAction } = botAI();
+  const tiles = engine.getPlayableTiles(sim).playable;
+  if (tiles.length <= 1) return tiles[0] || null;
+  let bestTile = null, bestVal = -Infinity;
+  for (const t of tiles) {
+    const s2 = clone(sim);
+    if (engine.placeTile(s2, actor, t).error) continue;
+    for (let k = 0; k < 12 && s2.phase !== 'gameOver' && !(s2.phase === 'buyStock' && s2.currentPlayerIdx === actor) && s2.currentPlayerIdx === actor; k++) {
+      const a = s2.phase === 'mergerDecision' && s2.pendingMerger ? s2.pendingMerger.decidingPlayer : s2.currentPlayerIdx;
+      const nm = s2.players[a].name;
+      try { decideBotAction(s2, a, PERSONALITY[nm] || 'balanced', 'hard', nm, { heuristicOnly: true }); } catch { break; }
+    }
+    const w = worthNow(s2);
+    let other = -Infinity;
+    w.forEach((v, i) => { if (i !== actor && v > other) other = v; });
+    const v = w[actor] - other + Math.random();        // tiny jitter breaks ties
+    if (v > bestVal) { bestVal = v; bestTile = t; }
+  }
+  return bestTile;
+}
+
+/* "Quick-thinking" buying for the next few turns of a future: among a few
+ * sensible purchases, pick the one that most improves this player's standing
+ * if the game ended now (buying itself is cash-neutral, so this is really
+ * "which purchase wins me the most bonus position"). */
+function greedyBuy(sim, actor) {
+  const p = sim.players[actor];
+  const issued = ch => sim.players.reduce((s, q) => s + (q.stocks[ch] || 0), 0);
+  const opts = [{}];
+  for (const ch of engine.HOTEL_CHAINS) {
+    if (!sim.chains[ch].active) continue;
+    const price = engine.stockPrice(ch, sim.chains[ch].tiles.length), room = 25 - issued(ch);
+    for (const k of [1, 2, 3]) if (k <= room && k * price <= p.cash) opts.push({ [ch]: k });
+  }
+  if (opts.length === 1) return {};
+  const base = worthNow(sim);
+  let best = {}, bestVal = 0;
+  for (const o of opts) {
+    const [ch, k] = Object.entries(o)[0] || [];
+    if (!ch) continue;
+    p.stocks[ch] = (p.stocks[ch] || 0) + k;              // try it in place, then undo
+    const w = worthNow(sim);
+    p.stocks[ch] -= k;
+    let other = -Infinity; w.forEach((v, i) => { if (i !== actor && v > other) other = v; });
+    let otherB = -Infinity; base.forEach((v, i) => { if (i !== actor && v > otherB) otherB = v; });
+    const cost = k * engine.stockPrice(ch, sim.chains[ch].tiles.length);
+    const gain = (w[actor] - cost - other) - (base[actor] - otherB);
+    if (gain > bestVal + 1) { bestVal = gain; best = o; }
+  }
+  return best;
+}
+
+/* ── Play the future out ─────────────────────────────────────────
+ * Default: to the end of the game with the Easy heuristic for every seat.
+ * opts.horizon:  stop after this many turns and score the position instead.
+ * opts.greedyTurns: for this many turns, players pick tiles one step ahead
+ *                   (greedyTile) instead of by the heuristic's rules.
+ * Returns 'end' | 'cut' | false (stuck). */
+function playout(sim, policy = 'hard', opts = {}) {
+  const { decideBotAction } = botAI();
+  const start = sim.turnNumber || 0;
+  const horizon = opts.horizon || 0, greedyTurns = opts.greedyTurns || 0;
   for (let steps = 0; sim.phase !== 'gameOver' && steps < MAX_PLAYOUT_STEPS; steps++) {
+    if (horizon && sim.turnNumber - start >= horizon) return 'cut';
     const actor = sim.phase === 'mergerDecision' && sim.pendingMerger
       ? sim.pendingMerger.decidingPlayer : sim.currentPlayerIdx;
     const name = sim.players[actor].name;
     const before = sim.log.length + '|' + sim.phase + '|' + sim.currentPlayerIdx + '|' + sim.turnNumber;
+    if (greedyTurns && sim.phase === 'placeTile' && sim.turnNumber - start < greedyTurns) {
+      const t = greedyTile(sim, actor);
+      if (t && !engine.placeTile(sim, actor, t).error) continue;
+    }
+    if (opts.greedyBuys && greedyTurns && sim.phase === 'buyStock' && sim.turnNumber - start < greedyTurns) {
+      const b = greedyBuy(sim, actor);
+      if (!engine.buyStock(sim, actor, b).error) continue;
+    }
     try { decideBotAction(sim, actor, PERSONALITY[name] || 'balanced', policy, name, { heuristicOnly: true }); } catch { return false; }
     if (before === sim.log.length + '|' + sim.phase + '|' + sim.currentPlayerIdx + '|' + sim.turnNumber
         && sim.phase !== 'mergerDecision') return false;
   }
-  return sim.phase === 'gameOver';
+  return sim.phase === 'gameOver' ? 'end' : false;
+}
+// Score of a finished or cut-off future
+function futureValue(res, sim, me, scoreFn, opts) {
+  if (res === 'end') return scoreFn(sim, me);
+  if (res === 'cut') return evalScore(sim, me, opts.evalScale);
+  return 0.25;
 }
 
 /* Seeded RNG so every candidate faces exactly the same simulated future
@@ -101,7 +207,7 @@ function tileCandidates(game) {
   return engine.getPlayableTiles(game).playable.map(t => ({ type: 'placeTile', tile: t }));
 }
 
-function buyCandidates(game, me, heuristicChoice) {
+function buyCandidates(game, me, heuristicChoice, wide = false) {
   const p = game.players[me];
   const issued = ch => game.players.reduce((s, q) => s + (q.stocks[ch] || 0), 0);
   const chains = engine.HOTEL_CHAINS.filter(ch => game.chains[ch].active).map(ch => ({
@@ -129,6 +235,21 @@ function buyCandidates(game, me, heuristicChoice) {
   // 2+1 splits between the two chains we're most invested in
   const top = [...chains].sort((a, b) => (p.stocks[b.ch] || 0) - (p.stocks[a.ch] || 0)).slice(0, 3);
   for (const a of top) for (const b of top) if (a !== b) add({ [a.ch]: 2, [b.ch]: 1 });
+  if (wide) {
+    // Shares needed to take (or keep) first place, and to reach second place
+    const others = ch => game.players.map((q, i) => i === me ? 0 : (q.stocks[ch] || 0)).sort((x, y) => y - x);
+    for (const c of chains) {
+      const mine = p.stocks[c.ch] || 0, o = others(c.ch);
+      const toFirst = Math.max(0, o[0] + 1 - mine), toSecond = Math.max(0, (o[1] || 0) + 1 - mine);
+      for (const need of [toFirst, toSecond]) if (need >= 1 && need <= 3) add({ [c.ch]: need });
+    }
+    // Spread buys: 1+1 and 1+1+1 across the most relevant chains
+    const rel = [...chains].sort((a, b) => ((p.stocks[b.ch] || 0) - (p.stocks[a.ch] || 0)) || (a.price - b.price)).slice(0, 4);
+    for (let i = 0; i < rel.length; i++) for (let j = i + 1; j < rel.length; j++) {
+      add({ [rel[i].ch]: 1, [rel[j].ch]: 1 });
+      for (let k = j + 1; k < rel.length; k++) add({ [rel[i].ch]: 1, [rel[j].ch]: 1, [rel[k].ch]: 1 });
+    }
+  }
   return [...seen.values()];
 }
 
@@ -169,7 +290,7 @@ function apply(game, me, a) {
  * Comparing candidates on identical futures cancels most of the luck, so
  * far fewer playouts are needed to tell a good move from a bad one.
  * Successive halving drops the weaker half at 4, 8, 16, ... futures. ── */
-function pairedSearch(game, me, candidates, budgetMs, maxPlayouts, policy, scoreFn) {
+function pairedSearch(game, me, candidates, budgetMs, maxPlayouts, policy, scoreFn, popts = {}) {
   const deadline = Date.now() + budgetMs;
   const totals = candidates.map(() => 0);
   let alive = candidates.map((_, i) => i);
@@ -187,7 +308,7 @@ function pairedSearch(game, me, candidates, budgetMs, maxPlayouts, policy, score
         const r = apply(sim, me, candidates[i]);
         let v;
         if (r && r.error) v = -1000;            // illegal → never pick
-        else v = playout(sim, policy) ? scoreFn(sim, me) : 0.25;
+        else v = futureValue(playout(sim, policy, popts), sim, me, scoreFn, popts);
         Math.random = realRandom;
         results.push([i, v]);
         playouts++;
@@ -214,7 +335,7 @@ function pairedSearch(game, me, candidates, budgetMs, maxPlayouts, policy, score
 function search(game, me, candidates, budgetMs, maxPlayouts, policy, opts = {}) {
   if (candidates.length <= 1) return candidates[0] || null;
   const scoreFn = opts.scoreMode === 'rank' ? rankScore : score;
-  if (opts.paired) return pairedSearch(game, me, candidates, budgetMs, maxPlayouts, policy, scoreFn);
+  if (opts.paired) return pairedSearch(game, me, candidates, budgetMs, maxPlayouts, policy, scoreFn, opts);
   const stats = candidates.map(() => ({ n: 0, total: 0 }));
   const deadline = Date.now() + budgetMs;
   let total = 0;
@@ -225,14 +346,26 @@ function search(game, me, candidates, budgetMs, maxPlayouts, policy, opts = {}) 
     determinize(sim, me);
     const r = apply(sim, me, candidates[i]);
     if (r && r.error) { stats[i].n += 1000; stats[i].total -= 1000; return; } // illegal → never pick
-    const ok = playout(sim, policy);
+    const res = playout(sim, policy, opts);
     stats[i].n++; total++;
-    stats[i].total += ok ? scoreFn(sim, me) : 0.25;
+    stats[i].total += futureValue(res, sim, me, scoreFn, opts);
   };
   for (let round = 0; round < 2; round++)
     for (let i = 0; i < candidates.length && Date.now() < deadline; i++) runOne(i);
 
+  let checkAt = opts.earlyStop ? Math.max(60, candidates.length * 12) : Infinity;
   while (Date.now() < deadline && total < maxPlayouts) {
+    if (total >= checkAt) {
+      // Stop early once the leader is clearly ahead of the runner-up
+      // (scores are 0..1, spread ~0.3, so the std. error of a mean is ~0.3/sqrt(n))
+      checkAt = total + 40;
+      const order = stats.map((x, i) => i).filter(i => stats[i].n > 0).sort((a, b) => stats[b].total / stats[b].n - stats[a].total / stats[a].n);
+      if (order.length >= 2) {
+        const a = stats[order[0]], b = stats[order[1]];
+        const gap = a.total / a.n - b.total / b.n, se = 0.3 * Math.sqrt(1 / a.n + 1 / b.n);
+        if (a.n >= 40 && gap > 3 * se) break;
+      }
+    }
     let best = 0, bestUcb = -Infinity;
     for (let i = 0; i < stats.length; i++) {
       const s = stats[i];
@@ -273,7 +406,7 @@ function decideSearchAction(game, me, opts = {}) {
       const traits = { mergerSeeking: 0, riskAppetite: 0, chainLoyalty: 0 };
       heuristic = botAI().decideBotBuyStock(h, me, personality, 'hard', traits, 1.0) || {};
     } catch {}
-    return search(game, me, buyCandidates(game, me, heuristic), budgetMs, maxPlayouts, policy, opts);
+    return search(game, me, buyCandidates(game, me, heuristic, !!opts.wideBuys), budgetMs, maxPlayouts, policy, opts);
   }
 
   if (game.phase === 'mergerDecision' && game.pendingMerger && game.pendingMerger.decidingPlayer === me) {
@@ -329,6 +462,23 @@ const SEARCH_LEVELS = {
   'lab-full': { budgetMs: 3000, maxPlayouts: 16000, full: true },
   'lab-pair': { budgetMs: 3000, maxPlayouts: 16000, paired: true },            // paired futures + halving
   'lab-rank': { budgetMs: 3000, maxPlayouts: 16000, scoreMode: 'rank' },       // rank-based scoring
+  // Nov 2026 round — compared at 1 s per move (fast to test), winner confirmed at 3 s
+  'lab-m1':   { budgetMs: 1000, maxPlayouts: 16000 },                                   // today's Master, 1 s
+  'lab-t1':   { budgetMs: 1000, maxPlayouts: 16000, horizon: 20 },                      // futures cut at 20 turns
+  'lab-tg1':  { budgetMs: 1000, maxPlayouts: 16000, horizon: 20, greedyTurns: 8 },      // + quick-thinking first 2 rounds
+  'lab-tg1b': { budgetMs: 1000, maxPlayouts: 16000, horizon: 20, greedyTurns: 4 },      // + quick-thinking first round
+  'lab-w1':   { budgetMs: 1000, maxPlayouts: 16000, horizon: 20, wideBuys: true },      // cut futures + more buy options
+  'lab-e1':   { budgetMs: 1000, maxPlayouts: 16000, horizon: 20, earlyStop: true },     // cut futures + stop early when clear
+  'lab-h12':  { budgetMs: 1000, maxPlayouts: 16000, horizon: 12 },                      // look 12 turns ahead
+  'lab-h32':  { budgetMs: 1000, maxPlayouts: 16000, horizon: 32 },                      // look 32 turns ahead
+  'lab-s3':   { budgetMs: 1000, maxPlayouts: 16000, horizon: 20, evalScale: 3000 },     // sharper position scoring
+  'lab-g1':   { budgetMs: 1000, maxPlayouts: 16000, greedyTurns: 8 },                   // quick-thinking 2 rounds, full futures
+  'lab-g16':  { budgetMs: 1000, maxPlayouts: 16000, greedyTurns: 16 },                  // quick-thinking 4 rounds, full futures
+  'lab-tg16': { budgetMs: 1000, maxPlayouts: 16000, horizon: 24, greedyTurns: 16 },     // quick-thinking 4 rounds, cut at 24
+  'lab-gb':   { budgetMs: 1000, maxPlayouts: 16000, greedyTurns: 8, greedyBuys: true },  // quick-thinking tiles AND buys, full futures
+  'lab-hg32': { budgetMs: 1000, maxPlayouts: 16000, horizon: 32, greedyTurns: 8 },     // look 32 ahead + quick-thinking 2 rounds
+  'lab-g12':  { budgetMs: 1000, maxPlayouts: 16000, greedyTurns: 12 },                  // quick-thinking 3 rounds, full futures
+  'lab-tgw':  { budgetMs: 1000, maxPlayouts: 16000, horizon: 20, greedyTurns: 8, wideBuys: true }, // + more buy options
 };
 
-module.exports = { decideSearchAction, applySearchAction: apply, SEARCH_LEVELS };
+module.exports = { decideSearchAction, applySearchAction: apply, SEARCH_LEVELS, worthNow, playout, evalScore, clone };

@@ -67,7 +67,7 @@ if (isMainThread) {
     MATCHUPS.forEach((m, i) => {
       const r = results[i], p = r.wins / Math.max(1, r.games);
       const se = Math.sqrt(p * (1 - p) / Math.max(1, r.games)) * 1.96;
-      lines.push(`| ${LABEL[m.hero]} | ${LABEL[m.opp]} | ${r.wins}/${r.games} | ${(p * 100).toFixed(0)}% | ${Math.max(0, (p - se) * 100).toFixed(0)}–${Math.min(100, (p + se) * 100).toFixed(0)}% | $${Math.round(r.margin / Math.max(1, r.games)).toLocaleString()} | ${(r.secs / Math.max(1, r.games)).toFixed(1)} | ${r.errors} |`);
+      lines.push(`| ${LABEL[m.hero] || m.hero} | ${LABEL[m.opp] || m.opp} | ${r.wins}/${r.games} | ${(p * 100).toFixed(0)}% | ${Math.max(0, (p - se) * 100).toFixed(0)}–${Math.min(100, (p + se) * 100).toFixed(0)}% | $${Math.round(r.margin / Math.max(1, r.games)).toLocaleString()} | ${(r.secs / Math.max(1, r.games)).toFixed(1)} | ${r.errors} |`);
     });
     lines.push(``);
     lines.push(`25% = no better than its opponents.`);

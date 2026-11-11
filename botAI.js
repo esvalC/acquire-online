@@ -634,12 +634,13 @@ function maybeDeclareEnd(game, botIdx) {
   if (game.endDeclared || !engine.canDeclareGameEnd(game)) return false;
   // Exact check: tally a copy of the game as if it ended now (pays every
   // bonus, sells all stock) and only declare if this bot would win outright.
-  const st = engine.standingsIfEndedNow(game) || [];
-  const me = game.players[botIdx].name;
-  if (!(st[0] && st[0].name === me && (!st[1] || st[1].cash < st[0].cash))) return false;
+  // (worthIfEndedNow = the same totals, computed without copying the game)
+  const w = engine.worthIfEndedNow(game);
+  if (!w.every((v, i) => i === botIdx || v < w[botIdx])) return false;
   return !engine.declareGameEnd(game, botIdx).error;
 }
 
+let _search = null;
 function decideBotAction(game, botIdx, personality, difficulty, botName, opts = {}) {
   difficulty = difficulty || 'medium';
   const traits = BOT_TRAITS[botName] || { mergerSeeking: 0, riskAppetite: 0, chainLoyalty: 0 };
@@ -649,7 +650,7 @@ function decideBotAction(game, botIdx, personality, difficulty, botName, opts = 
   // search (ai/searchBot.js); strength is set by the playout budget. The live
   // server runs this in a worker thread; this synchronous path is for scripts
   // (benchmark, selfplay) and fallbacks. opts.heuristicOnly skips the search.
-  const search = require('./ai/searchBot');
+  const search = _search || (_search = require('./ai/searchBot'));   // cached: a require() per call cost ~1/3 of search time
   if (search.SEARCH_LEVELS[difficulty]) {
     if (!opts.heuristicOnly) {
       if (maybeDeclareEnd(game, botIdx)) return true;

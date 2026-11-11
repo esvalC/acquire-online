@@ -806,6 +806,37 @@ function declareGameEnd(state, playerIdx) {
 }
 
 /* Final standings if the game ended right now (no state change). */
+/* Each player's money if the game ended now (bonuses paid, all shares sold),
+ * by seat — the same totals as standingsIfEndedNow, without copying the game. */
+function worthIfEndedNow(state) {
+  const w = state.players.map(p => p.cash);
+  for (const ch of HOTEL_CHAINS) {
+    const c = state.chains[ch];
+    if (!c.active) continue;
+    const size = c.tiles.length, price = stockPrice(ch, size);
+    const maj = majorityBonus(ch, size), min = minorityBonus(ch, size);
+    const hold = [];
+    state.players.forEach((p, i) => { const n = p.stocks[ch] || 0; if (n > 0) { w[i] += n * price; hold.push([i, n]); } });
+    if (!hold.length) continue;
+    hold.sort((a, b) => b[1] - a[1]);
+    const top = hold.filter(h => h[1] === hold[0][1]);
+    if (top.length > 1) {
+      const each = Math.floor((maj + min) / top.length / 100) * 100;
+      for (const [i] of top) w[i] += each;
+    } else {
+      w[hold[0][0]] += maj;
+      const rest = hold.slice(1);
+      if (!rest.length) w[hold[0][0]] += min;
+      else {
+        const sec = rest.filter(h => h[1] === rest[0][1]);
+        const each = Math.floor(min / sec.length / 100) * 100;
+        for (const [i] of sec) w[i] += each;
+      }
+    }
+  }
+  return w;
+}
+
 function standingsIfEndedNow(state) {
   const sim = JSON.parse(JSON.stringify({ ...state, log: [] }));
   endGame(sim, null);
@@ -863,7 +894,7 @@ function getClientState(state, forPlayerIdx) {
 }
 
 module.exports = {
-  standingsIfEndedNow,
+  standingsIfEndedNow, worthIfEndedNow,
   tileToCoord, coordToTile,
   createGame,
   placeTile,
