@@ -7,11 +7,11 @@
  * worker and applies the returned action when it arrives.
  */
 const { parentPort } = require('worker_threads');
-const { decideSearchAction } = require('./searchBot');
+const { decideSearchAction, lastSearchInfo } = require('./searchBot');
 
 parentPort.on('message', ({ id, game, me, opts }) => {
-  let action = null, error = null;
-  try { action = decideSearchAction(game, me, opts); }
+  let action = null, error = null, info = null;
+  try { action = decideSearchAction(game, me, opts); info = lastSearchInfo(); }
   catch (e) { error = e.stack || e.message; }
-  parentPort.postMessage({ id, action, error });
+  parentPort.postMessage({ id, action, error, info });
 });

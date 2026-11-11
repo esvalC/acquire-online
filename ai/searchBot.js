@@ -336,7 +336,7 @@ function search(game, me, candidates, budgetMs, maxPlayouts, policy, opts = {}) 
   if (candidates.length <= 1) return candidates[0] || null;
   const scoreFn = opts.scoreMode === 'rank' ? rankScore : score;
   if (opts.paired) return pairedSearch(game, me, candidates, budgetMs, maxPlayouts, policy, scoreFn, opts);
-  const stats = candidates.map(() => ({ n: 0, total: 0 }));
+  const stats = candidates.map(() => ({ n: 0, total: 0, wins: 0 }));
   const deadline = Date.now() + budgetMs;
   let total = 0;
 
@@ -349,6 +349,10 @@ function search(game, me, candidates, budgetMs, maxPlayouts, policy, opts = {}) 
     const res = playout(sim, policy, opts);
     stats[i].n++; total++;
     stats[i].total += futureValue(res, sim, me, scoreFn, opts);
+    if (opts.withStats && res) {           // did `me` finish (or stand) on top in this future?
+      const w = engine.worthIfEndedNow(sim);
+      if (w.every((v, k) => k === me || v < w[me])) stats[i].wins++;
+    }
   };
   for (let round = 0; round < 2; round++)
     for (let i = 0; i < candidates.length && Date.now() < deadline; i++) runOne(i);
@@ -378,6 +382,7 @@ function search(game, me, candidates, budgetMs, maxPlayouts, policy, opts = {}) 
   // Most-visited = most robust choice
   let pick = 0;
   for (let i = 1; i < stats.length; i++) if (stats[i].n > stats[pick].n) pick = i;
+  if (opts.withStats) LAST_INFO = { futures: total, winRate: stats[pick].n ? stats[pick].wins / stats[pick].n : null };
   return candidates[pick];
 }
 
@@ -385,6 +390,10 @@ function search(game, me, candidates, budgetMs, maxPlayouts, policy, opts = {}) 
  * Decide an action for `me`, or return null to let the hard heuristic handle
  * this phase (chain naming, tied-merger survivor, passing).
  */
+// Set by search() when opts.withStats: how often `me` came out on top with the chosen move
+let LAST_INFO = null;
+function lastSearchInfo() { const x = LAST_INFO; LAST_INFO = null; return x; }
+
 function decideSearchAction(game, me, opts = {}) {
   const budgetMs    = opts.budgetMs    ?? 800;
   const maxPlayouts = opts.maxPlayouts ?? 4000;
@@ -461,6 +470,9 @@ function decideSearchAction(game, me, opts = {}) {
 //   new Master vs 3x old Master, 3 s: 37.9% (354 games); at 1 s: 38% (200)
 //   new Hard vs 3x old Hard: 35% (200)   new Medium vs 3x old Medium: 34.5% (200)
 const QUICK = { horizon: 24, greedyTurns: 16 };
+// Suggested moves for players (solo "Solo" games only): Hard-level thinking with
+// every decision searched, plus how often the suggested move won in the futures.
+const HINT_LEVEL = { budgetMs: 700, maxPlayouts: 400, ...QUICK, full: true, withStats: true };
 const SEARCH_LEVELS = {
   expert: { budgetMs: 150,  maxPlayouts: 40,    ...QUICK },
   mcts:   { budgetMs: 400,  maxPlayouts: 200,   ...QUICK },
@@ -489,4 +501,4 @@ const SEARCH_LEVELS = {
   'lab-tgw':  { budgetMs: 1000, maxPlayouts: 16000, horizon: 20, greedyTurns: 8, wideBuys: true }, // + more buy options
 };
 
-module.exports = { decideSearchAction, applySearchAction: apply, SEARCH_LEVELS, worthNow, playout, evalScore, clone };
+module.exports = { HINT_LEVEL, decideSearchAction, lastSearchInfo, applySearchAction: apply, SEARCH_LEVELS, worthNow, playout, evalScore, clone };

@@ -15,7 +15,7 @@ const { Server } = require('socket.io');
 const rateLimit  = require('express-rate-limit');
 const engine     = require('./gameEngine');
 const { decideBotAction, BOT_ROSTER, maybeDeclareEnd } = require('./botAI');
-const { applySearchAction, SEARCH_LEVELS } = require('./ai/searchBot');
+const { applySearchAction, SEARCH_LEVELS, HINT_LEVEL } = require('./ai/searchBot');
 const db         = require('./db');
 const { SMS_ENABLED, hashPassword, verifyPassword, passwordProblem, signToken, verifyToken, requireAuth, requireAdmin, sendOtp, verifyOtp, normalisePhone, encryptPhone, decryptPhone, maskPhone } = require('./auth');
 
@@ -647,6 +647,7 @@ function broadcastState(code) {
   const spectatorState = engine.getClientState(room.game, -1);
   spectatorState.playerList = playerList;
   spectatorState.watching = room.spectators.length;
+  spectatorState.watchers = room.spectators.map(s => s.name);
   spectatorState.code = code;
   spectatorState.mode = room.mode || (room.isSolo ? 'Solo' : 'Multiplayer');
   room.replaySnapshots = room.replaySnapshots || [];
@@ -662,6 +663,8 @@ function broadcastState(code) {
       const clientState = engine.getClientState(room.game, p.idx);
       clientState.playerList = playerList;
       clientState.watching = room.spectators.length;
+      clientState.watchers = room.spectators.map(s => s.name);
+      clientState.hintsAllowed = hintsAllowed(room);
       clientState.code = code;
       if (room.sessionId) clientState.sessionId = room.sessionId;
       io.to(p.socketId).emit('gameState', clientState);
@@ -1011,12 +1014,12 @@ const searchPending = new Map();
 function getSearchWorker() {
   if (searchWorker) return searchWorker;
   searchWorker = new Worker(path.join(__dirname, 'ai', 'botWorker.js'));
-  searchWorker.on('message', ({ id, action, error }) => {
+  searchWorker.on('message', ({ id, action, error, info }) => {
     const done = searchPending.get(id);
     if (!done) return;
     searchPending.delete(id);
     if (error) console.error('Search bot error:', error);
-    done(action || null);
+    done(action || null, info || null);
   });
   const reset = (why) => {
     console.error('Search worker stopped:', why);
@@ -1045,6 +1048,21 @@ function runSearchInWorker(game, me, opts) {
     }
   });
 }
+
+// Suggested move for a player: same search, with "how often this won" info
+function runHintInWorker(game, me) {
+  return new Promise(resolve => {
+    const id = ++searchSeq;
+    const timer = setTimeout(() => { if (searchPending.delete(id)) resolve(null); }, HINT_LEVEL.budgetMs + 15000);
+    searchPending.set(id, (action, info) => { clearTimeout(timer); resolve(action ? { action, info } : null); });
+    try {
+      const { log, ...rest } = game;
+      getSearchWorker().postMessage({ id, game: { ...rest, log: [] }, me, opts: HINT_LEVEL });
+    } catch (e) { searchPending.delete(id); clearTimeout(timer); resolve(null); }
+  });
+}
+// Hints exist only in regular solo games — never multiplayer, Quick Master or Finance Road
+const hintsAllowed = room => !!(room && room.isSolo && room.mode === 'Solo');
 
 function playBotMove(code, game, botPlayer, searchAction) {
   const idx = botPlayer.idx;
@@ -1434,7 +1452,7 @@ io.on('connection', (socket) => {
     const room = rooms[currentRoomCode];
     const watchersBefore = room.spectators.length;
     room.spectators = room.spectators.filter(s => s.socketId !== socket.id);
-    if (room.spectators.length !== watchersBefore && room.game) io.to(currentRoomCode).emit('watching', { n: room.spectators.length });
+    if (room.spectators.length !== watchersBefore && room.game) io.to(currentRoomCode).emit('watching', { n: room.spectators.length, names: room.spectators.map(s => s.name) });
 
     if (room.isSolo) {
       // Don't delete immediately: phones locking, Wi-Fi blips and tab switches
@@ -1469,6 +1487,25 @@ io.on('connection', (socket) => {
     socket.join(code);
   }
 
+  /* ── Suggested move (solo "Solo" games only) ───── */
+  socket.on('getHint', async (_d, cb) => {
+    const code = currentRoom, room = code && rooms[code];
+    if (!hintsAllowed(room) || !room.game) return cb({ error: 'Hints aren\'t available in this game' });
+    const me = room.players.find(p => p.socketId === socket.id && !p.isBot);
+    if (!me) return cb({ error: 'Only the player can get hints' });
+    const g = room.game;
+    const deciding = g.phase === 'mergerDecision' && g.pendingMerger ? g.pendingMerger.decidingPlayer : g.currentPlayerIdx;
+    if (deciding !== me.idx || g.phase === 'gameOver') return cb({ error: 'Not your decision right now' });
+    const key = [g.turnNumber, g.phase, deciding, g.pendingMerger ? g.pendingMerger.currentDefunctIdx : ''].join('|');
+    if (room._hint && room._hint.key === key) return cb(await room._hint.promise);  // one search per decision
+    const promise = runHintInWorker(g, me.idx).then(r => r ? { ok: true, key, action: r.action, info: r.info } : { error: 'No suggestion this time' });
+    room._hint = { key, promise };
+    const out = await promise;
+    const g2 = rooms[code] && rooms[code].game;
+    const key2 = g2 && [g2.turnNumber, g2.phase, g2.phase === 'mergerDecision' && g2.pendingMerger ? g2.pendingMerger.decidingPlayer : g2.currentPlayerIdx, g2.pendingMerger ? g2.pendingMerger.currentDefunctIdx : ''].join('|');
+    cb(key2 === key ? out : { stale: true });
+  });
+
   /* ── Leave room (e.g. solo player goes back to setup) ── */
   // Solo: ends the game. Multiplayer table (before it starts): the host
   // cancels the table for everyone; anyone else just leaves their seat.
@@ -1483,7 +1520,7 @@ io.on('connection', (socket) => {
 
     if (!me) {                                              // spectator (any kind of game, solo too)
       room.spectators = room.spectators.filter(s => s.socketId !== socket.id);
-      if (!room.game) broadcastLobby(code); else io.to(code).emit('watching', { n: room.spectators.length });
+      if (!room.game) broadcastLobby(code); else io.to(code).emit('watching', { n: room.spectators.length, names: room.spectators.map(s => s.name) });
       return;
     }
     if (room.isSolo) { deleteRoom(code); return; }

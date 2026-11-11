@@ -1188,7 +1188,19 @@
   .live-players { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; }
   .live-players .friend { color: var(--green); font-weight: 600; }
   .live-meta { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
-  .watching-badge { font-size: 11px; color: var(--text-muted); margin-left: 8px; white-space: nowrap; }
+  .watching-badge { font-size: 11px; color: var(--text-muted); margin-left: 8px; white-space: nowrap; cursor: help; }
+  .hint-bubble { background: #eaf3ff; border-color: #1d4ed8; max-width: 280px; font-weight: 400; pointer-events: auto; z-index: 9; }
+  .hint-bubble.tail-down::after { border-top-color: #1d4ed8; }  .hint-bubble.tail-down::before { border-top-color: #eaf3ff; }
+  .hint-bubble.tail-up::after { border-bottom-color: #1d4ed8; }  .hint-bubble.tail-up::before { border-bottom-color: #eaf3ff; }
+  .hint-bubble .hint-title { font-weight: 800; color: #1e3a8a; margin-bottom: 2px; padding-right: 14px; }
+  .hint-bubble .hint-why { font-size: 12px; line-height: 1.4; color: #1f2937; }
+  .hint-bubble .hint-odds { font-size: 11px; color: #4b5563; margin-top: 4px; }
+  .hint-bubble .hint-x { position: absolute; top: 3px; right: 7px; background: none; border: none; color: #4b5563; cursor: pointer; font-size: 12px; padding: 0; }
+  .hint-target { outline: 2px solid #60a5fa !important; outline-offset: 2px; }
+  .hint-bubble .hint-btns { display: flex; gap: 5px; margin-top: 7px; flex-wrap: wrap; }
+  .hint-bubble .hint-btns button { font: inherit; font-size: 11px; font-weight: 700; border-radius: 6px; padding: 4px 8px; cursor: pointer; border: 1px solid #93c5fd; background: #fff; color: #1e3a8a; }
+  .hint-bubble .hint-btns .hint-do { background: #1d4ed8; border-color: #1d4ed8; color: #fff; }
+  .hint-bubble .hint-btns .hint-off { border-color: transparent; background: none; color: #6b7280; font-weight: 600; }
 
   /* ── Profile drawer ───────────────────────────────── */
   .profile-overlay {
@@ -1681,6 +1693,13 @@
         <span class="toggle-slider"></span>
       </label>
     </div>
+    <div class="input-group" style="flex-direction:row; align-items:center; gap:12px; margin-bottom:8px;">
+      <label style="margin:0; flex:1; font-size:13px;">Suggested moves <span style="color:var(--text-muted);font-size:11px">· a hint bubble on your turn</span></label>
+      <label class="toggle-switch">
+        <input type="checkbox" id="soloHintsToggle" onchange="setHints(this.checked)" />
+        <span class="toggle-slider"></span>
+      </label>
+    </div>
     <div class="panel-title">Bot Roster</div>
     <div class="bot-roster" id="botRoster"></div>
     <button class="btn" style="margin-top:16px;" onclick="startSoloGame()">Start Game</button>
@@ -2007,6 +2026,19 @@
         </div>
         <label class="toggle-switch">
           <input type="checkbox" id="botCommentaryToggle" onchange="toggleBotCommentary(this.checked)" />
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+    </div>
+
+    <div id="drawerHintsRow" hidden style="padding:0 0 14px;border-bottom:1px solid var(--border);margin:-4px 0 14px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div>
+          <div style="font-size:13px;">Suggested Moves</div>
+          <div style="font-size:11px;color:var(--text-muted);">A hint on your turn (solo games only)</div>
+        </div>
+        <label class="toggle-switch">
+          <input type="checkbox" id="drawerHintsToggle" onchange="setHints(this.checked)" />
           <span class="toggle-slider"></span>
         </label>
       </div>
@@ -2965,7 +2997,7 @@ socket.on('gameState', (state) => {
     }
   }
   prevBoard = state.board ? state.board.map(row => [...row]) : null;
-  updateWatching(state.watching || 0);
+  updateWatching(state.watching || 0, state.watchers);
   useChatFor(state.code);
 
   // Detect stock purchases: compare against previous stocks
@@ -3021,6 +3053,7 @@ socket.on('gameState', (state) => {
   renderHeader();
   renderConcedeBanner();
   renderQuickstart();
+  maybeHint();
   if (state.phase === 'gameOver') renderGameOver();
 
   detectBotCommentary(savedPrevPhase, prevIdx, savedPrevBoard, savedPrevStocks, state);
@@ -4330,6 +4363,7 @@ if (authToken) {
 
 /* ── Drawer open/close ───────────────────────────────────────── */
 function openProfileDrawer() {
+  try { refreshHintsRow(); } catch {}
   document.getElementById('profileOverlay').classList.add('open');
   const ct = document.getElementById('botCommentaryToggle');
   if (ct) ct.checked = botCommentaryEnabled;
@@ -5003,6 +5037,137 @@ async function openPlayerCard(userId, username, refresh) {
   } catch { body.innerHTML = '<div class="pc-sub">Could not load this player.</div>'; }
 }
 
+/* ══ Suggested moves (regular solo games only) ═══════════════════
+ * On your turn, if hints are on, the server's bot search thinks for your
+ * seat (it only uses what you can see) and a bubble points at the move it
+ * suggests, with a short reason and how often that move won in its futures. */
+let hintsEnabled = (() => { try { return localStorage.getItem('acquire_hints') === 'on'; } catch { return false; } })();
+let hintKey = null, hintEl = null, hintTarget = null;
+function setHints(on) {
+  hintsEnabled = !!on;
+  try { localStorage.setItem('acquire_hints', on ? 'on' : 'off'); } catch {}
+  for (const id of ['soloHintsToggle', 'drawerHintsToggle']) { const el = document.getElementById(id); if (el) el.checked = hintsEnabled; }
+  if (!hintsEnabled) clearHint(); else { hintKey = null; maybeHint(); }
+}
+function refreshHintsRow() {
+  const row = document.getElementById('drawerHintsRow');
+  if (row) row.hidden = !(gameState && gameState.hintsAllowed && myIdx >= 0);
+  for (const id of ['soloHintsToggle', 'drawerHintsToggle']) { const el = document.getElementById(id); if (el) el.checked = hintsEnabled; }
+}
+function clearHint() {
+  if (hintEl) hintEl.remove();
+  if (hintTarget) hintTarget.classList.remove('hint-target');
+  hintEl = null; hintTarget = null;
+}
+function myDecisionKey(st) {
+  if (!st || myIdx < 0 || st.phase === 'gameOver') return null;
+  const decider = st.phase === 'mergerDecision' && st.pendingMerger ? st.pendingMerger.decidingPlayer : st.currentPlayerIdx;
+  if (decider !== myIdx) return null;
+  if (!['placeTile', 'chooseChain', 'chooseMergerSurvivor', 'mergerDecision', 'buyStock'].includes(st.phase)) return null;
+  return [st.turnNumber, st.phase, decider, st.pendingMerger ? st.pendingMerger.currentDefunctIdx : ''].join('|');
+}
+function maybeHint() {
+  refreshHintsRow();
+  const st = gameState;
+  const key = hintsEnabled && st && st.hintsAllowed ? myDecisionKey(st) : null;
+  if (key !== hintKey) clearHint();
+  if (!key || key === hintKey) return;
+  hintKey = key;
+  socket.emit('getHint', {}, (r) => {
+    if (!r || r.error || r.stale || hintKey !== key || myDecisionKey(gameState) !== key) return;
+    showHint(r.action, r.info);
+  });
+}
+function hintCopy(a, st) {
+  const me = st.players[myIdx];
+  const holders = ch => st.players.map((p, i) => ({ i, n: (p.stocks && p.stocks[ch]) || 0 }));
+  if (a.type === 'placeTile') {
+    const t = rbParseTile(a.tile);
+    let why = t ? rbTileAnswer(st, t) : '';
+    why = why.replace(/<[^>]+>/g, '').replace(/\s*\(?It(?:'|’)s in your hand\.?\)?|\s*\(It isn't in your hand\.\)/g, '').replace(/^\S+ would /, 'It would ');
+    return { title: `Play ${a.tile}`, why, target: [...document.querySelectorAll('#tileHand .hand-tile')].find(e => e.textContent.trim() === a.tile) };
+  }
+  if (a.type === 'chooseChain') {
+    const tier = RB_TIER[a.chain];
+    const why = tier === 2 ? 'Most expensive tier: bigger bonuses and share value as it grows.'
+      : tier === 0 ? 'Cheapest tier: shares are cheap, so you can build a big lead in it.'
+      : 'Middle tier: a balance of cheap shares and decent bonuses.';
+    return { title: `Name it ${a.chain}`, why: why + ' You get 1 free share.', target: [...document.querySelectorAll('#actionContent button')].find(e => e.textContent.includes(a.chain)) };
+  }
+  if (a.type === 'chooseMergerSurvivor') {
+    const mine = me.stocks[a.chain] || 0;
+    return { title: `Keep ${a.chain}`, why: mine ? `You own ${mine} ${a.chain} share${mine === 1 ? '' : 's'}, so you want it to survive.` : `It works out best for you in the bot's simulations.`,
+      target: [...document.querySelectorAll('#actionContent button')].find(e => e.textContent.includes(a.chain)) };
+  }
+  if (a.type === 'mergerDecision') {
+    const pm = st.pendingMerger, dc = pm.defunctChains[pm.currentDefunctIdx], held = me.stocks[dc] || 0;
+    const keep = held - a.sell - a.trade, parts = [];
+    if (a.sell) parts.push(`sell ${a.sell} (${rbMoney(a.sell * (st.chains[dc].price || 0))})`);
+    if (a.trade) parts.push(`trade ${a.trade} for ${a.trade / 2} ${pm.survivor}`);
+    if (keep) parts.push(`keep ${keep}`);
+    const why = a.trade ? `${pm.survivor} shares are worth more than 2 ${dc} shares.` : keep && !a.sell ? `Keeping them pays off if ${dc} is founded again later.` : 'Cash now is worth more than holding them.';
+    return { title: parts.length ? parts.join(', ').replace(/^./, c => c.toUpperCase()) : 'Keep them all', why, target: document.getElementById('actionPanel') };
+  }
+  if (a.type === 'buyStock') {
+    const buys = Object.entries(a.purchases || {}).filter(([, n]) => n > 0);
+    if (!buys.length) return { title: Object.values(st.chains).some(c => c.size > 0) ? 'Skip buying this turn' : 'Nothing to buy yet',
+      why: Object.values(st.chains).some(c => c.size > 0) ? 'Nothing here is worth the cash right now — save it for a better chance.' : 'No chains are on the board yet, so just continue.', target: [...document.querySelectorAll('#actionContent .btn')].find(b => /Skip|Continue/.test(b.textContent)) };
+    const reasons = buys.map(([ch, n]) => {
+      const h = holders(ch), mine = h[myIdx].n, after = mine + n;
+      const others = h.filter(x => x.i !== myIdx).map(x => x.n).sort((x, y) => y - x);
+      if (after > others[0] && mine <= others[0]) return `takes first place in ${ch}`;
+      if (after > others[0]) return `extends your lead in ${ch}`;
+      if (after === others[0]) return `ties for first in ${ch}`;
+      if (after > (others[1] || 0) && mine <= (others[1] || 0)) return `moves you into second place in ${ch}`;
+      return `builds your position in ${ch}`;
+    });
+    return { title: 'Buy ' + buys.map(([ch, n]) => `${n} ${ch}`).join(' + '), why: reasons.join('; ').replace(/^./, c => c.toUpperCase()) + '.', target: document.getElementById(`buycard-${buys[0][0]}`) };
+  }
+  return null;
+}
+function doHintAction(a) {
+  if (!a || myDecisionKey(gameState) !== hintKey) return;
+  if (a.type === 'placeTile') placeTile(a.tile);
+  else if (a.type === 'chooseChain') chooseChain(a.chain);
+  else if (a.type === 'chooseMergerSurvivor') chooseMergerSurvivor(a.chain);
+  else if (a.type === 'mergerDecision') socket.emit('mergerDecision', { sell: a.sell, trade: a.trade });
+  else if (a.type === 'buyStock') { socket.emit('buyStock', { purchases: a.purchases || {} }); buySelections = {}; }
+}
+function showHint(action, info) {
+  clearHint();
+  const st = gameState;
+  if (!st || !action) return;
+  let c = null;
+  try { c = hintCopy(action, st); } catch {}
+  if (!c) return;
+  const anchor = c.target || document.getElementById('actionPanel');
+  const layer = document.getElementById('annotationLayer');
+  if (!anchor || !layer) return;
+  const b = document.createElement('div');
+  b.className = 'ann-bubble hint-bubble';
+  b.innerHTML = `<button class="hint-x" aria-label="Hide hint">✕</button><div class="hint-title">💡 ${escapeHtml(c.title)}</div>`
+    + (c.why ? `<div class="hint-why">${escapeHtml(c.why)}</div>` : '')
+    + (info && typeof info.winRate === 'number' ? `<div class="hint-odds">With this move you won ${Math.round(info.winRate * 100)}% of the bot's simulated games.</div>` : '')
+    + `<div class="hint-btns"><button class="hint-do">✓ Do it</button><button class="hint-dismiss">Dismiss</button><button class="hint-off">Turn off hints</button></div>`;
+  b.querySelector('.hint-x').onclick = () => clearHint();
+  b.querySelector('.hint-dismiss').onclick = () => clearHint();
+  b.querySelector('.hint-off').onclick = () => { setHints(false); showToast('Hints off — turn them back on from the ⚙ menu.'); };
+  b.querySelector('.hint-do').onclick = () => { clearHint(); doHintAction(action); };
+  b.style.visibility = 'hidden'; b.style.left = '0px'; b.style.top = '0px';
+  layer.appendChild(b);
+  const r = anchor.getBoundingClientRect(), bw = b.offsetWidth, bh = b.offsetHeight;
+  const above = r.top - bh - 12 > 8;
+  const x = Math.max(8, Math.min(r.left + r.width / 2 - bw / 2, window.innerWidth - bw - 8));
+  const y = above ? r.top - bh - 12 : Math.min(r.bottom + 12, window.innerHeight - bh - 8);
+  b.classList.add(above ? 'tail-down' : 'tail-up');
+  b.style.left = x + 'px'; b.style.top = y + 'px';
+  b.style.setProperty('--tail-x', Math.max(16, Math.min(r.left + r.width / 2 - x, bw - 16)) + 'px');
+  b.style.visibility = '';
+  hintEl = b;
+  if (c.target) { hintTarget = c.target; hintTarget.classList.add('hint-target'); }
+}
+window.addEventListener('resize', () => { if (hintEl) { const k = hintKey; hintKey = null; clearHint(); if (k) maybeHint(); } });
+
 /* ══ Friends, invites, live games, friend chat ═══════════════════
  * Signed-in players only. The live connection is tied to the account
  * (see the io() call and storeAuthToken), so the server can push friend
@@ -5247,13 +5412,20 @@ function watchGame(code) {
     });
   });
 }
-function updateWatching(n) {
+let watcherNames = [];
+function updateWatching(n, names) {
   const b = document.getElementById('watchingBadge');
   if (!b) return;
+  if (Array.isArray(names)) watcherNames = names;
   b.hidden = !n;
   b.textContent = `👁 ${n} watching`;
+  b.title = watcherNames.length ? 'Watching: ' + watcherNames.join(', ') : '';
 }
-socket.on('watching', ({ n }) => updateWatching(n));
+socket.on('watching', ({ n, names }) => updateWatching(n, names));
+// Tap/click the badge to see who's watching (hover shows it too)
+document.getElementById('watchingBadge')?.addEventListener('click', () => {
+  if (watcherNames.length) showToast('Watching: ' + watcherNames.join(', '));
+});
 // /?watch=CODE (the admin page's Watch links) opens that game as a spectator
 (function watchFromLink() {
   const code = new URLSearchParams(location.search).get('watch');
