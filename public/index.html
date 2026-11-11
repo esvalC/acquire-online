@@ -230,8 +230,23 @@
     background: rgba(245,158,11,0.1); padding: 3px 8px; border-radius: 4px;
   }
 
-  .game-main { display: grid; grid-template-columns: 1fr 300px; gap: 8px; flex: 1; min-height: 0; overflow: hidden; }
-  .game-left { display: flex; flex-direction: column; gap: 8px; min-height: 0; height: 100%; }
+  .game-main { display: grid; grid-template-columns: 1fr var(--side-w, 300px); gap: 8px; flex: 1; min-height: 0; overflow: hidden; }
+  .game-left { display: flex; flex-direction: column; gap: 8px; min-height: 0; height: 100%; position: relative; }
+  .game-right > * { zoom: var(--sz, 1); }               /* market/log/chat grow with the column */
+  .board-container { position: relative; }
+  /* Corner grip: drag left/right = right column, up/down = bottom bar */
+  .board-corner { position: absolute; right: 2px; bottom: 2px; width: 22px; height: 22px; z-index: 6; cursor: nwse-resize;
+    touch-action: none; border-radius: 4px; opacity: .5; transition: opacity .15s;
+    background: linear-gradient(135deg, transparent 0 45%, var(--border-light) 45% 52%, transparent 52% 62%, var(--border-light) 62% 69%, transparent 69% 79%, var(--border-light) 79% 86%, transparent 86%); }
+  .board-corner:hover, .board-corner.dragging { opacity: 1;
+    background: linear-gradient(135deg, transparent 0 45%, var(--gold) 45% 52%, transparent 52% 62%, var(--gold) 62% 69%, transparent 69% 79%, var(--gold) 79% 86%, transparent 86%); }
+  /* Edge grip between the board and the right column */
+  .side-resize { position: absolute; top: 0; bottom: 0; right: -9px; width: 10px; z-index: 5; cursor: col-resize; touch-action: none;
+    display: flex; align-items: center; justify-content: center; }
+  .side-resize span { width: 4px; height: 44px; border-radius: 3px; background: var(--border-light); opacity: .45; transition: opacity .15s, background .15s; }
+  .side-resize:hover span, .side-resize.dragging span { opacity: 1; background: var(--gold); }
+  body.resizing-side { cursor: col-resize; user-select: none; }
+  body.resizing-both { cursor: nwse-resize; user-select: none; }
 
   /* ── Board ────────────────────────────────────── */
   .board-container {
@@ -318,10 +333,23 @@
   /* Everything in the bottom bar grows with it (tiles, buttons, stock cards) */
   .hand-actions > * { zoom: var(--hz, 1); }
   .hand-actions > .stock-panel { zoom: 1; }            /* stock cards re-flow instead of zooming */
-  .hand-actions.tall .stock-panel .buy-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+  /* Taller bar: stocks by price tier — 2 cheapest, 3 middle, 2 most expensive */
+  .hand-actions.tall .stock-panel .buy-strip { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px;
     align-content: start; overflow-y: auto; min-height: 0; }
-  .hand-actions.tall .stock-panel .buy-card { max-width: none; min-width: 0; font-size: 13px; }
-  .hand-actions.tall .stock-panel .buy-choice button { padding: 7px 0; font-size: 13px; }
+  .hand-actions.tall .stock-panel .buy-card { max-width: none; min-width: 0; font-size: 13px; grid-column: span 2;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "name meta" "own choice";
+    column-gap: 8px; row-gap: 4px; align-items: center; padding: 6px 8px; }
+  .hand-actions.tall .stock-panel .buy-card:nth-child(1), .hand-actions.tall .stock-panel .buy-card:nth-child(2),
+  .hand-actions.tall .stock-panel .buy-card:nth-child(6), .hand-actions.tall .stock-panel .buy-card:nth-child(7) { grid-column: span 3; }
+  .hand-actions.tall .stock-panel .buy-card > .buy-name { grid-area: name; }
+  .hand-actions.tall .stock-panel .buy-card > .buy-meta { grid-area: meta; white-space: nowrap; text-align: right; }
+  .hand-actions.tall .stock-panel .buy-card > .buy-own { grid-area: own; white-space: nowrap; }
+  .hand-actions.tall .stock-panel .buy-choice { grid-area: choice; margin: 0; grid-template-columns: repeat(4, 26px); }
+  /* Middle row (3 cards) is narrower: name + holdings, price, then the 0–3 buttons full-width */
+  .hand-actions.tall .stock-panel .buy-card:nth-child(n+3):nth-child(-n+5) { grid-template-areas: "name own" "meta meta" "choice choice"; }
+  .hand-actions.tall .stock-panel .buy-card:nth-child(n+3):nth-child(-n+5) > .buy-meta { text-align: left; }
+  .hand-actions.tall .stock-panel .buy-card:nth-child(n+3):nth-child(-n+5) .buy-choice { grid-template-columns: repeat(4, 1fr); }
+  .hand-actions.tall .stock-panel .buy-choice button { padding: 6px 0; font-size: 12px; }
   /* Drag bar between the board and the bottom bar */
   .hand-resize { flex: 0 0 10px; margin: -9px 0 -9px; position: relative; z-index: 5; cursor: row-resize;
     display: flex; align-items: center; justify-content: center; touch-action: none; }
@@ -335,13 +363,13 @@
   /* Turn status + your decisions (found / merge / confirm purchase) */
   .action-panel {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 10px 12px; flex: 0 0 270px;
-    min-width: 0; overflow: hidden;
+    border-radius: var(--radius); padding: 10px 12px; flex: 0 1 270px;
+    min-width: 210px; overflow: hidden;
   }
   /* Always-visible stock market: all 7 chains in a fixed order */
   .stock-panel {
     background: var(--bg-card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 10px 12px; flex: 1 1 auto;
+    border-radius: var(--radius); padding: 10px 12px; flex: 1 1 360px;
     min-width: 0; overflow-x: auto; overflow-y: hidden; display: flex; flex-direction: column;
   }
   .stock-panel.buying { border-color: var(--gold); box-shadow: 0 0 0 1px rgba(245,158,11,.35); }
@@ -637,7 +665,8 @@
     .board-cell { font-size: 8px; min-height: 22px; }
     .hand-actions { flex-wrap: wrap; height: auto; flex-basis: auto; }
     .hand-actions > * { zoom: 1; }
-    .hand-resize { display: none; }
+    .game-right > * { zoom: 1; }
+    .hand-resize, .side-resize, .board-corner { display: none; }
     .hand-panel, .action-panel, .stock-panel { flex: 1 1 100%; }
     .action-row { flex-wrap: wrap; height: auto; }
     /* Phones: the whole page scrolls (no inner scroll areas, nothing clipped
@@ -1721,7 +1750,9 @@
     <div class="game-left">
       <div class="board-container">
         <div class="board" id="board"></div>
+        <div class="board-corner" id="boardCorner" title="Drag to resize the bottom bar and right column · double-click to reset"></div>
       </div>
+      <div class="side-resize" id="sideResize" title="Drag to resize the right column · double-click to reset"><span></span></div>
       <div class="hand-resize" id="handResize" role="separator" aria-orientation="horizontal"
            title="Drag up or down to resize · double-click to reset"><span></span></div>
       <div class="hand-actions">
@@ -3336,7 +3367,7 @@ function applyHandHeight(h, save) {
   if (!ha) return;
   h = Math.round(Math.min(handMax(), Math.max(130, h || HAND_DEFAULT)));
   ha.style.setProperty('--hand-h', h + 'px');
-  ha.style.setProperty('--hz', Math.min(1.45, Math.max(0.85, h / HAND_DEFAULT)).toFixed(3));
+  ha.style.setProperty('--hz', Math.min(1.25, Math.max(0.85, h / HAND_DEFAULT)).toFixed(3));
   ha.classList.toggle('tall', h >= 250);
   if (save) { try { h === HAND_DEFAULT ? localStorage.removeItem(HAND_KEY) : localStorage.setItem(HAND_KEY, h); } catch {} }
 }
@@ -3360,7 +3391,57 @@ function savedHandHeight() { try { return Number(localStorage.getItem(HAND_KEY))
     window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
   });
   bar.addEventListener('dblclick', () => applyHandHeight(HAND_DEFAULT, true));
-  window.addEventListener('resize', () => applyHandHeight(savedHandHeight()));
+  window.addEventListener('resize', () => { applyHandHeight(savedHandHeight()); applySideWidth(savedSideWidth()); });
+})();
+
+/* Right column (market / log / chat): drag the edge grip, or the board's
+ * corner grip to change both at once. Wider column = bigger market chart. */
+const SIDE_DEFAULT = 300, SIDE_KEY = 'acquire_side_width';
+function sideMax() { return Math.max(SIDE_DEFAULT, Math.min(640, window.innerWidth * 0.45)); }
+function applySideWidth(w, save) {
+  const gm = document.querySelector('#game .game-main');
+  if (!gm) return;
+  w = Math.round(Math.min(sideMax(), Math.max(260, w || SIDE_DEFAULT)));
+  gm.style.setProperty('--side-w', w + 'px');
+  gm.style.setProperty('--sz', Math.min(1.7, Math.max(0.87, w / SIDE_DEFAULT)).toFixed(3));
+  if (save) { try { w === SIDE_DEFAULT ? localStorage.removeItem(SIDE_KEY) : localStorage.setItem(SIDE_KEY, w); } catch {} }
+}
+function savedSideWidth() { try { return Number(localStorage.getItem(SIDE_KEY)) || SIDE_DEFAULT; } catch { return SIDE_DEFAULT; } }
+function sideWidthNow() { return document.querySelector('#game .game-right').getBoundingClientRect().width; }
+function handHeightNow() { return document.querySelector('.hand-actions').getBoundingClientRect().height; }
+
+// Shared drag helper: onMove(dx, dy) while dragging, onEnd() when released
+function dragGrip(el, bodyClass, onStart, onMove, onEnd) {
+  el.addEventListener('pointerdown', e => {
+    e.preventDefault();
+    const x0 = e.clientX, y0 = e.clientY;
+    onStart();
+    el.classList.add('dragging'); document.body.classList.add(bodyClass);
+    const move = ev => onMove(ev.clientX - x0, ev.clientY - y0);
+    const up = () => {
+      el.classList.remove('dragging'); document.body.classList.remove(bodyClass);
+      window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up);
+      onEnd();
+    };
+    window.addEventListener('pointermove', move); window.addEventListener('pointerup', up);
+  });
+}
+(function setupSideResize() {
+  applySideWidth(savedSideWidth());
+  const edge = document.getElementById('sideResize'), corner = document.getElementById('boardCorner');
+  let w0 = 0, h0 = 0;
+  if (edge) {
+    dragGrip(edge, 'resizing-side', () => { w0 = sideWidthNow(); },
+      (dx) => applySideWidth(w0 - dx),
+      () => applySideWidth(sideWidthNow(), true));
+    edge.addEventListener('dblclick', () => applySideWidth(SIDE_DEFAULT, true));
+  }
+  if (corner) {
+    dragGrip(corner, 'resizing-both', () => { w0 = sideWidthNow(); h0 = handHeightNow(); },
+      (dx, dy) => { applySideWidth(w0 - dx); applyHandHeight(h0 - dy); },
+      () => { applySideWidth(sideWidthNow(), true); applyHandHeight(handHeightNow(), true); });
+    corner.addEventListener('dblclick', () => { applySideWidth(SIDE_DEFAULT, true); applyHandHeight(HAND_DEFAULT, true); });
+  }
 })();
 
 /* ── Always-visible stock panel ──────────────────
