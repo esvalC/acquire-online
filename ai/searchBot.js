@@ -453,10 +453,18 @@ function decideSearchAction(game, me, opts = {}) {
 //   rank-based scoring: 28% vs Master (160) → within noise, off
 //   paired + rank: 18% vs Master (160) → worse, off
 //   engine speedups (precomputed coords/neighbors): ~55% more playouts per second
+//
+// Nov 2026 round (see ai/BOT_IMPROVEMENT_NOTES.md): each imagined future now
+// uses "quick-thinking" tile choices for its first 16 turns (every player picks
+// the tile that best improves their worth-if-the-game-ended-now) and is scored
+// directly after 24 turns. Live levels vs the previous versions:
+//   new Master vs 3x old Master, 3 s: 38.6% (114 games); at 1 s: 38% (200)
+//   new Hard vs 3x old Hard: 35% (200)   new Medium vs 3x old Medium: 34.5% (200)
+const QUICK = { horizon: 24, greedyTurns: 16 };
 const SEARCH_LEVELS = {
-  expert: { budgetMs: 150,  maxPlayouts: 40 },
-  mcts:   { budgetMs: 400,  maxPlayouts: 200 },
-  master: { budgetMs: 3000, maxPlayouts: 16000 },
+  expert: { budgetMs: 150,  maxPlayouts: 40,    ...QUICK },
+  mcts:   { budgetMs: 400,  maxPlayouts: 200,   ...QUICK },
+  master: { budgetMs: 3000, maxPlayouts: 16000, ...QUICK },
   // Experiments for ai/benchmark.js only (not selectable in the UI):
   'lab-xp':   { budgetMs: 400,  maxPlayouts: 200, policy: 'expert' },
   'lab-full': { budgetMs: 3000, maxPlayouts: 16000, full: true },
