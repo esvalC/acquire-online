@@ -1075,8 +1075,8 @@
   .tut-chapter:hover { border-color: var(--gold); }
   .tut-ch-n { width: 26px; height: 26px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; background: rgba(245,158,11,0.15); color: var(--gold); font-weight: 700; font-size: 13px; flex-shrink: 0; }
   .tut-ch-go { margin-left: auto; color: var(--gold); font-size: 12px; }
-  .tut-dim { position: fixed; z-index: 2500; pointer-events: none; border-radius: 10px; box-shadow: 0 0 0 9999px rgba(0,0,0,0.5); transition: all .25s ease; }
-  .tut-dim.tut-dim-full { inset: 0; width: auto !important; height: auto !important; border-radius: 0; box-shadow: none; background: rgba(0,0,0,0.6); }
+  .tut-dim { position: fixed; inset: 0; z-index: 2500; pointer-events: none; background: rgba(0,0,0,0.5); }
+  .tut-dim.tut-dim-full { background: rgba(0,0,0,0.6); }
   .tut-target { outline: 3px solid #f59e0b !important; outline-offset: 3px; border-radius: 6px; animation: tutGlow 1.6s ease-in-out infinite; }
   @keyframes tutGlow { 0%,100% { outline-color: #f59e0b; } 50% { outline-color: #fde68a; } }
   .tut-bubble { position: fixed; z-index: 3000; max-width: 340px; background: #fffbeb; color: #1f2937; border: 2.5px solid #d97706; border-radius: 14px; padding: 12px 14px; font-size: 13.5px; line-height: 1.5; box-shadow: 0 10px 30px rgba(0,0,0,0.35); animation: bubbleIn .18s ease-out; }
@@ -1090,7 +1090,7 @@
   .tut-bubble .tut-wait { margin-top: 8px; font-size: 12px; font-weight: 700; color: #b45309; text-align: right; }
   .tut-bubble.tail-down::after { content: ''; position: absolute; bottom: -12px; left: var(--tail-x, 50%); transform: translateX(-50%); border: 9px solid transparent; border-top: 12px solid #d97706; }
   .tut-bubble.tail-up::after { content: ''; position: absolute; top: -12px; left: var(--tail-x, 50%); transform: translateX(-50%); border: 9px solid transparent; border-bottom: 12px solid #d97706; }
-  .tut-controls { display: inline-flex; align-items: center; gap: 6px; }
+  .tut-controls { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; box-shadow: 0 0 0 2px rgba(245,158,11,0.55); padding: 2px 4px; }
   .tut-controls[hidden] { display: none; }
   .tut-progress { font-size: 11px; color: var(--gold); font-weight: 700; white-space: nowrap; }
   @media (max-width: 600px) { .tut-bubble { max-width: calc(100vw - 16px); font-size: 13px; } .tut-controls { width: 100%; } .tut-progress { flex: 1; } }
@@ -1837,8 +1837,8 @@
     <button class="btn btn-sm btn-secondary" onclick="goHome()">← Home</button>
   </div>
   <div class="tut-page">
-    <h2 class="lb-title">🎓 Tutorial</h2>
-    <p class="tut-intro">Learn Acquire by playing a short, guided game against two bots. Gold bubbles walk you through every important rule — founding hotels, buying stock, mergers, safe hotels and ending the game. About 10 minutes.</p>
+    <h1 class="lb-title">🎓 How to Play Acquire</h1>
+    <p class="tut-intro">Learn the Acquire board game by playing a short, guided mock game against two bots. Gold bubbles walk you through every important rule — founding hotels, buying stock, mergers, safe hotels and ending the game. About 10 minutes.</p>
     <button class="btn" style="width:auto;padding:12px 32px" onclick="tutStart(0)">Start the tutorial</button>
     <div class="lb-sub">Or jump to a chapter</div>
     <div id="tutChapterList" class="tut-chapters"></div>
@@ -2673,6 +2673,9 @@ function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
   if (id !== 'game' && id !== 'lobby') checkForUpdate();
+  const titles = { newLanding: 'Acquire Online – Play the Classic Hotel Board Game Free', tutorialPage: 'How to Play Acquire – Interactive Board Game Tutorial',
+    rulesPage: 'Acquire Rules – How to Play the Acquire Board Game', leaderboardPage: 'Acquire Leaderboard – Top Players', game: 'Acquire – Game in progress' };
+  if (titles[id]) document.title = titles[id];
 }
 
 /* After an update is deployed, pages pick up the new version the next time
@@ -2985,7 +2988,7 @@ function attemptReconnect(code, name, token) {
   if (replayMatch) {
     showScreen('newLanding');
     loadRecentGames();
-    openReplay(Number(replayMatch[1]));
+    setTimeout(() => openReplay(Number(replayMatch[1])), 0);   // replay code loads further down
     return;
   }
   // /solo
@@ -2999,14 +3002,15 @@ function attemptReconnect(code, name, token) {
     showScreen('rulesPage');
     return;
   }
+  // These pages' code is further down the file: draw them once it has loaded
   if (path === '/leaderboard') {
     showScreen('leaderboardPage');
-    loadLeaderboard();
+    setTimeout(() => loadLeaderboard(), 0);
     return;
   }
   if (path === '/tutorial') {
-    renderTutorialPage();
     showScreen('tutorialPage');
+    setTimeout(() => renderTutorialPage(), 0);
     return;
   }
   // /multiplayer
@@ -3283,6 +3287,7 @@ socket.on('gameState', (state) => {
 socket.on('actionError', (msg) => showError(msg));
 
 function showYourTurnBanner() {
+  if (tut) return;                      // the tutorial bubbles say whose turn it is
   const banner = document.getElementById('yourTurnBanner');
   banner.classList.add('show');
   setTimeout(() => banner.classList.remove('show'), 2500);
@@ -5337,6 +5342,7 @@ const tutHand = t => () => [...document.querySelectorAll('#tileHand .hand-tile')
 const tutCell = t => () => getBoardCellEl(t);
 const tutBtn = (text, scope = '#actionContent') => () => [...document.querySelectorAll(scope + ' button')].find(b => b.textContent.includes(text));
 const tutEnd = () => window.innerWidth > 900 ? document.querySelector('#endPanel .end-big') : document.getElementById('btnDeclareEnd');
+const tutBuyBtn = () => [...document.querySelectorAll('#actionContent .btn')].find(b => b.textContent.trim() === 'Buy');
 const tutSkip = () => [...document.querySelectorAll('#actionContent .btn')].find(b => /Skip|Continue/.test(b.textContent));
 const TUT_CHAPTERS = [
   { title: 'Your first hotel', steps: [
@@ -5344,16 +5350,16 @@ const TUT_CHAPTERS = [
     { at: '#board', t: `This is the board: 12 columns × 9 rows. Every square has a name like <b>6C</b> — column 6, row C.` },
     { at: '#quickstartBanner', t: `To start, everyone drew a tile — closest to 1A goes first. Those tiles stay on the board as <b>loose tiles</b>.` },
     { at: '#tileHand', t: `These are your <b>6 tiles</b>. Each one matches a square on the board. Hover over a tile to preview where it goes.` },
-    { at: tutHand('6C'), me: true, t: `Play <b>6C</b>. It's next to the loose tile at 5C — two touching loose tiles <b>found a new hotel</b>!` },
+    { at: tutHand('6C'), also: tutCell('6C'), me: true, t: `Play <b>6C</b>. You can click it in <b>your tiles</b> or right on the <b>board</b> — both are lit up, and either works from now on.<br><br>6C is next to the loose tile at 5C — two touching loose tiles <b>found a new hotel</b>!` },
     { at: tutBtn('American'), me: true, t: `Name your hotel. Names come in three price levels:<br>• <b>Cheap:</b> Tower, Luxor — $200 a share at 2 tiles<br>• <b>Middle:</b> American, Worldwide, Festival — $300<br>• <b>Expensive:</b> Imperial, Continental — $400<br>Expensive hotels cost more per share but pay bigger bonuses, and every share's price rises as its hotel grows.<br><br>Choose <b>American</b>.` },
     { at: '#stockMatrix', t: `Founders get <b>1 free share</b>. This table shows who owns what in every hotel.` },
-    { at: () => document.getElementById('buycard-American'), me: true, t: `Now buy stock: up to <b>3 shares a turn</b>, in any hotels on the board. Each hotel has only 25 shares. You start with $6,000, and cash only comes back from bonuses and selling — so spend wisely.<br><br>Click <b>3</b> on the American card, then press <b>Buy</b>.` },
+    { at: () => document.getElementById('buycard-American'), also: tutBuyBtn, me: true, t: `Now buy stock: up to <b>3 shares a turn</b>, in any hotels on the board. Each hotel has only 25 shares. You start with $6,000, and cash only comes back from bonuses and selling — so spend wisely.<br><br>Click <b>3</b> on the American card, then press <b>Buy</b>.` },
     { bot: 3, at: tutCell('9E'), t: `<b>Aria:</b> “My turn to build!” She played 9E next to her loose tile, named it <b>Luxor</b> and bought 2 shares. Now there are two hotels to invest in.` },
     { bot: 2, at: tutCell('12A'), t: `<b>Rex</b> played 12A — it touches nothing, so it just sits there. Then he bought 2 shares of <b>your</b> American. Rex: “I'll take a piece of yours.”` },
-    { at: tutHand('11H'), me: true, t: `Your turn. Not every turn builds something. Play <b>11H</b> — it touches nothing, so it's a loose tile that may connect to something later.` },
+    { at: tutHand('11H'), also: tutCell('11H'), me: true, t: `Your turn. Not every turn builds something. Play <b>11H</b> — it touches nothing, so it's a loose tile that may connect to something later.` },
     { at: '#stockMatrix', t: `<b>Who gets paid?</b> When a hotel is bought out in a merger, or when the game ends, its <b>biggest shareholder gets the 1st-place bonus</b> (10× the share price) and the <b>second biggest gets the 2nd-place bonus</b> (5×). Aim to be 1st or a solid 2nd — shares where you finish 3rd only pay their sale price.` },
     { at: '#stockMatrix', t: `<b>Ties:</b> if two players tie for 1st, they add the 1st and 2nd bonuses together and split them, and nobody else gets 2nd. If players tie for 2nd, they split the 2nd bonus.` },
-    { at: () => document.getElementById('buycard-Luxor'), me: true, t: `Aria has 3 Luxor. Buy <b>3 Luxor</b> to tie her for 1st — click <b>3</b> on the Luxor card, then <b>Buy</b>.` },
+    { at: () => document.getElementById('buycard-Luxor'), also: tutBuyBtn, me: true, t: `Aria has 3 Luxor. Buy <b>3 Luxor</b> to tie her for 1st — click <b>3</b> on the Luxor card, then <b>Buy</b>.` },
     { at: '#stockMatrix', t: `Now you lead <b>American 4–2</b> over Rex, and you're <b>tied 3–3 with Aria in Luxor</b>. If Luxor were bought out right now, you two would split its bonuses.` },
     { bot: 2, at: tutCell('7C'), t: `Aria played <b>7C</b> next to your hotel — tiles that touch a hotel join it. American grew to 3 tiles and its price went from $300 to <b>$400</b>, so every share you own is worth more. Then she bought 1 more Luxor to lead it 4–3. The race is on!` },
     { card: `<h3>⏩ A few turns later…</h3><p>Next up: <b>mergers</b>, the heart of the game.</p>`, btn: 'Continue' },
@@ -5361,17 +5367,17 @@ const TUT_CHAPTERS = [
   { title: 'Mergers', steps: [
     { at: tutCell('4E'), t: `A few turns have passed. You lead <b>American</b> (6 tiles). <b>Tower</b> has 3 tiles: you own 5 of its shares, Rex 3 and Aria 1.` },
     { at: tutHand('6E'), t: `Look at <b>6E</b>: it touches American <i>and</i> Tower. Playing it causes a <b>merger</b>. The <b>bigger hotel survives</b> and buys out the smaller one — American (6) takes over Tower (3), and Tower closes.` },
-    { at: tutHand('6E'), me: true, t: `Play <b>6E</b>.` },
+    { at: tutHand('6E'), also: tutCell('6E'), me: true, t: `Play <b>6E</b>.` },
     { at: '#actionPanel', t: `Tower's shareholders are paid right away. You were the biggest holder: <b>$3,000</b> 1st-place bonus. Rex was 2nd: <b>$1,500</b>. Aria, in 3rd, gets nothing.` },
     { at: '#actionPanel', me: true, preset: { sell: 1, trade: 4 }, t: `Now choose what to do with your 5 Tower shares — any mix of:<br>• <b>Sell</b> them at Tower's price now ($300 each)<br>• <b>Trade</b> 2 Tower for 1 American<br>• <b>Keep</b> them<br><br>We've set <b>Sell 1, Trade 4</b> for you — press <b>Confirm</b>.` },
     { bot: 1, at: '#stockMatrix', t: `Everyone holding Tower decides in turn, starting with whoever caused the merger. <b>Aria:</b> “I'll keep my Tower share — maybe it comes back.”` },
     { bot: 1, at: '#stockMatrix', t: `<b>Rex:</b> “Selling all 3 — I need the cash.”` },
     { at: tutCell('8E'), t: `<b>Tower has closed.</b> Its tiles now belong to American, and the Tower name is free again. If someone founds Tower later, Aria's kept share is worth something again — until then it's worth nothing.` },
-    { at: () => document.getElementById('buycard-Festival'), me: true, t: `Your buy. Festival is about to matter — click <b>2</b> on the Festival card, then <b>Buy</b>.` },
+    { at: () => document.getElementById('buycard-Festival'), also: tutBuyBtn, me: true, t: `Your buy. Festival is about to matter — click <b>2</b> on the Festival card, then <b>Buy</b>.` },
     { bot: 2, at: tutCell('11B'), t: `Aria played a loose tile and kept her cash. <b>Aria:</b> “Saving up.”` },
     { bot: 2, at: tutCell('1A'), t: `Rex played a loose tile and bought 1 Worldwide.` },
     { at: tutHand('7H'), t: `<b>7H</b> touches Festival and Worldwide, and both have <b>4 tiles</b>. When the hotels are the same size, the player who caused the merger <b>chooses which one survives</b>.` },
-    { at: tutHand('7H'), me: true, t: `Play <b>7H</b>.` },
+    { at: tutHand('7H'), also: tutCell('7H'), me: true, t: `Play <b>7H</b>.` },
     { at: tutBtn('Festival'), me: true, t: `You lead Festival 5–1, so keep it alive: choose <b>Festival</b>.` },
     { bot: 1, at: '#stockMatrix', t: `Worldwide's shareholders were paid: Aria $5,000 (1st), Rex $2,500 (2nd). You owned none, so you have nothing to decide. <b>Aria:</b> “Trading 4 Worldwide for 2 Festival.”` },
     { bot: 1, at: '#stockMatrix', t: `<b>Rex:</b> “Selling mine.”` },
@@ -5382,14 +5388,14 @@ const TUT_CHAPTERS = [
     { at: tutCell('3B'), t: `All 7 hotels are on the board now. A hotel with <b>11 or more tiles is safe</b>: it can still buy out smaller hotels, but it can never be bought out. Continental (12) and Imperial (11) are safe.` },
     { at: tutHand('3C'), t: `<b>3C</b> is crossed out: it would join Continental and Imperial — two safe hotels. That's never allowed, so it's a <b>dead tile</b>. It's swapped for a new one at the end of your turn.` },
     { at: tutHand('7H'), t: `<b>7H</b> is crossed out for a different reason: it would found a new hotel, but all 7 are already on the board. It's <b>blocked</b> — you keep it, and it becomes playable once a hotel closes in a merger.` },
-    { at: tutHand('7A'), me: true, t: `Play <b>7A</b> — it grows Continental.` },
-    { at: () => document.getElementById('buycard-Continental'), me: true, t: `Click <b>2</b> on the Continental card, then <b>Buy</b>.` },
+    { at: tutHand('7A'), also: tutCell('7A'), me: true, t: `Play <b>7A</b> — it grows Continental.` },
+    { at: () => document.getElementById('buycard-Continental'), also: tutBuyBtn, me: true, t: `Click <b>2</b> on the Continental card, then <b>Buy</b>.` },
     { at: '#tileHand', t: `Your dead tile 3C was swapped for a new one. The blocked 7H stays in your hand.` },
     { card: `<h3>⏩ Near the end…</h3><p>Last chapter: <b>ending the game</b>.</p>`, btn: 'Continue' },
   ] },
   { title: 'Ending the game', steps: [
     { at: tutCell('4D'), t: `Continental has <b>40 tiles</b>. You may end the game on your turn when any hotel has <b>41 or more tiles</b>, or when <b>every hotel on the board is safe</b>. It also ends by itself when all 7 hotels are safe, or when nobody can play a tile.` },
-    { at: tutHand('5D'), me: true, t: `Play <b>5D</b> to take Continental to 41.` },
+    { at: tutHand('5D'), also: tutCell('5D'), me: true, t: `Play <b>5D</b> to take Continental to 41.` },
     { at: tutEnd, me: true, t: `The <b>End Game</b> button appeared. Ending is optional, only the player whose turn it is can do it, and you still finish your turn. Press <b>End Game</b>.` },
     { at: tutSkip, me: true, t: `Finish your turn: press <b>Skip</b>.` },
     { at: '#standingsDisplay', t: `Every hotel pays its 1st and 2nd bonuses, then all stock is sold at current prices. <b>Most money wins — that's you!</b>` },
@@ -5400,7 +5406,7 @@ const TUT_CHAPTERS = [
 ];
 
 let tut = null;           // { ch, i, busy }
-let tutBubbleEl = null, tutDimEl = null, tutTargetEl = null;
+let tutBubbleEl = null, tutDimEl = null, tutTargetEl = null, tutAlsoEls = [];
 const tutDone = () => { try { return JSON.parse(localStorage.getItem('acquire_tutorial_done') || '[]'); } catch { return []; } };
 function tutMarkDone(ch) { const d = new Set(tutDone()); d.add(ch); try { localStorage.setItem('acquire_tutorial_done', JSON.stringify([...d])); } catch {} }
 function tutMovesBefore(ch, i) { return TUT_CHAPTERS[ch].steps.slice(0, i).reduce((n, s) => n + (s.me ? 1 : s.bot || 0), 0); }
@@ -5439,6 +5445,7 @@ function tutResolve(at) {
 function tutClear() {
   if (tutBubbleEl) tutBubbleEl.remove();
   if (tutTargetEl) tutTargetEl.classList.remove('tut-target');
+  tutAlsoEls.forEach(e => e.classList.remove('tut-target')); tutAlsoEls = [];
   if (tutDimEl) tutDimEl.remove();
   tutBubbleEl = tutDimEl = tutTargetEl = null;
 }
@@ -5459,6 +5466,7 @@ function tutShow() {
     target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     tutTargetEl = target; target.classList.add('tut-target');
   }
+  tutSetAlso(st);
   const b = document.createElement('div');
   b.className = 'tut-bubble';
   const backOk = tut.i > 0 && !st.me && !st.bot && !TUT_CHAPTERS[tut.ch].steps[tut.i - 1].me && !TUT_CHAPTERS[tut.ch].steps[tut.i - 1].bot && !TUT_CHAPTERS[tut.ch].steps[tut.i - 1].card;
@@ -5468,15 +5476,34 @@ function tutShow() {
   tutBubbleEl = b;
   tutPlace();
 }
+function tutSetAlso(st) {
+  tutAlsoEls.forEach(e => e.classList.remove('tut-target'));
+  const extra = st && st.also ? tutResolve(st.also) : null;
+  tutAlsoEls = extra ? [extra] : [];
+  tutAlsoEls.forEach(e => e.classList.add('tut-target'));
+}
+// Dim the screen except for the highlighted things (one hole per target)
+function tutDimHoles() {
+  if (!tutDimEl) return;
+  const W = window.innerWidth, H = window.innerHeight;
+  let d = `M0 0H${W}V${H}H0Z`;
+  const ctl = document.getElementById('tutControls');           // Skip chapter / Exit stay lit the whole time
+  const full = tutDimEl.classList.contains('tut-dim-full');
+  for (const el of [...(full ? [] : [tutTargetEl, ...tutAlsoEls]), ctl && !ctl.hidden ? ctl : null]) {
+    if (!el) continue;
+    const r = el.getBoundingClientRect();
+    if (!r.width) continue;
+    const x = Math.round(r.left - 6), y = Math.round(r.top - 6), w = Math.round(r.width + 12), h = Math.round(r.height + 12);
+    d += ` M${x} ${y}h${w}v${h}h${-w}Z`;
+  }
+  tutDimEl.style.clipPath = `path(evenodd, '${d}')`;
+}
 function tutPlace() {
   const b = tutBubbleEl;
   if (!b) return;
   const target = tutTargetEl;
   const r = target ? target.getBoundingClientRect() : null;
-  if (tutDimEl && !tutDimEl.classList.contains('tut-dim-full')) {
-    if (r && r.width) Object.assign(tutDimEl.style, { left: r.left - 6 + 'px', top: r.top - 6 + 'px', width: r.width + 12 + 'px', height: r.height + 12 + 'px' });
-    else Object.assign(tutDimEl.style, { left: '50%', top: '50%', width: '0px', height: '0px' });
-  }
+  tutDimHoles();
   const bw = b.offsetWidth, bh = b.offsetHeight, vw = window.innerWidth, vh = window.innerHeight;
   b.classList.remove('tail-up', 'tail-down');
   if (!r || !r.width) { b.style.left = (vw - bw) / 2 + 'px'; b.style.top = (vh - bh) / 2 + 'px'; return; }
@@ -5542,6 +5569,7 @@ function tutOnState() {
       if (tutTargetEl) tutTargetEl.classList.remove('tut-target');
       tutTargetEl = target; if (target) target.classList.add('tut-target');
     }
+    tutSetAlso(st);
     if (st.preset) tutPreset(st.preset);
     tutPlace();
   }

@@ -71,6 +71,51 @@ const server = http.createServer(app);
 const io     = new Server(server, { cors: { origin: ['https://playonlineacquire.com', 'http://localhost:3000'] } });
 
 app.use(express.json({ limit: '50kb' }));
+/* ── Search-engine friendly pages ─────────────────────────────
+ * Every page is the same single-page app, but each public route gets its own
+ * title, description and canonical link so search results point straight at
+ * it (e.g. "how to play acquire" → /tutorial). Game, table and replay links
+ * aren't indexed. */
+const SITE_URL = 'https://playonlineacquire.com';
+const PAGE_META = {
+  '/': { title: 'Acquire Online – Play the Classic Hotel Board Game Free',
+    desc: 'Play Acquire, the classic hotel-chain and stock board game, free in your browser — against smart bots or with friends. No download needed.' },
+  '/tutorial': { title: 'How to Play Acquire – Interactive Board Game Tutorial',
+    desc: 'Immersive Acquire tutorial using a mock game: learn how to found hotels, buy stock, handle mergers, use safe hotels and win — step by step in about 10 minutes.' },
+  '/rules': { title: 'Acquire Rules – How to Play the Acquire Board Game',
+    desc: 'Complete Acquire board game rules: placing tiles, founding hotel chains, buying stock, mergers and bonuses, safe chains and how the game ends.' },
+  '/leaderboard': { title: 'Acquire Leaderboard – Top Players',
+    desc: 'Rankings of Acquire Online members by rating, with finished, multiplayer and solo wins.' },
+  '/solo': { title: 'Play Acquire Solo vs Bots', desc: 'Play the Acquire board game against AI opponents, from Easy to Master.' },
+  '/multiplayer': { title: 'Play Acquire Online with Friends', desc: 'Create or join an Acquire table and play the classic board game online with friends.' },
+  '/finance-road': { title: 'Finance Road – Acquire Challenge Levels', desc: '15 Acquire challenge levels across 5 tiers. How far can you go?' },
+};
+const escAttr = v => String(v).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+let _indexHtml = null;
+function pageHtml(reqPath) {
+  if (!_indexHtml) _indexHtml = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+  const meta = PAGE_META[reqPath];
+  const noindex = !meta;                            // game / table / replay links
+  const m = meta || PAGE_META['/'];
+  const url = SITE_URL + (reqPath === '/' ? '/' : reqPath);
+  const head = `<title>${escAttr(m.title)}</title>
+<meta name="description" content="${escAttr(m.desc)}">
+${noindex ? '<meta name="robots" content="noindex">' : `<link rel="canonical" href="${url}">`}
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Acquire Online">
+<meta property="og:title" content="${escAttr(m.title)}">
+<meta property="og:description" content="${escAttr(m.desc)}">
+<meta property="og:url" content="${url}">
+<meta name="twitter:card" content="summary">`;
+  return _indexHtml.replace(/<title>[^<]*<\/title>/, head);
+}
+const sendPage = (req, res) => res.type('html').send(pageHtml(req.path.replace(/\/+$/, '') || '/'));
+app.get(['/', '/index.html'], sendPage);
+app.get('/robots.txt', (_req, res) => res.type('text').send(`User-agent: *\nAllow: /\nDisallow: /api/\nDisallow: /plan\nDisallow: /training\nSitemap: ${SITE_URL}/sitemap.xml\n`));
+app.get('/sitemap.xml', (_req, res) => res.type('application/xml').send(
+  `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n` +
+  Object.keys(PAGE_META).map(p => `  <url><loc>${SITE_URL}${p}</loc><changefreq>weekly</changefreq><priority>${p === '/' ? '1.0' : p === '/tutorial' ? '0.9' : '0.6'}</priority></url>`).join('\n') +
+  `\n</urlset>\n`));
 app.use(express.static('public'));
 
 /* ── Rate limiters ───────────────────────────────────────────── */
@@ -644,7 +689,7 @@ const clientRoutes = ['/solo', '/multiplayer', '/multiplayer/:code([0-9]{4})', '
 app.get('/plan', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'plan.html')));
 app.get('/training', (_req, res) => res.sendFile(path.join(__dirname, 'public', 'training.html')));
 for (const route of clientRoutes) {
-  app.get(route, (_req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+  app.get(route, sendPage);
 }
 // Legacy: bare 4-digit code still works
 app.get('/:code([0-9]{4})', (req, res) => {
