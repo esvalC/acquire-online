@@ -101,6 +101,15 @@
   /* ── User Management ── */
   .user-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; }
   .user-row:last-child { border-bottom:none; }
+  .live-row { display:flex; align-items:center; gap:12px; padding:8px 0; border-bottom:1px solid var(--border); font-size:13px; flex-wrap:wrap; }
+  .live-row:last-child { border-bottom:none; }
+  .live-row .players { flex:1; min-width:0; }
+  .live-row .meta { color:var(--muted); font-size:12px; }
+  .watch-btn { font-size:12px; padding:4px 12px; border-radius:6px; border:1px solid var(--gold); background:transparent; color:var(--gold); cursor:pointer; text-decoration:none; }
+  .report { border:1px solid var(--border); border-radius:8px; padding:10px 12px; margin-bottom:10px; font-size:13px; }
+  .report.reviewed { opacity:.55; }
+  .report .tr { margin-top:8px; max-height:220px; overflow:auto; font-size:12px; background:rgba(0,0,0,.25); border-radius:6px; padding:8px; }
+  .report .tr div { padding:2px 0; }
   .btn-reset-pw { margin-left:auto; font-size:11px; padding:3px 8px; border-radius:6px; border:1px solid var(--border); background:transparent; color:var(--dim); cursor:pointer; }
   .btn-reset-pw:hover { color:var(--text); border-color:var(--gold); }
   .temp-pw { margin-left:auto; font-size:12px; color:var(--gold); }
@@ -154,6 +163,16 @@
   </div>
 
   <!-- User Management -->
+  <div class="section">
+    <div class="section-title">Live Games <span style="font-size:12px;color:var(--muted);font-family:'DM Sans',sans-serif">· updates every 5 seconds</span></div>
+    <div id="liveList"><div class="digest-empty">Loading…</div></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">Chat Reports</div>
+    <div id="reportList"><div class="digest-empty">Loading…</div></div>
+  </div>
+
   <div class="section">
     <div class="section-title">User Management</div>
     <div id="userList"><div class="digest-empty">Loading…</div></div>
@@ -239,6 +258,8 @@ async function loadDashboard() {
   allUsers = usersRes.ok ? (await usersRes.json()).users || [] : [];
   document.getElementById('authGate').style.display = 'none';
   document.getElementById('dashboard').style.display = 'block';
+  loadLive(); loadReports();
+  if (!window._liveTimer) window._liveTimer = setInterval(loadLive, 5000);
 
   // Stats
   document.getElementById('sUsers').textContent         = data.stats.users;
@@ -468,6 +489,45 @@ function renderUserList() {
       <button class="btn-reset-pw" onclick="resetUserPassword(${Number(u.id)}, this)" title="Give this player a temporary password">Reset password</button>
     </div>`;
   }).join('');
+}
+
+/* ── Live games (any game in progress; Watch opens it as a spectator) ── */
+async function loadLive() {
+  try {
+    const res = await fetch(API_BASE + '/api/live-games', { headers: { Authorization: 'Bearer ' + token } });
+    const d = await res.json();
+    const el = document.getElementById('liveList');
+    const games = d.games || [];
+    el.innerHTML = games.length ? games.map(g => `<div class="live-row">
+      <div class="players">${g.players.map(p => escHtml(p.name) + (p.isBot ? ' <span style="color:var(--muted);font-size:11px">(bot)</span>' : '')).join(', ')}</div>
+      <span class="meta">${escHtml(g.mode)} · turn ${Number(g.turn)}${g.watching ? ' · ' + Number(g.watching) + ' watching' : ''}</span>
+      <a class="watch-btn" href="/?watch=${encodeURIComponent(g.code)}" target="_blank" rel="noopener">Watch</a></div>`).join('')
+      : '<div class="digest-empty">No games in progress right now.</div>';
+  } catch {}
+}
+/* ── Chat reports ── */
+async function loadReports() {
+  try {
+    const res = await fetch(API_BASE + '/api/plan/reports', { headers: { Authorization: 'Bearer ' + token } });
+    const d = await res.json();
+    const el = document.getElementById('reportList');
+    const reps = d.reports || [];
+    el.innerHTML = reps.length ? reps.map(r => {
+      const names = { [r.reporter_id]: r.reporter, [r.reported_id]: r.reported };
+      return `<div class="report ${r.status === 'reviewed' ? 'reviewed' : ''}">
+        <b>${escHtml(r.reporter)}</b> reported <b>${escHtml(r.reported)}</b> · ${new Date(r.created_at * 1000).toLocaleString()}
+        ${r.reason ? `<div style="margin-top:4px">"${escHtml(r.reason)}"</div>` : ''}
+        <div class="tr">${(r.transcript || []).map(m => `<div><b>${escHtml(names[m.from] || '?')}:</b> ${escHtml(m.body)}</div>`).join('') || '<i>No messages</i>'}</div>
+        <div style="margin-top:8px;display:flex;gap:8px">
+          <button class="btn-reset-pw" style="margin-left:0" onclick="setReport(${Number(r.id)}, '${r.status === 'reviewed' ? 'new' : 'reviewed'}')">${r.status === 'reviewed' ? 'Mark as new' : 'Mark reviewed'}</button>
+          <button class="btn-reset-pw" style="margin-left:0" onclick="resetUserPassword(${Number(r.reported_id)}, this)">Reset ${escHtml(r.reported)}'s password (locks them out)</button>
+        </div></div>`;
+    }).join('') : '<div class="digest-empty">No reports.</div>';
+  } catch {}
+}
+async function setReport(id, status) {
+  await fetch(API_BASE + `/api/plan/reports/${id}/status`, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ status }) });
+  loadReports();
 }
 
 async function resetUserPassword(id, btn) {

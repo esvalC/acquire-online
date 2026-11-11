@@ -121,6 +121,99 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_news_replies_post ON news_replies(post_id);
 `);
 
+/* ── Friends, chat, reports ────────────────────────────────────
+ * friendships: one row per pair (smaller id first). status pending|accepted|blocked;
+ * requested_by = who sent the request (or who blocked). */
+db.exec(`
+  CREATE TABLE IF NOT EXISTS friendships (
+    user_low     INTEGER NOT NULL REFERENCES users(id),
+    user_high    INTEGER NOT NULL REFERENCES users(id),
+    status       TEXT    NOT NULL,
+    requested_by INTEGER NOT NULL,
+    created_at   INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    PRIMARY KEY (user_low, user_high)
+  );
+  CREATE INDEX IF NOT EXISTS idx_friend_high ON friendships(user_high);
+  CREATE TABLE IF NOT EXISTS messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_id    INTEGER NOT NULL REFERENCES users(id),
+    to_id      INTEGER NOT NULL REFERENCES users(id),
+    body       TEXT    NOT NULL,
+    created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+    read_at    INTEGER
+  );
+  CREATE INDEX IF NOT EXISTS idx_msg_pair ON messages(from_id, to_id, created_at);
+  CREATE INDEX IF NOT EXISTS idx_msg_unread ON messages(to_id, read_at);
+  CREATE TABLE IF NOT EXISTS reports (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    reporter_id INTEGER NOT NULL REFERENCES users(id),
+    reported_id INTEGER NOT NULL REFERENCES users(id),
+    reason      TEXT,
+    transcript  TEXT    NOT NULL,
+    status      TEXT    NOT NULL DEFAULT 'new',
+    created_at  INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+  );
+`);
+{
+  const uc = db.prepare(`PRAGMA table_info(users)`).all().map(r => r.name);
+  if (!uc.includes('allow_requests')) db.exec(`ALTER TABLE users ADD COLUMN allow_requests INTEGER NOT NULL DEFAULT 1`);
+  if (!uc.includes('friends_only_dm')) db.exec(`ALTER TABLE users ADD COLUMN friends_only_dm INTEGER NOT NULL DEFAULT 0`);
+  if (!uc.includes('last_seen'))      db.exec(`ALTER TABLE users ADD COLUMN last_seen INTEGER`);
+}
+const MESSAGE_DAYS = 90;
+const pair = (a, b) => (a < b ? [a, b] : [b, a]);
+const social = {
+  MESSAGE_DAYS,
+  relation(a, b) { const [lo, hi] = pair(a, b); return db.prepare('SELECT * FROM friendships WHERE user_low=? AND user_high=?').get(lo, hi) || null; },
+  setRelation(a, b, status, by) {
+    const [lo, hi] = pair(a, b);
+    db.prepare(`INSERT INTO friendships (user_low, user_high, status, requested_by) VALUES (?,?,?,?)
+      ON CONFLICT(user_low, user_high) DO UPDATE SET status=excluded.status, requested_by=excluded.requested_by, created_at=strftime('%s','now')`).run(lo, hi, status, by);
+  },
+  clearRelation(a, b) { const [lo, hi] = pair(a, b); return db.prepare('DELETE FROM friendships WHERE user_low=? AND user_high=?').run(lo, hi).changes; },
+  relationsOf(id) {
+    return db.prepare(`SELECT f.status, f.requested_by, f.created_at, u.id, u.username, u.last_seen, u.is_admin
+      FROM friendships f JOIN users u ON u.id = CASE WHEN f.user_low = ? THEN f.user_high ELSE f.user_low END
+      WHERE f.user_low = ? OR f.user_high = ?`).all(id, id, id);
+  },
+  friendIds(id) {
+    return db.prepare(`SELECT CASE WHEN user_low = ? THEN user_high ELSE user_low END AS id FROM friendships
+      WHERE (user_low = ? OR user_high = ?) AND status = 'accepted'`).all(id, id, id).map(r => r.id);
+  },
+  settings(id) { return db.prepare('SELECT allow_requests, friends_only_dm FROM users WHERE id=?').get(id); },
+  setSettings(id, { allowRequests, friendsOnlyDm }) {
+    if (typeof allowRequests === 'boolean') db.prepare('UPDATE users SET allow_requests=? WHERE id=?').run(allowRequests ? 1 : 0, id);
+    if (typeof friendsOnlyDm === 'boolean') db.prepare('UPDATE users SET friends_only_dm=? WHERE id=?').run(friendsOnlyDm ? 1 : 0, id);
+  },
+  touchLastSeen(id) { db.prepare(`UPDATE users SET last_seen = strftime('%s','now') WHERE id=?`).run(id); },
+  addMessage(from, to, body) {
+    const id = db.prepare('INSERT INTO messages (from_id, to_id, body) VALUES (?,?,?)').run(from, to, body).lastInsertRowid;
+    return db.prepare('SELECT * FROM messages WHERE id=?').get(id);
+  },
+  conversation(a, b, before, limit = 50) {
+    return db.prepare(`SELECT * FROM messages WHERE ((from_id=? AND to_id=?) OR (from_id=? AND to_id=?)) AND id < ?
+      ORDER BY id DESC LIMIT ?`).all(a, b, b, a, before || Number.MAX_SAFE_INTEGER, limit).reverse();
+  },
+  markRead(me, other) { return db.prepare(`UPDATE messages SET read_at = strftime('%s','now') WHERE to_id=? AND from_id=? AND read_at IS NULL`).run(me, other).changes; },
+  unreadCounts(me) { return db.prepare('SELECT from_id AS id, COUNT(*) AS n FROM messages WHERE to_id=? AND read_at IS NULL GROUP BY from_id').all(me); },
+  // Everyone you have a conversation with (newest first), so chats with non-friends show up too
+  conversations(me) {
+    return db.prepare(`SELECT c.other AS id, u.username, MAX(c.at) AS last_at FROM (
+        SELECT CASE WHEN from_id = ? THEN to_id ELSE from_id END AS other, created_at AS at FROM messages WHERE from_id = ? OR to_id = ?) c
+      JOIN users u ON u.id = c.other GROUP BY c.other ORDER BY last_at DESC LIMIT 30`).all(me, me, me);
+  },
+  pruneMessages() { return db.prepare(`DELETE FROM messages WHERE created_at < strftime('%s','now') - ?`).run(MESSAGE_DAYS * 86400).changes; },
+  addReport(reporter, reported, reason, transcript) {
+    return db.prepare('INSERT INTO reports (reporter_id, reported_id, reason, transcript) VALUES (?,?,?,?)').run(reporter, reported, reason || null, JSON.stringify(transcript)).lastInsertRowid;
+  },
+  listReports(limit = 100) {
+    return db.prepare(`SELECT r.*, a.username AS reporter, b.username AS reported FROM reports r
+      JOIN users a ON a.id = r.reporter_id JOIN users b ON b.id = r.reported_id ORDER BY r.created_at DESC LIMIT ?`).all(limit)
+      .map(r => ({ ...r, transcript: (() => { try { return JSON.parse(r.transcript); } catch { return []; } })() }));
+  },
+  setReportStatus(id, status) { db.prepare('UPDATE reports SET status=? WHERE id=?').run(status, id); },
+};
+
 /* ── Phone hashing ───────────────────────────────────────────── */
 // Salt prevents rainbow-table attacks on the hash.
 // PHONE_HASH_SALT must be set in .env — a random 32+ char string.
@@ -232,6 +325,7 @@ function deleteNewsReply(id) {
 }
 
 module.exports = {
+  social,
   REPLAY_DAYS, pruneReplays, saveActiveRoom, deleteActiveRoom, loadActiveRooms,
   getTotalGames, listNews, createNewsPost, deleteNewsPost, newsPostExists, createNewsReply, deleteNewsReply,
   hashPhone,

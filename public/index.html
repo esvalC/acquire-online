@@ -230,7 +230,7 @@
     background: rgba(245,158,11,0.1); padding: 3px 8px; border-radius: 4px;
   }
 
-  .game-main { display: grid; grid-template-columns: 1fr var(--side-w, 300px); gap: 8px; flex: 1; min-height: 0; overflow: hidden; }
+  .game-main { display: grid; grid-template-columns: minmax(0, 1fr) var(--side-w, 300px); gap: 8px; flex: 1; min-height: 0; overflow: hidden; }
   .game-left { display: flex; flex-direction: column; gap: 8px; min-height: 0; height: 100%; position: relative; }
   .game-right > * { zoom: var(--sz, 1); }               /* market/log/chat grow with the column */
   .board-container { position: relative; }
@@ -1128,6 +1128,67 @@
     background: var(--green); border: 1.5px solid var(--bg-card);
   }
 
+  /* ── Friends, chat, invites, live games ───────────── */
+  .menu-count { position: absolute; top: -6px; right: -6px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+    background: var(--red); color: #fff; font: 700 11px/18px 'DM Sans', sans-serif; text-align: center; border: 2px solid var(--bg-dark); }
+  .tab-count[hidden], .menu-count[hidden] { display: none; }
+  .tab-count { display: inline-block; min-width: 16px; padding: 0 4px; margin-left: 4px; border-radius: 8px; background: var(--red); color: #fff; font-size: 10px; line-height: 16px; }
+  .set-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 10px; }
+  .fr-add { display: flex; gap: 6px; margin-bottom: 12px; }
+  .fr-add input { flex: 1; min-width: 0; }
+  .fr-section { font-size: 10px; text-transform: uppercase; letter-spacing: 1px; color: var(--text-muted); margin: 14px 0 6px; }
+  .fr-row { display: flex; align-items: center; gap: 8px; padding: 7px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+  .fr-row:last-child { border-bottom: none; }
+  .fr-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--text-muted); opacity: .5; }
+  .fr-dot.online { background: var(--green); opacity: 1; } .fr-dot.table { background: var(--gold); opacity: 1; } .fr-dot.game { background: #60a5fa; opacity: 1; }
+  .fr-main { flex: 1; min-width: 0; }
+  .fr-name { font-weight: 600; cursor: pointer; } .fr-name:hover { color: var(--gold); }
+  .fr-status { font-size: 11px; color: var(--text-muted); }
+  .fr-btns { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+  .mini-btn { font: 600 11px 'DM Sans', sans-serif; padding: 4px 8px; border-radius: 6px; border: 1px solid var(--border-light);
+    background: var(--bg-dark); color: var(--text); cursor: pointer; white-space: nowrap; touch-action: manipulation; position: relative; }
+  .mini-btn:hover { border-color: var(--gold); color: var(--gold); }
+  .mini-btn.primary { background: var(--gold); border-color: var(--gold); color: #111; }
+  .mini-btn .n { position: absolute; top: -7px; right: -7px; min-width: 16px; height: 16px; border-radius: 8px; background: var(--red); color: #fff; font-size: 10px; line-height: 16px; padding: 0 4px; }
+  .fr-empty { font-size: 12px; color: var(--text-muted); padding: 6px 0; line-height: 1.5; }
+  .link-btn { background: none; border: none; padding: 0; color: var(--text-muted); font: inherit; font-size: 11px; text-decoration: underline; cursor: pointer; }
+  .link-btn:hover { color: var(--red); }
+  .pc-actions { display: flex; gap: 6px; flex-wrap: wrap; margin: -4px 0 14px; }
+  .dm-overlay { z-index: 660; }
+  .dm-drawer { display: flex; flex-direction: column; }
+  .dm-sub { font-size: 11px; color: var(--text-muted); margin: -6px 0 8px; }
+  .dm-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 4px 0; min-height: 0; }
+  .dm-msg { max-width: 82%; padding: 7px 10px; border-radius: 12px; font-size: 13px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+  .dm-msg.them { align-self: flex-start; background: var(--bg-dark); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+  .dm-msg.me { align-self: flex-end; background: rgba(245,158,11,.16); border: 1px solid rgba(245,158,11,.35); border-bottom-right-radius: 4px; }
+  .dm-time { display: block; font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+  .dm-day { align-self: center; font-size: 10px; color: var(--text-muted); margin: 6px 0 2px; }
+  .dm-form { display: flex; gap: 6px; align-items: flex-end; padding-top: 8px; border-top: 1px solid var(--border); }
+  .dm-form textarea { flex: 1; resize: none; font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--border-light); background: var(--bg-dark); color: var(--text); }
+  .dm-foot { padding-top: 6px; text-align: right; }
+  .ip-overlay { position: fixed; inset: 0; z-index: 640; background: rgba(0,0,0,.6); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .ip-overlay[hidden] { display: none; }
+  .ip-card { width: min(380px, 100%); background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 12px; padding: 18px; }
+  .ip-title { font-family: 'Playfair Display', serif; font-size: 18px; color: var(--gold); margin-bottom: 10px; }
+  .ip-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 14px; cursor: pointer; }
+  .ip-row input { width: 18px; height: 18px; accent-color: var(--gold); margin: 0; }
+  .ip-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+  .invite-toasts { position: fixed; right: 16px; bottom: 16px; z-index: 700; display: flex; flex-direction: column; gap: 8px; max-width: min(340px, calc(100vw - 32px)); }
+  @media (max-width: 600px) { .invite-toasts { top: 70px; bottom: auto; left: 12px; right: 12px; max-width: none; } }
+  .invite-toast { background: var(--bg-card); border: 1px solid var(--gold); border-radius: 12px; padding: 12px 14px; box-shadow: 0 10px 30px rgba(0,0,0,.45); font-size: 13px; }
+  .invite-toast .it-btns { display: flex; gap: 6px; margin-top: 8px; justify-content: flex-end; }
+  .invite-toast .it-time { font-size: 11px; color: var(--text-muted); }
+  .live-games-section { margin-bottom: 14px; }
+  .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--red); margin-right: 6px; vertical-align: 1px; animation: livePulse 1.6s ease-in-out infinite; }
+  @keyframes livePulse { 50% { opacity: .35; } }
+  .live-note { text-transform: none; letter-spacing: 0; margin-left: 6px; }
+  .live-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 12px; flex-wrap: wrap; }
+  .live-row:last-child { border-bottom: none; }
+  .live-players { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; gap: 4px 10px; }
+  .live-players .friend { color: var(--green); font-weight: 600; }
+  .live-meta { color: var(--text-muted); font-size: 11px; white-space: nowrap; }
+  .watching-badge { font-size: 11px; color: var(--text-muted); margin-left: 8px; white-space: nowrap; }
+
   /* ── Profile drawer ───────────────────────────────── */
   .profile-overlay {
     position: fixed; inset: 0; background: rgba(0,0,0,0.5);
@@ -1487,6 +1548,10 @@
     </div>
   </div>
 
+  <div class="recent-games-section live-games-section" id="liveGamesBox" hidden>
+    <div class="recent-games-title"><span class="live-dot"></span>Live Games <span id="liveGamesNote" class="live-note"></span></div>
+    <div id="liveGamesList"></div>
+  </div>
   <div class="recent-games-section">
     <div class="recent-games-title">Recent Games</div>
     <div id="recentGamesList"><div style="font-size:12px;color:var(--text-muted);padding:8px 0;">Loading…</div></div>
@@ -1524,6 +1589,34 @@
 </div>
 
 <!-- ═══ FEEDBACK MODAL ═══ -->
+<!-- Friend chat: slides in from the side -->
+<div id="dmOverlay" class="profile-overlay pc-overlay dm-overlay" onclick="if(event.target===this) closeChat()">
+  <div class="profile-drawer pc-drawer dm-drawer" role="dialog" aria-modal="true" aria-labelledby="dmName">
+    <div class="drawer-header">
+      <div class="drawer-title" id="dmName">Chat</div>
+      <button class="drawer-close" onclick="closeChat()" aria-label="Close">✕</button>
+    </div>
+    <div class="dm-sub" id="dmSub"></div>
+    <div class="dm-list" id="dmList"></div>
+    <form class="dm-form" id="dmForm" onsubmit="event.preventDefault(); sendDm()">
+      <textarea id="dmInput" rows="2" maxlength="500" placeholder="Write a message…" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendDm();}"></textarea>
+      <button class="btn btn-sm" type="submit" style="width:auto">Send</button>
+    </form>
+    <div class="dm-foot"><button type="button" class="link-btn" onclick="reportChat()">Report this conversation</button></div>
+  </div>
+</div>
+<!-- Invite friends to your table -->
+<div id="invitePicker" class="ip-overlay" onclick="if(event.target===this) closeInvitePicker()" hidden>
+  <div class="ip-card" role="dialog" aria-modal="true" aria-labelledby="ipTitle">
+    <div class="ip-title" id="ipTitle">Invite friends to this table</div>
+    <div id="ipList"></div>
+    <div class="ip-actions">
+      <button class="btn btn-secondary btn-sm" style="width:auto" onclick="closeInvitePicker()">Cancel</button>
+      <button class="btn btn-sm" style="width:auto" id="ipSend" onclick="sendInvites()">Send invites</button>
+    </div>
+  </div>
+</div>
+<div id="inviteToasts" class="invite-toasts" aria-live="polite"></div>
 <!-- Another player's profile: slides in from the side like your own -->
 <div id="playerCardOverlay" class="profile-overlay pc-overlay" onclick="if(event.target===this) closePlayerCard()">
   <div class="profile-drawer pc-drawer" role="dialog" aria-modal="true" aria-labelledby="pcName">
@@ -1721,6 +1814,7 @@
     </div>
     <div style="margin-top:16px;">
       <button class="btn" onclick="toggleReady()">Toggle Ready</button>
+      <button class="btn btn-secondary" id="lobbyInviteBtn" style="margin-top:8px;display:none" onclick="openInvitePicker()">Invite Friends</button>
       <button class="btn btn-secondary" id="lobbyLeaveBtn" style="margin-top:8px" onclick="leaveTable()">Leave Table</button>
     </div>
     <div style="margin-top:8px; font-size:11px; color:var(--text-muted); text-align:center;">
@@ -1738,11 +1832,12 @@
       <span id="currentPlayerLabel">—</span>
       <span class="turn-clock" id="turnClock" title="Time on this turn">⏱ <span id="turnClockVal">0:00</span></span>
       <span id="spectatorBadge" style="display:none;" class="spectator-badge">Spectating</span>
+      <span id="watchingBadge" class="watching-badge" hidden title="People watching this game"></span>
     </div>
     <div id="lastAction"></div>
     <div style="display:flex; gap:6px;">
       <button class="btn btn-sm btn-secondary" id="btnDeclareEnd" onclick="declareEnd()" style="display:none;">End Game</button>
-      <button class="btn btn-sm btn-danger" onclick="initiateConcedeVote()">Vote End</button>
+      <button class="btn btn-sm btn-danger" id="btnVoteEnd" onclick="initiateConcedeVote()">Vote End</button>
       <button class="btn btn-sm btn-secondary" id="btnRestartSolo" onclick="restartSoloGame()" style="display:none;" title="Restart this game">↺ Restart</button>
     </div>
   </div>
@@ -1888,6 +1983,7 @@
 <!-- ═══ HAMBURGER BUTTON (always visible) ═══ -->
 <button class="menu-btn" onclick="openProfileDrawer()" aria-label="Menu">
   <span></span><span></span><span></span>
+  <b class="menu-count" id="menuCount" hidden></b>
 </button>
 
 <!-- ═══ PROFILE DRAWER ═══ -->
@@ -1997,7 +2093,10 @@
       <div class="drawer-tabs">
         <button class="drawer-tab active" id="drawerTabStats" onclick="switchDrawerTab('stats')">Stats</button>
         <button class="drawer-tab" id="drawerTabGames" onclick="switchDrawerTab('games')">Game History</button>
+        <button class="drawer-tab" id="drawerTabFriends" onclick="switchDrawerTab('friends')">Friends <span class="tab-count" id="friendsTabCount" hidden></span></button>
       </div>
+      <!-- Friends tab -->
+      <div id="drawerPanelFriends" style="display:none;"></div>
 
       <!-- Stats tab -->
       <div id="drawerPanelStats">
@@ -2026,6 +2125,14 @@
               <input type="checkbox" id="visibilityToggle" onchange="toggleVisibility(this.checked)" />
               <span class="toggle-slider"></span>
             </label>
+          </div>
+          <div class="set-row">
+            <div><div style="font-size:13px;">Allow friend requests</div><div style="font-size:11px;color:var(--text-muted);">Turn off to stop new requests</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="setAllowRequests" onchange="saveSocialSettings()" /><span class="toggle-slider"></span></label>
+          </div>
+          <div class="set-row">
+            <div><div style="font-size:13px;">Messages from friends only</div><div style="font-size:11px;color:var(--text-muted);">Otherwise any signed-in player can message you</div></div>
+            <label class="toggle-switch"><input type="checkbox" id="setFriendsOnlyDm" onchange="saveSocialSettings()" /><span class="toggle-slider"></span></label>
           </div>
           <button type="button" class="pw-toggle" id="pwToggle" onclick="togglePasswordBox()">Change password</button>
           <div id="pwBox" class="pw-box" style="display:none;">
@@ -2066,7 +2173,9 @@
 <div id="tilePreview"><div class="tp-action" id="tpAction"></div><div class="tp-detail" id="tpDetail"></div></div>
 
 <script>
-const socket = io();
+// The live connection carries the sign-in token (read fresh on every reconnect),
+// so the server knows which account is online. Signing in/out later re-sends it.
+const socket = io({ auth: (cb) => { let t = null; try { t = authToken; } catch {} cb({ token: t || null }); } });
 
 let gameState = null;
 let myIdx = -1;
@@ -2714,6 +2823,7 @@ const LOBBY_DIFF_LABEL = { hard: 'Easy', expert: 'Medium', mcts: 'Hard', master:
 let lastLobby = null;
 socket.on('lobbyUpdate', (data) => {
   lastLobby = data;
+  setTimeout(refreshInviteButton, 0);
   document.getElementById('lobbyCode').textContent = data.code;
   const isHost = !!data.host && data.host === myName;
 
@@ -2848,6 +2958,7 @@ socket.on('gameState', (state) => {
     }
   }
   prevBoard = state.board ? state.board.map(row => [...row]) : null;
+  updateWatching(state.watching || 0);
 
   // Detect stock purchases: compare against previous stocks
   if (prevPlayerStocks && state.players) {
@@ -3747,6 +3858,7 @@ function renderHeader() {
   document.getElementById('btnRestartSolo').style.display = isSoloGame ? 'inline-block' : 'none';
   // Spectator badge
   document.getElementById('spectatorBadge').style.display = myIdx === -1 ? '' : 'none';
+  document.getElementById('btnVoteEnd').style.display = myIdx === -1 ? 'none' : '';
   // Last action strip (most recent log entry)
   const log = gameState.log || [];
   document.getElementById('lastAction').textContent = log.length ? log[log.length - 1] : '';
@@ -3986,6 +4098,7 @@ function readStoredToken() {
   catch { return null; }
 }
 function storeAuthToken(token, remember) {
+  try { socket.emit('auth', { token: token || null }); } catch {}
   try {
     localStorage.removeItem('acquire_auth_token'); sessionStorage.removeItem('acquire_auth_token');
     if (token) (remember ? localStorage : sessionStorage).setItem('acquire_auth_token', token);
@@ -4055,11 +4168,11 @@ function updateNameInputs(username) {
 
 /* ── Profile drawer tab switching ───────────────────────────── */
 function switchDrawerTab(tab) {
-  const isStats = tab === 'stats';
-  document.getElementById('drawerTabStats').classList.toggle('active', isStats);
-  document.getElementById('drawerTabGames').classList.toggle('active', !isStats);
-  document.getElementById('drawerPanelStats').style.display = isStats ? 'block' : 'none';
-  document.getElementById('drawerPanelGames').style.display = isStats ? 'none'  : 'block';
+  for (const [t, tabId, panelId] of [['stats', 'drawerTabStats', 'drawerPanelStats'], ['games', 'drawerTabGames', 'drawerPanelGames'], ['friends', 'drawerTabFriends', 'drawerPanelFriends']]) {
+    document.getElementById(tabId).classList.toggle('active', t === tab);
+    document.getElementById(panelId).style.display = t === tab ? 'block' : 'none';
+  }
+  if (tab === 'friends') loadFriends();
 }
 
 /* ── Auth tab switching ──────────────────────────────────────── */
@@ -4082,7 +4195,9 @@ function renderDrawerLoggedOut() {
 }
 
 function renderDrawerLoggedIn(user, history, sessions = []) {
+  const firstTime = !currentUser || currentUser.id !== user.id;
   currentUser = user;
+  if (firstTime) { loadFriends(); startLiveGames(); }
   document.querySelector('.menu-btn')?.classList.add('logged-in');
   document.getElementById('drawerLoggedOut').style.display = 'none';
   document.getElementById('drawerLoggedIn').style.display  = 'flex';
@@ -4428,6 +4543,8 @@ function logOut() {
   authToken = null;
   currentUser = null;
   storeAuthToken(null);
+  loadFriends(); closeChat();
+  document.getElementById('liveGamesBox').hidden = true;
   document.querySelector('.menu-btn')?.classList.remove('logged-in');
   updateNameInputs(null);
   renderDrawerLoggedOut();
@@ -4563,7 +4680,7 @@ async function deleteNewsReply(id) {
 async function loadRecentGames() {
   // Deferred: on first page load this runs before the rest of the script
   // (API_BASE, currentUser, news state) has been initialized.
-  setTimeout(() => { loadNews(); loadGamesCounter(); }, 0);
+  setTimeout(() => { loadNews(); loadGamesCounter(); loadLiveGames(); }, 0);
   try {
     const base = window.location.pathname.startsWith('/beta') ? '/beta/api' : '/api';
     const res  = await fetch(`${base}/recent-games`);
@@ -4635,10 +4752,11 @@ function closePlayerCard() {
 }
 document.addEventListener('keydown', e => { if (e.key === 'Escape') closePlayerCard(); });
 
-async function openPlayerCard(userId, username) {
+async function openPlayerCard(userId, username, refresh) {
   const overlay = document.getElementById('playerCardOverlay');
   const body = document.getElementById('pcBody');
-  body.innerHTML = `<div class="pc-sub">Loading ${escapeHtml(username || 'player')}…</div>`;
+  pcCurrent = { id: Number(userId), username };
+  if (!refresh) body.innerHTML = `<div class="pc-sub">Loading ${escapeHtml(username || 'player')}…</div>`;
   overlay.classList.add('open');
   requestAnimationFrame(() => requestAnimationFrame(() => overlay.classList.add('slid')));
   try {
@@ -4651,7 +4769,7 @@ async function openPlayerCard(userId, username) {
         <div class="pc-avatar">${escapeHtml((p.username || '?')[0].toUpperCase())}</div>
         <div><div class="pc-name" id="pcName">${escapeHtml(p.username)}${p.isAdmin ? ADMIN_TAG : ''}</div>
         <div class="pc-sub">${joined ? 'Joined ' + joined : ''}${p.elo ? ' · ' + p.elo + ' ELO' : ''}</div></div>
-      </div>`;
+      </div>` + playerCardActions(p);
     if (p.private) {
       h += `<div class="pc-sub" style="padding:10px 0">🔒 ${escapeHtml(p.username)} keeps their stats private.</div>`;
       body.innerHTML = h; return;
@@ -4684,6 +4802,381 @@ async function openPlayerCard(userId, username) {
     }
     body.innerHTML = h;
   } catch { body.innerHTML = '<div class="pc-sub">Could not load this player.</div>'; }
+}
+
+/* ══ Friends, invites, live games, friend chat ═══════════════════
+ * Signed-in players only. The live connection is tied to the account
+ * (see the io() call and storeAuthToken), so the server can push friend
+ * requests, online status, invites and messages as they happen. */
+let social = { friends: [], incoming: [], outgoing: [], blocked: [], chats: [], settings: {} };
+let chatWith = null;          // { id, username } of the open conversation
+let addFriendNote = { text: '', error: false };
+
+function authHeaders(json) {
+  const h = authToken ? { Authorization: 'Bearer ' + authToken } : {};
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
+async function api(method, path, body) {
+  const res = await fetch(`${API_BASE}${path}`, { method, headers: authHeaders(!!body), body: body ? JSON.stringify(body) : undefined });
+  let data = {}; try { data = await res.json(); } catch {}
+  if (!res.ok && !data.error) data.error = 'Something went wrong';
+  return data;
+}
+
+async function loadFriends() {
+  if (!authToken) { social = { friends: [], incoming: [], outgoing: [], blocked: [], chats: [], settings: {} }; updateSocialBadges(); renderFriendsPanel(); return; }
+  const d = await api('GET', '/friends');
+  if (d.error) return;
+  social = d;
+  const ar = document.getElementById('setAllowRequests'), fo = document.getElementById('setFriendsOnlyDm');
+  if (ar) ar.checked = !!d.settings.allowRequests;
+  if (fo) fo.checked = !!d.settings.friendsOnlyDm;
+  updateSocialBadges();
+  renderFriendsPanel();
+  refreshInviteButton();
+}
+function unreadTotal() {
+  return social.friends.reduce((s, f) => s + (f.unread || 0), 0) + social.chats.reduce((s, c) => s + (c.unread || 0), 0);
+}
+function updateSocialBadges() {
+  const n = social.incoming.length + unreadTotal();
+  const mc = document.getElementById('menuCount'), tc = document.getElementById('friendsTabCount');
+  if (mc) { mc.hidden = !n; mc.textContent = n > 99 ? '99+' : n; }
+  if (tc) { tc.hidden = !n; tc.textContent = n; }
+}
+function statusText(f) {
+  if (f.state === 'game') return f.solo ? `Playing solo · turn ${f.turn}` : `In a game · turn ${f.turn}`;
+  if (f.state === 'table') return f.seats ? `At a table · ${f.seats} seat${f.seats === 1 ? '' : 's'} free` : 'At a full table';
+  if (f.state === 'online') return 'Online';
+  if (f.lastSeen) return 'Last seen ' + timeAgo(f.lastSeen);
+  return 'Offline';
+}
+function timeAgo(sec) {
+  const d = Math.max(0, Date.now() / 1000 - sec);
+  if (d < 90) return 'just now';
+  if (d < 3600) return Math.round(d / 60) + ' min ago';
+  if (d < 86400) return Math.round(d / 3600) + ' h ago';
+  return Math.round(d / 86400) + ' d ago';
+}
+function inMyLobby() {
+  return !!(lastLobby && document.getElementById('lobby').classList.contains('active') && !lastLobby.gameInProgress);
+}
+function renderFriendsPanel() {
+  const el = document.getElementById('drawerPanelFriends');
+  if (!el) return;
+  const esc = escapeHtml, nameBtn = (u) => `<span class="fr-name" data-name="${esc(u.username)}" onclick="openPlayerCard(${Number(u.id)}, this.dataset.name)">${esc(u.username)}</span>`;
+  let h = `<form class="fr-add" onsubmit="event.preventDefault(); addFriend()">
+      <input type="text" id="addFriendName" maxlength="20" placeholder="Add a friend by username" autocapitalize="none" spellcheck="false" />
+      <button class="mini-btn primary" type="submit">Add</button>
+    </form><div class="auth-hint" id="addFriendMsg" style="color:${addFriendNote.error ? 'var(--red)' : 'var(--green)'}">${esc(addFriendNote.text)}</div>`;
+  if (social.incoming.length) {
+    h += `<div class="fr-section">Requests</div>` + social.incoming.map(u => `<div class="fr-row">
+      <div class="fr-main">${nameBtn(u)}<div class="fr-status">wants to be friends</div></div>
+      <div class="fr-btns"><button class="mini-btn primary" onclick="answerRequest(${Number(u.id)}, 'accept')">Accept</button>
+      <button class="mini-btn" onclick="answerRequest(${Number(u.id)}, 'decline')">Decline</button></div></div>`).join('');
+  }
+  h += `<div class="fr-section">Friends${social.friends.length ? ' · ' + social.friends.filter(f => f.state !== 'offline').length + ' online' : ''}</div>`;
+  if (!social.friends.length) h += `<div class="fr-empty">No friends yet. Add someone by their exact username, or open a player's profile from Recent Games and press Add friend.</div>`;
+  h += social.friends.map(f => {
+    const btns = [];
+    if (f.state === 'table' && f.seats) btns.push(`<button class="mini-btn" onclick="joinFriendTable('${esc(f.code)}')">Join</button>`);
+    if (f.state === 'game') btns.push(`<button class="mini-btn" onclick="watchGame('${esc(f.code)}')">Watch</button>`);
+    if (inMyLobby() && f.state !== 'offline' && f.state !== 'game') btns.push(`<button class="mini-btn" onclick="inviteOne(${Number(f.id)})">Invite</button>`);
+    btns.push(`<button class="mini-btn" data-name="${esc(f.username)}" onclick="openChat(${Number(f.id)}, this.dataset.name)">Message${f.unread ? `<span class="n">${f.unread}</span>` : ''}</button>`);
+    return `<div class="fr-row"><span class="fr-dot ${esc(f.state)}"></span>
+      <div class="fr-main">${nameBtn(f)}${f.isAdmin ? ADMIN_TAG : ''}<div class="fr-status">${esc(statusText(f))}</div></div>
+      <div class="fr-btns">${btns.join('')}</div></div>`;
+  }).join('');
+  if (social.chats.length) {
+    h += `<div class="fr-section">Other chats</div>` + social.chats.map(c => `<div class="fr-row"><div class="fr-main">${nameBtn(c)}</div>
+      <div class="fr-btns"><button class="mini-btn" data-name="${esc(c.username)}" onclick="openChat(${Number(c.id)}, this.dataset.name)">Message${c.unread ? `<span class="n">${c.unread}</span>` : ''}</button></div></div>`).join('');
+  }
+  if (social.outgoing.length) {
+    h += `<div class="fr-section">Sent requests</div>` + social.outgoing.map(u => `<div class="fr-row"><div class="fr-main">${nameBtn(u)}<div class="fr-status">waiting for an answer</div></div>
+      <div class="fr-btns"><button class="mini-btn" onclick="answerRequest(${Number(u.id)}, 'cancel')">Cancel</button></div></div>`).join('');
+  }
+  if (social.blocked.length) {
+    h += `<div class="fr-section">Blocked</div>` + social.blocked.map(u => `<div class="fr-row"><div class="fr-main">${esc(u.username)}</div>
+      <div class="fr-btns"><button class="mini-btn" onclick="unblockUser(${Number(u.id)})">Unblock</button></div></div>`).join('');
+  }
+  const keep = document.getElementById('addFriendName');
+  const typed = keep ? keep.value : '';
+  el.innerHTML = h;
+  if (typed) document.getElementById('addFriendName').value = typed;
+}
+async function addFriend(userId) {
+  const input = document.getElementById('addFriendName');
+  const username = userId ? undefined : (input ? input.value.trim() : '');
+  if (!userId && !username) return;
+  const d = await api('POST', '/friends/request', userId ? { userId } : { username });
+  addFriendNote = { text: d.error || d.message, error: !!d.error };
+  const msg = document.getElementById('addFriendMsg');
+  if (msg) { msg.style.color = d.error ? 'var(--red)' : 'var(--green)'; msg.textContent = addFriendNote.text; }
+  if (!d.error && input && !userId) input.value = '';
+  if (userId) showToast(d.error || d.message);
+  loadFriends();
+  return d;
+}
+async function answerRequest(id, action) { const d = await api('POST', `/friends/${Number(id)}/${action}`); if (d.error) showError(d.error); loadFriends(); }
+async function removeFriend(id, name) {
+  if (!confirm(`Remove ${name} from your friends?`)) return;
+  await api('DELETE', `/friends/${Number(id)}`); loadFriends(); refreshPlayerCard();
+}
+async function blockUser(id, name) {
+  if (!confirm(`Block ${name}? You won't see each other online, and they can't message you or send requests.`)) return;
+  await api('POST', `/users/${Number(id)}/block`); showToast(`${name} is blocked`); loadFriends(); refreshPlayerCard();
+  if (chatWith && chatWith.id === id) closeChat();
+}
+async function unblockUser(id) { await api('DELETE', `/users/${Number(id)}/block`); loadFriends(); refreshPlayerCard(); }
+async function saveSocialSettings() {
+  await api('POST', '/me/social-settings', {
+    allowRequests: document.getElementById('setAllowRequests').checked,
+    friendsOnlyDm: document.getElementById('setFriendsOnlyDm').checked,
+  });
+}
+
+/* Profile panel buttons (Add friend / Message / Block) */
+let pcCurrent = null;
+function playerCardActions(p) {
+  if (!currentUser || !p.relation || p.relation === 'self' || p.relation === 'guest') return '';
+  const esc = escapeHtml, id = Number(p.id), nm = esc(p.username);
+  const b = [];
+  if (p.relation === 'friends') b.push(`<button class="mini-btn" data-name="${nm}" onclick="removeFriend(${id}, this.dataset.name)">✓ Friends</button>`);
+  else if (p.relation === 'outgoing') b.push(`<button class="mini-btn" disabled>Request sent</button>`);
+  else if (p.relation === 'incoming') b.push(`<button class="mini-btn primary" onclick="answerRequest(${id}, 'accept').then(refreshPlayerCard)">Accept request</button>`);
+  else if (p.relation === 'none') b.push(`<button class="mini-btn primary" onclick="addFriend(${id}).then(refreshPlayerCard)">Add friend</button>`);
+  if (p.relation !== 'blocked') b.push(`<button class="mini-btn" data-name="${nm}" onclick="openChat(${id}, this.dataset.name)">Message</button>`);
+  if (p.presence && p.presence.state === 'game') b.push(`<button class="mini-btn" onclick="closePlayerCard(); watchGame('${esc(p.presence.code)}')">Watch game</button>`);
+  if (p.presence && p.presence.state === 'table' && p.presence.seats) b.push(`<button class="mini-btn" onclick="closePlayerCard(); joinFriendTable('${esc(p.presence.code)}')">Join table</button>`);
+  b.push(p.relation === 'blocked'
+    ? `<button class="mini-btn" onclick="unblockUser(${id})">Unblock</button>`
+    : `<button class="mini-btn" data-name="${nm}" onclick="blockUser(${id}, this.dataset.name)">Block</button>`);
+  return `<div class="pc-actions">${b.join('')}</div>`;
+}
+function refreshPlayerCard() {
+  const o = document.getElementById('playerCardOverlay');
+  if (pcCurrent && o.classList.contains('open')) openPlayerCard(pcCurrent.id, pcCurrent.username, true);
+}
+
+/* Live connection events */
+socket.on('friendsChanged', () => { loadFriends(); refreshPlayerCard(); });
+socket.on('presence', (p) => {
+  const f = social.friends.find(x => x.id === p.id);
+  if (!f) return;
+  Object.assign(f, { state: p.state, code: p.code, seats: p.seats, solo: p.solo, turn: p.turn });
+  if (p.state === 'offline') f.lastSeen = Math.floor(Date.now() / 1000);
+  social.friends.sort((a, b) => (a.state === 'offline') - (b.state === 'offline') || a.username.localeCompare(b.username));
+  renderFriendsPanel();
+});
+socket.on('connect', () => { if (authToken) loadFriends(); });
+
+/* ── Invites ── */
+function refreshInviteButton() {
+  const b = document.getElementById('lobbyInviteBtn');
+  if (b) b.style.display = currentUser && lastLobby && !lastLobby.gameInProgress ? '' : 'none';
+}
+function openInvitePicker() {
+  const online = social.friends.filter(f => f.state === 'online' || f.state === 'table');
+  const list = document.getElementById('ipList');
+  list.innerHTML = online.length
+    ? online.map(f => `<label class="ip-row"><input type="checkbox" value="${Number(f.id)}" checked /> <span>${escapeHtml(f.username)}</span><span class="fr-status" style="margin-left:auto">${escapeHtml(statusText(f))}</span></label>`).join('')
+    : `<div class="fr-empty">None of your friends are online right now. You can still share this table's link: <b>${escapeHtml(location.origin + '/multiplayer/' + (lastLobby ? lastLobby.code : ''))}</b></div>`;
+  document.getElementById('ipSend').style.display = online.length ? '' : 'none';
+  document.getElementById('invitePicker').hidden = false;
+  loadFriends();
+}
+function closeInvitePicker() { document.getElementById('invitePicker').hidden = true; }
+function sendInvites(ids) {
+  const to = ids || [...document.querySelectorAll('#ipList input:checked')].map(i => Number(i.value));
+  if (!to.length) return;
+  socket.emit('sendInvites', { to }, (r) => {
+    if (r && r.error) return showError(r.error);
+    showToast(`Invite sent to ${r.sent} friend${r.sent === 1 ? '' : 's'}`);
+    closeInvitePicker();
+  });
+}
+function inviteOne(id) { sendInvites([id]); }
+socket.on('invite', (inv) => {
+  const box = document.getElementById('inviteToasts');
+  const el = document.createElement('div');
+  el.className = 'invite-toast';
+  el.innerHTML = `<div><b>${escapeHtml(inv.from.username)}</b> invited you to a game</div>
+    <div class="it-time"></div>
+    <div class="it-btns"><button class="mini-btn">Decline</button><button class="mini-btn primary">Join</button></div>`;
+  const [dec, join] = el.querySelectorAll('button');
+  const t = el.querySelector('.it-time');
+  const tick = () => { const s = Math.round((inv.expires - Date.now()) / 1000); if (s <= 0) { done(); return; } t.textContent = `Expires in ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+  const timer = setInterval(tick, 1000);
+  const done = () => { clearInterval(timer); el.remove(); };
+  dec.onclick = () => { socket.emit('inviteResponse', { id: inv.id, accept: false }); done(); };
+  join.onclick = () => {
+    if (gameState && myIdx >= 0 && gameState.phase !== 'gameOver' && document.getElementById('game').classList.contains('active')
+        && !confirm('Leave the game you are in and join this table?')) return;
+    socket.emit('inviteResponse', { id: inv.id, accept: true }, (r) => {
+      done();
+      if (r && r.error) return showError(r.error);
+      if (r.started) { showToast('That game already started, so you are watching it'); watchGame(r.code); }
+      else joinFriendTable(r.code);
+    });
+  };
+  tick();
+  box.appendChild(el);
+});
+socket.on('inviteAnswered', ({ username, accept }) => showToast(accept ? `${username} is joining your table` : `${username} declined your invite`));
+
+/* ── Join a friend's table / watch a game ── */
+function joinFriendTable(code) {
+  closeProfileDrawer();
+  leaveLobbyIfIn();
+  const jc = document.getElementById('joinCode');
+  if (jc) jc.value = code;
+  joinRoom(false);
+}
+function watchGame(code) {
+  closeProfileDrawer(); closePlayerCard();
+  leaveLobbyIfIn();
+  const name = currentUser ? currentUser.username : 'Guest';
+  myName = name; isSoloGame = false;
+  socket.emit('joinRoom', { name, code, spectate: true, authToken }, (res) => {
+    if (res.error) return showError(res.error === 'Room not found' ? 'That game has ended' : res.error);
+    history.pushState({}, '', '/multiplayer/' + code);
+    document.getElementById('lobbyCode').textContent = code;
+    socket.emit('getRoomStatus', { code }, (st) => {
+      if (st && st.gameInProgress) { showScreen('game'); startTurnClock(); }
+      else showScreen('lobby');
+    });
+  });
+}
+function updateWatching(n) {
+  const b = document.getElementById('watchingBadge');
+  if (!b) return;
+  b.hidden = !n;
+  b.textContent = `👁 ${n} watching`;
+}
+socket.on('watching', ({ n }) => updateWatching(n));
+// /?watch=CODE (the admin page's Watch links) opens that game as a spectator
+(function watchFromLink() {
+  const code = new URLSearchParams(location.search).get('watch');
+  if (!code || !/^[0-9]{4}$/.test(code)) return;
+  history.replaceState({}, '', '/');
+  const go = () => setTimeout(() => watchGame(code), 300);
+  if (socket.connected) go(); else socket.once('connect', go);
+})();
+
+/* ── Live games on the home page (friends' games; every game for the admin) ── */
+let liveTimer = null;
+async function loadLiveGames() {
+  const box = document.getElementById('liveGamesBox');
+  if (!box) return;
+  if (!authToken || !document.getElementById('newLanding').classList.contains('active')) { if (!authToken) box.hidden = true; return; }
+  try {
+    const d = await api('GET', '/live-games');
+    const games = d.games || [];
+    box.hidden = !games.length;
+    document.getElementById('liveGamesNote').textContent = d.admin ? '· all games (admin)' : '· your friends';
+    document.getElementById('liveGamesList').innerHTML = games.map(g => `<div class="live-row">
+      <div class="live-players">${g.players.map(p => `<span class="${p.isFriend ? 'friend' : ''}">${escapeHtml(p.name)}${p.isAdmin ? ADMIN_TAG : ''}${p.isBot ? ' <span class="player-badge player-badge-bot">Bot</span>' : ''}</span>`).join('')}</div>
+      <span class="live-meta">${escapeHtml(g.mode)} · turn ${Number(g.turn)}${g.watching ? ` · 👁 ${Number(g.watching)}` : ''}</span>
+      <button class="mini-btn primary" onclick="watchGame('${escapeHtml(g.code)}')">Watch</button></div>`).join('');
+  } catch {}
+}
+function startLiveGames() { clearInterval(liveTimer); loadLiveGames(); liveTimer = setInterval(loadLiveGames, 5000); }
+
+/* ── Friend chat ── */
+async function openChat(id, username) {
+  if (!currentUser) return showError('Sign in to chat');
+  closePlayerCard();
+  chatWith = { id: Number(id), username };
+  document.querySelectorAll(`.invite-toast[data-from="${Number(id)}"]`).forEach(e => e.remove());
+  document.getElementById('dmName').textContent = username;
+  document.getElementById('dmSub').textContent = '';
+  document.getElementById('dmList').innerHTML = '<div class="fr-empty">Loading…</div>';
+  const o = document.getElementById('dmOverlay');
+  o.classList.add('open'); requestAnimationFrame(() => requestAnimationFrame(() => o.classList.add('slid')));
+  const d = await api('GET', `/messages/${chatWith.id}`);
+  if (!chatWith || chatWith.id !== Number(id)) return;
+  if (d.error) { document.getElementById('dmList').innerHTML = `<div class="fr-empty">${escapeHtml(d.error)}</div>`; return; }
+  document.getElementById('dmName').innerHTML = escapeHtml(d.user.username) + (d.user.isAdmin ? ADMIN_TAG : '');
+  document.getElementById('dmSub').textContent = d.relation === 'friends' ? 'Friends' : 'Not friends · messages are kept 90 days';
+  document.getElementById('dmForm').style.display = d.canMessage ? '' : 'none';
+  if (!d.canMessage) document.getElementById('dmSub').textContent = d.relation === 'blocked' ? 'You blocked this player' : `${d.user.username} only accepts messages from friends`;
+  const list = document.getElementById('dmList');
+  list.innerHTML = d.messages.length ? '' : '<div class="fr-empty" id="dmEmpty">No messages yet. Say hi!</div>';
+  d.messages.forEach(appendDm);
+  list.scrollTop = list.scrollHeight;
+  clearUnread(chatWith.id);
+  setTimeout(() => document.getElementById('dmInput').focus(), 250);
+}
+function closeChat() {
+  const o = document.getElementById('dmOverlay');
+  o.classList.remove('slid'); setTimeout(() => o.classList.remove('open'), 250);
+  chatWith = null;
+}
+let lastDmDay = null;
+function appendDm(m) {
+  const list = document.getElementById('dmList');
+  document.getElementById('dmEmpty')?.remove();
+  const mine = currentUser && m.from_id !== undefined ? m.from_id === currentUser.id : !!m.mine;
+  const when = new Date((m.created_at || Date.now() / 1000) * 1000);
+  const day = when.toDateString();
+  if (list.dataset.lastDay !== day) {
+    list.dataset.lastDay = day;
+    list.insertAdjacentHTML('beforeend', `<div class="dm-day">${when.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}</div>`);
+  }
+  list.insertAdjacentHTML('beforeend', `<div class="dm-msg ${mine ? 'me' : 'them'}">${escapeHtml(m.body)}<span class="dm-time">${when.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}</span></div>`);
+}
+function sendDm() {
+  const input = document.getElementById('dmInput');
+  const body = input.value.trim();
+  if (!body || !chatWith) return;
+  socket.emit('dm', { to: chatWith.id, body }, (r) => {
+    if (r && r.error) return showError(r.error);
+    input.value = '';
+  });
+}
+function clearUnread(id) {
+  for (const list of [social.friends, social.chats]) { const x = list.find(f => f.id === id); if (x) x.unread = 0; }
+  socket.emit('dmRead', { from: id });
+  updateSocialBadges(); renderFriendsPanel();
+}
+socket.on('dm', (m) => {
+  const msg = { id: m.id, from_id: m.from, to_id: m.to, body: m.body, created_at: m.created_at };
+  const other = m.mine ? m.to : m.from;
+  if (chatWith && chatWith.id === other) {
+    appendDm(msg);
+    const list = document.getElementById('dmList'); list.scrollTop = list.scrollHeight;
+    if (!m.mine) socket.emit('dmRead', { from: other });
+    return;
+  }
+  if (m.mine) return;
+  const f = social.friends.find(x => x.id === other) || social.chats.find(x => x.id === other);
+  if (f) f.unread = (f.unread || 0) + 1; else social.chats.unshift({ id: other, username: m.fromName, unread: 1 });
+  updateSocialBadges(); renderFriendsPanel();
+  showMessageToast(other, m.fromName, m.body);
+});
+function showMessageToast(id, name, body) {
+  const box = document.getElementById('inviteToasts');
+  const el = document.createElement('div');
+  el.className = 'invite-toast';
+  el.dataset.from = id;
+  el.style.borderColor = 'var(--border-light)';
+  el.innerHTML = `<div><b>${escapeHtml(name)}</b>: ${escapeHtml(body.length > 90 ? body.slice(0, 90) + '…' : body)}</div>
+    <div class="it-btns"><button class="mini-btn">Close</button><button class="mini-btn primary">Reply</button></div>`;
+  const [x, reply] = el.querySelectorAll('button');
+  x.onclick = () => el.remove();
+  reply.onclick = () => { el.remove(); openChat(id, name); };
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 12000);
+}
+async function reportChat() {
+  if (!chatWith) return;
+  const reason = prompt(`Report ${chatWith.username} to the site admin? The last 50 messages of this conversation are sent with the report.\n\nWhat happened? (optional)`);
+  if (reason === null) return;
+  const d = await api('POST', `/messages/${chatWith.id}/report`, { reason });
+  if (d.error) return showError(d.error);
+  showToast('Thanks — the report was sent to the admin');
+  if (confirm(`Also block ${chatWith.username}?`)) blockUser(chatWith.id, chatWith.username);
 }
 
 /* ── Game Replay ─────────────────────────────────────────────── */

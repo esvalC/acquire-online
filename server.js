@@ -148,6 +148,7 @@ app.post('/api/signup', signupLimit, async (req, res) => {
   const bad = passwordProblem(password);
   if (bad) return res.status(400).json({ error: bad });
   if (password.toLowerCase() === username.toLowerCase()) return res.status(400).json({ error: 'Password can\'t be your username' });
+  if (!isClean(username)) return res.status(400).json({ error: 'Please pick a different username' });
   if (db.findByUsername(username)) return res.status(409).json({ error: 'Username already taken' });
   try {
     const user = db.createPasswordUser(username, await hashPassword(password));
@@ -434,7 +435,9 @@ app.get('/api/users/:id/profile', (req, res) => {
   const header = req.headers.authorization || '';
   const viewer = header.startsWith('Bearer ') ? verifyToken(header.slice(7)) : null;
   const isSelf = viewer && viewer.sub === id;
-  const base = { id: user.id, username: user.username, isAdmin: !!user.is_admin, joined: user.created_at };
+  const relation = viewer ? socialApi.relationFor(viewer.sub, id) : 'guest';
+  const base = { id: user.id, username: user.username, isAdmin: !!user.is_admin, joined: user.created_at, relation,
+    ...(relation === 'friends' ? { presence: socialApi.statusOf(id) } : {}) };
   if (!user.public_profile && !isSelf && !(viewer && isAdminUser(viewer.sub))) {
     return res.json({ ...base, private: true });
   }
@@ -571,7 +574,7 @@ app.delete('/api/news/:id', requireAdmin, (req, res) => {
 app.post('/api/news/:id/replies', newsReplyLimit, (req, res) => {
   const postId = Number(req.params.id);
   if (!db.newsPostExists(postId)) return res.status(404).json({ error: 'Post not found' });
-  const body = cleanText(req.body && req.body.body, 500);
+  const body = censor(cleanText(req.body && req.body.body, 500));
   if (!body) return res.status(400).json({ error: 'Reply is empty' });
 
   // Logged-in users reply as themselves; everyone else is a guest.
@@ -579,6 +582,7 @@ app.post('/api/news/:id/replies', newsReplyLimit, (req, res) => {
   const payload = header.startsWith('Bearer ') ? verifyToken(header.slice(7)) : null;
   const user = payload ? db.findById(payload.sub) : null;
   let guestName = cleanText(req.body && req.body.name, 24).replace(/[^\p{L}\p{N} _.'-]/gu, '') || 'Guest';
+  if (!isClean(guestName)) guestName = 'Guest';
   const id = db.createNewsReply(postId, user ? user.id : null, guestName, body);
   res.json({ ok: true, id });
 });
@@ -609,6 +613,12 @@ app.use((err, req, res, _next) => {
 /* ── Room store ────────────────────────────────────────────── */
 const rooms = {};
 
+/* Friends, invites, live games, friend chat, reports — see social.js */
+const { censor, isClean } = require('./filter');
+const socialApi = require('./social')({
+  app, io, db, getRooms: () => rooms, verifyToken, requireAuth, requireAdmin, byVisitor, isAdminUser,
+});
+
 function generateCode() {
   let code;
   do { code = String(Math.floor(1000 + Math.random() * 9000)); } while (rooms[code]);
@@ -636,6 +646,7 @@ function broadcastState(code) {
   // Capture spectator snapshot for replay before recording game end
   const spectatorState = engine.getClientState(room.game, -1);
   spectatorState.playerList = playerList;
+  spectatorState.watching = room.spectators.length;
   spectatorState.mode = room.mode || (room.isSolo ? 'Solo' : 'Multiplayer');
   room.replaySnapshots = room.replaySnapshots || [];
   room.replaySnapshots.push(JSON.parse(JSON.stringify(spectatorState)));
@@ -649,6 +660,7 @@ function broadcastState(code) {
     if (p.socketId && !p.isBot) {
       const clientState = engine.getClientState(room.game, p.idx);
       clientState.playerList = playerList;
+      clientState.watching = room.spectators.length;
       if (room.sessionId) clientState.sessionId = room.sessionId;
       io.to(p.socketId).emit('gameState', clientState);
     }
@@ -1068,7 +1080,7 @@ function playBotMove(code, game, botPlayer, searchAction) {
 function cleanName(raw) {
   const s = String(raw == null ? '' : raw).normalize('NFC')
     .replace(/[\u0000-\u001f\u007f<>"'`\\]/g, '').replace(/\s+/g, ' ').trim().slice(0, 20);
-  return s || 'Player';
+  return s && isClean(s) ? s : 'Player';
 }
 function uniqueName(room, name) {
   const taken = new Set(room.players.map(p => p.name.toLowerCase()).concat(room.spectators.map(s => s.name.toLowerCase())));
@@ -1366,7 +1378,7 @@ io.on('connection', (socket) => {
     const room = rooms[currentRoom];
     if (!room) return;
     const name = playerName || 'Anonymous';
-    const msg = message.trim().slice(0, 300);
+    const msg = censor(message.trim().slice(0, 300));
     const sender = room.players.find(p => p.socketId === socket.id);
     io.to(currentRoom).emit('chatMessage', { name, message: msg, time: Date.now(), isAdmin: isAdminUser(sender && sender.userId) || undefined });
   });
@@ -1424,7 +1436,7 @@ io.on('connection', (socket) => {
 
     if (!me) {                                              // spectator
       room.spectators = room.spectators.filter(s => s.socketId !== socket.id);
-      if (!room.game) broadcastLobby(code);
+      if (!room.game) broadcastLobby(code); else io.to(code).emit('watching', { n: room.spectators.length });
       return;
     }
     if (room.game) {
@@ -1442,7 +1454,9 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     if (!currentRoom || !rooms[currentRoom]) return;
     const room = rooms[currentRoom];
+    const watchersBefore = room.spectators.length;
     room.spectators = room.spectators.filter(s => s.socketId !== socket.id);
+    if (room.spectators.length !== watchersBefore && room.game) io.to(currentRoom).emit('watching', { n: room.spectators.length });
 
     if (room.isSolo) {
       // Don't delete immediately: phones locking, Wi-Fi blips and tab switches
