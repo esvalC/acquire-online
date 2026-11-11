@@ -1100,6 +1100,12 @@
   .lobby-share-hint { font-size: 11px; color: var(--text-muted); }
   .lobby-link { color: var(--gold); font-size: 14px; font-weight: 600; word-break: break-all; text-decoration: underline; }
   .lobby-share .btn { width: auto; padding: 6px 16px; }
+  .skipwarn-overlay { position: fixed; inset: 0; z-index: 4000; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; padding: 16px; }
+  .skipwarn { background: var(--bg-card); border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px; max-width: 380px; width: 100%; box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+  .skipwarn-title { font-family: 'Playfair Display', serif; font-size: 20px; color: var(--gold); margin-bottom: 8px; }
+  .skipwarn-text { font-size: 13px; color: var(--text-dim); line-height: 1.6; }
+  .skipwarn-check { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-muted); margin: 12px 0; cursor: pointer; }
+  .skipwarn-btns { display: flex; gap: 8px; } .skipwarn-btns .btn { flex: 1; }
   .end-panel { flex-shrink: 0; margin-top: 12px; border: 1px solid rgba(245,158,11,0.55); background: rgba(245,158,11,0.08); border-radius: 12px; padding: 14px; text-align: center; }
   .end-panel .end-why { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-top: 8px; }
   .end-panel .end-big { width: 100%; font-size: 18px; font-weight: 800; letter-spacing: 1px; padding: 14px 10px; border-radius: 10px; border: none; cursor: pointer;
@@ -3788,8 +3794,7 @@ function renderActionPanel() {
         <div style="font-size:11px;color:var(--text-muted)">Buying <span id="buyCount" style="color:var(--text)">${n}</span> of 3 · <span id="buyTotal" style="color:var(--text)">$${cost}</span> · cash $${cash.toLocaleString()}</div>
       </div>
       <div style="display:flex;gap:6px;margin-top:8px">
-        ${canBuy ? '<button class="btn" style="flex:1" onclick="confirmBuy()">Buy</button>' : ''}
-        <button class="btn btn-secondary btn-sm" style="width:auto" onclick="confirmBuy(true)">${canBuy ? 'Skip' : 'Continue'}</button>
+        <button class="btn ${buyPicked() ? '' : 'btn-secondary'}" id="buyMainBtn" style="flex:1" onclick="buyMainClick()">${buyBtnLabel()}</button>
       </div>`;
     return;
   }
@@ -3958,6 +3963,40 @@ function setBuy(chain, n) {
   const tEl = document.getElementById('buyTotal'), cEl = document.getElementById('buyCount');
   if (tEl) tEl.textContent = '$' + cost;
   if (cEl) cEl.textContent = Object.values(buySelections).reduce((s, v) => s + v, 0);
+  const b = document.getElementById('buyMainBtn');
+  if (b) { b.textContent = buyBtnLabel(); b.classList.toggle('btn-secondary', !buyPicked()); }
+}
+/* One button: "Skip buy" until you pick shares, then "Buy 2 · $600". */
+const buyPicked = () => Object.values(buySelections).reduce((s, v) => s + v, 0);
+function buyBtnLabel() {
+  const n = buyPicked();
+  if (!n) return gameState && buyableChains(gameState).length ? 'Skip buy' : 'Continue';
+  const cost = Object.entries(buySelections).reduce((s, [c, v]) => s + v * (gameState.chains[c]?.price || 0), 0);
+  return `Buy ${n} · $${cost.toLocaleString()}`;
+}
+function buyMainClick() {
+  if (buyPicked()) return confirmBuy();
+  const canBuy = gameState && buyableChains(gameState).length > 0;
+  let off = false; try { off = localStorage.getItem('acquire_skip_warn') === 'off'; } catch {}
+  if (!canBuy || off || tut) return confirmBuy(true);
+  showSkipBuyWarning();
+}
+function showSkipBuyWarning() {
+  document.getElementById('skipWarn')?.remove();
+  const cheapest = Math.min(...buyableChains(gameState).map(c => gameState.chains[c].price));
+  const el = document.createElement('div');
+  el.id = 'skipWarn'; el.className = 'skipwarn-overlay';
+  el.innerHTML = `<div class="skipwarn" role="dialog" aria-modal="true">
+      <div class="skipwarn-title">Skip buying this turn?</div>
+      <div class="skipwarn-text">Stock is how you win in Acquire — bonuses and final payouts all come from shares. You can afford shares this turn (from $${cheapest.toLocaleString()}).</div>
+      <label class="skipwarn-check"><input type="checkbox" id="skipWarnOff"> Don't warn me again</label>
+      <div class="skipwarn-btns"><button class="btn btn-secondary" id="skipWarnBack">Go back</button><button class="btn" id="skipWarnGo">Skip buy</button></div>
+    </div>`;
+  document.body.appendChild(el);
+  const close = () => { if (document.getElementById('skipWarnOff').checked) { try { localStorage.setItem('acquire_skip_warn', 'off'); } catch {} } el.remove(); };
+  el.querySelector('#skipWarnBack').onclick = close;
+  el.querySelector('#skipWarnGo').onclick = () => { close(); if (gameState && gameState.phase === 'buyStock' && gameState.currentPlayerIdx === myIdx) confirmBuy(true); };
+  el.onclick = e => { if (e.target === el) close(); };
 }
 
 function adjustBuy(chain, delta, price, cash) {
@@ -5397,8 +5436,8 @@ const tutHand = t => () => [...document.querySelectorAll('#tileHand .hand-tile')
 const tutCell = t => () => getBoardCellEl(t);
 const tutBtn = (text, scope = '#actionContent') => () => [...document.querySelectorAll(scope + ' button')].find(b => b.textContent.includes(text));
 const tutEnd = () => window.innerWidth > 900 ? document.querySelector('#endPanel .end-big') : document.getElementById('btnDeclareEnd');
-const tutBuyBtn = () => [...document.querySelectorAll('#actionContent .btn')].find(b => b.textContent.trim() === 'Buy');
-const tutSkip = () => [...document.querySelectorAll('#actionContent .btn')].find(b => /Skip|Continue/.test(b.textContent));
+const tutBuyBtn = () => document.getElementById('buyMainBtn');
+const tutSkip = () => document.getElementById('buyMainBtn');
 const TUT_CHAPTERS = [
   { title: 'Your first hotel', steps: [
     { card: `<h3>🎓 Welcome to Acquire!</h3><p>Acquire is about building <b>hotel chains</b> and owning their <b>stock</b>. Whoever has the most money at the end wins.</p><p>You'll play a short, prepared game against two bots, <b>Aria</b> and <b>Rex</b>. Follow the gold bubbles — it takes about 10 minutes.</p>`, btn: 'Start' },
@@ -5408,13 +5447,13 @@ const TUT_CHAPTERS = [
     { at: tutHand('6C'), also: tutCell('6C'), me: true, t: `Play <b>6C</b>. You can click it in <b>your tiles</b> or right on the <b>board</b> — both are lit up, and either works from now on.<br><br>6C is next to the loose tile at 5C — two touching loose tiles <b>found a new hotel</b>!` },
     { at: tutBtn('American'), me: true, t: `Name your hotel. Names come in three price levels:<br>• <b>Cheap:</b> Tower, Luxor — $200 a share at 2 tiles<br>• <b>Middle:</b> American, Worldwide, Festival — $300<br>• <b>Expensive:</b> Imperial, Continental — $400<br>Expensive hotels cost more per share but pay bigger bonuses, and every share's price rises as its hotel grows.<br><br>Choose <b>American</b>.` },
     { at: '#stockMatrix', t: `Founders get <b>1 free share</b>. This table shows who owns what in every hotel.` },
-    { at: () => document.getElementById('buycard-American'), also: tutBuyBtn, me: true, t: `Now buy stock: up to <b>3 shares a turn</b>, in any hotels on the board. Each hotel has only 25 shares. You start with $6,000, and cash only comes back from bonuses and selling — so spend wisely.<br><br>Click <b>3</b> on the American card, then press <b>Buy</b>.` },
+    { at: () => document.getElementById('buycard-American'), also: tutBuyBtn, me: true, t: `Now buy stock: up to <b>3 shares a turn</b>, in any hotels on the board. Each hotel has only 25 shares. You start with $6,000, and cash only comes back from bonuses and selling — so spend wisely.<br><br>Click <b>3</b> on the American card, then press <b>Buy</b> (the button changes from Skip buy to Buy once you pick).` },
     { bot: 3, at: tutCell('9E'), t: `<b>Aria:</b> “My turn to build!” She played 9E next to her loose tile, named it <b>Luxor</b> and bought 2 shares. Now there are two hotels to invest in.` },
     { bot: 2, at: tutCell('12A'), t: `<b>Rex</b> played 12A — it touches nothing, so it just sits there. Then he bought 2 shares of <b>your</b> American. Rex: “I'll take a piece of yours.”` },
     { at: tutHand('11H'), also: tutCell('11H'), me: true, t: `Your turn. Not every turn builds something. Play <b>11H</b> — it touches nothing, so it's a loose tile that may connect to something later.` },
     { at: '#stockMatrix', t: `<b>Who gets paid?</b> When a hotel is bought out in a merger, or when the game ends, its <b>biggest shareholder gets the 1st-place bonus</b> (10× the share price) and the <b>second biggest gets the 2nd-place bonus</b> (5×). Aim to be 1st or a solid 2nd — shares where you finish 3rd only pay their sale price.` },
     { at: '#stockMatrix', t: `<b>Ties:</b> if two players tie for 1st, they add the 1st and 2nd bonuses together and split them, and nobody else gets 2nd. If players tie for 2nd, they split the 2nd bonus.` },
-    { at: () => document.getElementById('buycard-Luxor'), also: tutBuyBtn, me: true, t: `Aria has 3 Luxor. Buy <b>3 Luxor</b> to tie her for 1st — click <b>3</b> on the Luxor card, then <b>Buy</b>.` },
+    { at: () => document.getElementById('buycard-Luxor'), also: tutBuyBtn, me: true, t: `Aria has 3 Luxor. Buy <b>3 Luxor</b> to tie her for 1st — click <b>3</b> on the Luxor card, then press <b>Buy</b>.` },
     { at: '#stockMatrix', t: `Now you lead <b>American 4–2</b> over Rex, and you're <b>tied 3–3 with Aria in Luxor</b>. If Luxor were bought out right now, you two would split its bonuses.` },
     { bot: 2, at: tutCell('7C'), t: `Aria played <b>7C</b> next to your hotel — tiles that touch a hotel join it. American grew to 3 tiles and its price went from $300 to <b>$400</b>, so every share you own is worth more. Then she bought 1 more Luxor to lead it 4–3. The race is on!` },
     { card: `<h3>⏩ A few turns later…</h3><p>Next up: <b>mergers</b>, the heart of the game.</p>`, btn: 'Continue' },
@@ -5428,7 +5467,7 @@ const TUT_CHAPTERS = [
     { bot: 1, at: '#stockMatrix', t: `Everyone holding Tower decides in turn, starting with whoever caused the merger. <b>Aria:</b> “I'll keep my Tower share — maybe it comes back.”` },
     { bot: 1, at: '#stockMatrix', t: `<b>Rex:</b> “Selling all 3 — I need the cash.”` },
     { at: tutCell('8E'), t: `<b>Tower has closed.</b> Its tiles now belong to American, and the Tower name is free again. If someone founds Tower later, Aria's kept share is worth something again — until then it's worth nothing.` },
-    { at: () => document.getElementById('buycard-Festival'), also: tutBuyBtn, me: true, t: `Your buy. Festival is about to matter — click <b>2</b> on the Festival card, then <b>Buy</b>.` },
+    { at: () => document.getElementById('buycard-Festival'), also: tutBuyBtn, me: true, t: `Your buy. Festival is about to matter — click <b>2</b> on the Festival card, then press <b>Buy</b>.` },
     { bot: 2, at: tutCell('11B'), t: `Aria played a loose tile and kept her cash. <b>Aria:</b> “Saving up.”` },
     { bot: 2, at: tutCell('1A'), t: `Rex played a loose tile and bought 1 Worldwide.` },
     { at: tutHand('7H'), also: tutCell('7H'), t: `<b>7H</b> touches Festival and Worldwide, and both have <b>4 tiles</b>. When the hotels are the same size, the player who caused the merger <b>chooses which one survives</b>.` },
@@ -5436,7 +5475,7 @@ const TUT_CHAPTERS = [
     { at: tutBtn('Festival'), me: true, t: `You lead Festival 5–1, so keep it alive: choose <b>Festival</b>.` },
     { bot: 1, at: '#stockMatrix', t: `Worldwide's shareholders were paid: Aria $5,000 (1st), Rex $2,500 (2nd). You owned none, so you have nothing to decide. <b>Aria:</b> “Trading 4 Worldwide for 2 Festival.”` },
     { bot: 1, at: '#stockMatrix', t: `<b>Rex:</b> “Selling mine.”` },
-    { at: tutSkip, me: true, t: `Good to know: a tile can touch 3 or even 4 hotels. Then they're bought out from biggest to smallest, one at a time.<br><br>Press <b>Skip</b> to end your turn without buying.` },
+    { at: tutSkip, me: true, t: `Good to know: a tile can touch 3 or even 4 hotels. Then they're bought out from biggest to smallest, one at a time.<br><br>Press <b>Skip buy</b> to end your turn without buying.` },
     { card: `<h3>⏩ Later in the game…</h3><p>Next: <b>safe hotels</b> and tiles you can't play.</p>`, btn: 'Continue' },
   ] },
   { title: 'Safe hotels & stuck tiles', steps: [
@@ -5444,7 +5483,7 @@ const TUT_CHAPTERS = [
     { at: tutHand('3C'), also: tutCell('3C'), t: `<b>3C</b> is crossed out: it would join Continental and Imperial — two safe hotels. That's never allowed, so it's a <b>dead tile</b>. It's swapped for a new one at the end of your turn.` },
     { at: tutHand('7H'), also: tutCell('7H'), t: `<b>7H</b> is crossed out for a different reason: it would found a new hotel, but all 7 are already on the board. It's <b>blocked</b> — you keep it, and it becomes playable once a hotel closes in a merger.` },
     { at: tutHand('7A'), also: tutCell('7A'), me: true, t: `Play <b>7A</b> — it grows Continental.` },
-    { at: () => document.getElementById('buycard-Continental'), also: tutBuyBtn, me: true, t: `Click <b>2</b> on the Continental card, then <b>Buy</b>.` },
+    { at: () => document.getElementById('buycard-Continental'), also: tutBuyBtn, me: true, t: `Click <b>2</b> on the Continental card, then press <b>Buy</b>.` },
     { at: '#tileHand', t: `Your dead tile 3C was swapped for a new one. The blocked 7H stays in your hand.` },
     { card: `<h3>⏩ Near the end…</h3><p>Last chapter: <b>ending the game</b>.</p>`, btn: 'Continue' },
   ] },
@@ -5452,7 +5491,7 @@ const TUT_CHAPTERS = [
     { at: tutCell('4D'), t: `Continental has <b>40 tiles</b>. You may end the game on your turn when any hotel has <b>41 or more tiles</b>, or when <b>every hotel on the board is safe</b>. It also ends by itself when all 7 hotels are safe, or when nobody can play a tile.` },
     { at: tutHand('5D'), also: tutCell('5D'), me: true, t: `Play <b>5D</b> to take Continental to 41.` },
     { at: tutEnd, me: true, t: `The <b>End Game</b> button appeared. Ending is optional, only the player whose turn it is can do it, and you still finish your turn. Press <b>End Game</b>.` },
-    { at: tutSkip, me: true, t: `Finish your turn: press <b>Skip</b>.` },
+    { at: tutSkip, me: true, t: `Finish your turn: press <b>Skip buy</b>.` },
     { at: '#standingsDisplay', t: `Every hotel pays its 1st and 2nd bonuses, then all stock is sold at current prices. <b>Most money wins — that's you!</b>` },
     { at: '#standingsDisplay', t: `One more thing: <b>Vote End</b> is only for stopping a game early, and it can only lower your rating. Leaving a game before it ends counts as a loss.` },
     { card: `<h3>🎉 You're ready to play!</h3><p>A few tips:</p><ul><li>Lead a few hotels instead of owning a little of many.</li><li>Founding a hotel gives you a free share.</li><li>Watch for mergers coming — be 1st or 2nd when they happen.</li><li>Don't spend down to $0.</li><li>Safe hotels lock in their value.</li></ul><p style="font-size:12px;opacity:.8">Tip: in Solo you can turn on <b>Suggested moves</b> for a hint every turn while you practice.</p>`,
@@ -5860,7 +5899,7 @@ function hintCopy(a, st) {
   if (a.type === 'buyStock') {
     const buys = Object.entries(a.purchases || {}).filter(([, n]) => n > 0);
     if (!buys.length) return { title: Object.values(st.chains).some(c => c.size > 0) ? 'Skip buying this turn' : 'Nothing to buy yet',
-      why: Object.values(st.chains).some(c => c.size > 0) ? 'Nothing here is worth the cash right now — save it for a better chance.' : 'No chains are on the board yet, so just continue.', target: [...document.querySelectorAll('#actionContent .btn')].find(b => /Skip|Continue/.test(b.textContent)) };
+      why: Object.values(st.chains).some(c => c.size > 0) ? 'Nothing here is worth the cash right now — save it for a better chance.' : 'No chains are on the board yet, so just continue.', target: document.getElementById('buyMainBtn') };
     const reasons = buys.map(([ch, n]) => {
       const h = holders(ch), mine = h[myIdx].n, after = mine + n;
       const others = h.filter(x => x.i !== myIdx).map(x => x.n).sort((x, y) => y - x);
