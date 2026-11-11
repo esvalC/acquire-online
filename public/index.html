@@ -1576,9 +1576,11 @@
   <div class="replay-topbar">
     <div class="replay-topbar-title">▶ Game Replay</div>
     <div class="replay-nav">
+      <button class="btn-replay" id="replayStartBtn" onclick="replayGo(0)" title="Skip to start (Home)">⏮</button>
       <button class="btn-replay" id="replayPrevBtn" onclick="replayPrev()">← Prev</button>
       <span id="replayStepLabel">Loading…</span>
       <button class="btn-replay" id="replayNextBtn" onclick="replayNext()">Next →</button>
+      <button class="btn-replay" id="replayEndBtn" onclick="replayGo(Infinity)" title="Skip to end (End)">⏭</button>
     </div>
     <button class="btn-replay" id="replayShareBtn" onclick="shareReplay()" style="display:none;">🔗 Share</button>
     <button class="btn-replay-exit" onclick="closeReplay()">✕ Exit Replay</button>
@@ -5573,6 +5575,8 @@ async function openReplay(sessionId, event) {
   document.getElementById('replayStepLabel').textContent = 'Loading…';
   document.getElementById('replayPrevBtn').disabled = true;
   document.getElementById('replayNextBtn').disabled = true;
+  document.getElementById('replayStartBtn').disabled = true;
+  document.getElementById('replayEndBtn').disabled = true;
   document.getElementById('replayShareBtn').style.display = 'none';
   document.getElementById('replayBoard').innerHTML = '';
   document.getElementById('replayScoreboard').innerHTML = '';
@@ -5637,6 +5641,11 @@ function shareReplay() {
   }
 }
 
+function replayGo(i) {
+  if (!replaySnapshots.length) return;
+  const n = Math.max(0, Math.min(i, replaySnapshots.length - 1));
+  if (n !== replayIdx) { replayIdx = n; renderReplayFrame(); }
+}
 function replayPrev() {
   if (replayIdx > 0) { replayIdx--; renderReplayFrame(); }
 }
@@ -5652,6 +5661,8 @@ function renderReplayFrame() {
   document.getElementById('replayStepLabel').textContent = `Step ${replayIdx + 1} / ${total}  ·  Turn ${snap.turnNumber}`;
   document.getElementById('replayPrevBtn').disabled = replayIdx === 0;
   document.getElementById('replayNextBtn').disabled = replayIdx === total - 1;
+  document.getElementById('replayStartBtn').disabled = replayIdx === 0;
+  document.getElementById('replayEndBtn').disabled = replayIdx === total - 1;
 
   const phaseNames = { placeTile: 'Place Tile', chooseChain: 'Found Chain', buyStock: 'Buy Stock', mergerDecision: 'Merger', gameOver: 'Game Over' };
   const curName = snap.players[snap.currentPlayerIdx]?.name || '';
@@ -5775,6 +5786,8 @@ document.addEventListener('keydown', e => {
   if (document.getElementById('replayOverlay').style.display !== 'none') {
     if (e.key === 'ArrowLeft')  replayPrev();
     if (e.key === 'ArrowRight') replayNext();
+    if (e.key === 'Home') { e.preventDefault(); replayGo(0); }
+    if (e.key === 'End')  { e.preventDefault(); replayGo(Infinity); }
   }
 });
 
