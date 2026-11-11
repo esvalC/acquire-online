@@ -647,6 +647,7 @@ function broadcastState(code) {
   const spectatorState = engine.getClientState(room.game, -1);
   spectatorState.playerList = playerList;
   spectatorState.watching = room.spectators.length;
+  spectatorState.code = code;
   spectatorState.mode = room.mode || (room.isSolo ? 'Solo' : 'Multiplayer');
   room.replaySnapshots = room.replaySnapshots || [];
   room.replaySnapshots.push(JSON.parse(JSON.stringify(spectatorState)));
@@ -661,6 +662,7 @@ function broadcastState(code) {
       const clientState = engine.getClientState(room.game, p.idx);
       clientState.playerList = playerList;
       clientState.watching = room.spectators.length;
+      clientState.code = code;
       if (room.sessionId) clientState.sessionId = room.sessionId;
       io.to(p.socketId).emit('gameState', clientState);
     }
@@ -1126,7 +1128,7 @@ io.on('connection', (socket) => {
   socket.on('createRoom', ({ name, maxPlayers, quickstart, authToken }, cb) => {
     name = cleanName(name);
     const code = generateCode();
-    currentRoom = code;
+    enter(code);
     playerName = name;
     const token = randomUUID();
     const payload = authToken ? verifyToken(authToken) : null;
@@ -1151,7 +1153,7 @@ io.on('connection', (socket) => {
     if (BOT_ROSTER.some(b => b.name.toLowerCase() === name.toLowerCase())) name = name.slice(0, 17) + ' (you)';
     if (!Array.isArray(botConfigs)) botConfigs = [];
     const code = generateCode();
-    currentRoom = code;
+    enter(code);
     playerName = name;
     const token = randomUUID();
     const payload = authToken ? verifyToken(authToken) : null;
@@ -1209,9 +1211,8 @@ io.on('connection', (socket) => {
     if (!room) return cb({ error: 'Room not found' });
     name = uniqueName(room, cleanName(name));
 
-    currentRoom = code;
+    enter(code);
     playerName = name;
-    socket.join(code);
     const payload = authToken ? verifyToken(authToken) : null;
     const userId  = payload ? payload.sub : null;
 
@@ -1241,9 +1242,8 @@ io.on('connection', (socket) => {
     p.socketId = socket.id;
     p.disconnected = false;
     clearTimeout(room.cleanupTimer);
-    currentRoom = code;
+    enter(code);
     playerName = name;
-    socket.join(code);
 
     cb({ ok: true, inGame: !!room.game, isSolo: room.isSolo });
     if (room.game) {
@@ -1380,7 +1380,7 @@ io.on('connection', (socket) => {
     const name = playerName || 'Anonymous';
     const msg = censor(message.trim().slice(0, 300));
     const sender = room.players.find(p => p.socketId === socket.id);
-    io.to(currentRoom).emit('chatMessage', { name, message: msg, time: Date.now(), isAdmin: isAdminUser(sender && sender.userId) || undefined });
+    io.to(currentRoom).emit('chatMessage', { code: currentRoom, name, message: msg, time: Date.now(), isAdmin: isAdminUser(sender && sender.userId) || undefined });
   });
 
   /* ── Play again ───────────────────────────────── */
@@ -1420,6 +1420,55 @@ io.on('connection', (socket) => {
     startGame(currentRoom);
   });
 
+  /* Step away from the current game/table without ending it — what a closed
+   * tab does: spectators stop watching, a waiting seat is freed, a player in a
+   * game is marked away (they can come back for a few minutes). Also used when
+   * this connection moves to a different game, so it never keeps receiving
+   * another game's updates or chat. */
+  function detach() {
+    const code = currentRoom;
+    for (const r of socket.rooms) if (r !== socket.id && !String(r).startsWith('user:')) socket.leave(r);
+    currentRoom = null;
+    if (!code || !rooms[code]) return;
+    const currentRoomCode = code;
+    const room = rooms[currentRoomCode];
+    const watchersBefore = room.spectators.length;
+    room.spectators = room.spectators.filter(s => s.socketId !== socket.id);
+    if (room.spectators.length !== watchersBefore && room.game) io.to(currentRoomCode).emit('watching', { n: room.spectators.length });
+
+    if (room.isSolo) {
+      // Don't delete immediately: phones locking, Wi-Fi blips and tab switches
+      // all drop the socket. The player can come back via /game/<code> (or the
+      // auto-rejoin on reconnect) within RECONNECT_GRACE_MS.
+      const human = room.players.find(p => p.socketId === socket.id);
+      if (human) { human.socketId = null; human.disconnected = true; }
+      scheduleAbandonedRoomCleanup(currentRoomCode);
+      return;
+    }
+
+    if (room.game) {
+      const p = room.players.find(p => p.socketId === socket.id);
+      if (p) {
+        p.socketId = null;
+        p.disconnected = true;
+        room.game.log.push(`${p.name} disconnected`);
+        broadcastState(currentRoomCode);
+        if (room.players.every(q => q.isBot || q.disconnected)) scheduleAbandonedRoomCleanup(currentRoomCode);
+      }
+    } else {
+      const me = room.players.find(p => p.socketId === socket.id);
+      if (me) leaveLobbySeat(currentRoomCode, me);
+      else broadcastLobby(currentRoomCode);
+    }
+  }
+  // Join a game/table room, leaving any other first
+  function enter(code) {
+    if (currentRoom && currentRoom !== code) detach();
+    for (const r of socket.rooms) if (r !== socket.id && r !== code && !String(r).startsWith('user:')) socket.leave(r);
+    currentRoom = code;
+    socket.join(code);
+  }
+
   /* ── Leave room (e.g. solo player goes back to setup) ── */
   // Solo: ends the game. Multiplayer table (before it starts): the host
   // cancels the table for everyone; anyone else just leaves their seat.
@@ -1432,13 +1481,12 @@ io.on('connection', (socket) => {
     socket.leave(code);
     const me = room.players.find(p => p.socketId === socket.id);
 
-    if (room.isSolo) { if (me) deleteRoom(code); return; }
-
-    if (!me) {                                              // spectator
+    if (!me) {                                              // spectator (any kind of game, solo too)
       room.spectators = room.spectators.filter(s => s.socketId !== socket.id);
       if (!room.game) broadcastLobby(code); else io.to(code).emit('watching', { n: room.spectators.length });
       return;
     }
+    if (room.isSolo) { deleteRoom(code); return; }
     if (room.game) {
       me.socketId = null; me.disconnected = true;
       room.game.log.push(`${me.name} left the game`);
@@ -1451,38 +1499,7 @@ io.on('connection', (socket) => {
 
   /* ── Disconnect ───────────────────────────────── */
 
-  socket.on('disconnect', () => {
-    if (!currentRoom || !rooms[currentRoom]) return;
-    const room = rooms[currentRoom];
-    const watchersBefore = room.spectators.length;
-    room.spectators = room.spectators.filter(s => s.socketId !== socket.id);
-    if (room.spectators.length !== watchersBefore && room.game) io.to(currentRoom).emit('watching', { n: room.spectators.length });
-
-    if (room.isSolo) {
-      // Don't delete immediately: phones locking, Wi-Fi blips and tab switches
-      // all drop the socket. The player can come back via /game/<code> (or the
-      // auto-rejoin on reconnect) within RECONNECT_GRACE_MS.
-      const human = room.players.find(p => p.socketId === socket.id);
-      if (human) { human.socketId = null; human.disconnected = true; }
-      scheduleAbandonedRoomCleanup(currentRoom);
-      return;
-    }
-
-    if (room.game) {
-      const p = room.players.find(p => p.socketId === socket.id);
-      if (p) {
-        p.socketId = null;
-        p.disconnected = true;
-        room.game.log.push(`${p.name} disconnected`);
-        broadcastState(currentRoom);
-        if (room.players.every(q => q.isBot || q.disconnected)) scheduleAbandonedRoomCleanup(currentRoom);
-      }
-    } else {
-      const me = room.players.find(p => p.socketId === socket.id);
-      if (me) leaveLobbySeat(currentRoom, me);
-      else broadcastLobby(currentRoom);
-    }
-  });
+  socket.on('disconnect', () => detach());
 });
 
 const PORT = process.env.PORT || 3000;

@@ -1839,6 +1839,7 @@
     <div style="display:flex; gap:6px;">
       <button class="btn btn-sm btn-secondary" id="btnDeclareEnd" onclick="declareEnd()" style="display:none;">End Game</button>
       <button class="btn btn-sm btn-danger" id="btnVoteEnd" onclick="initiateConcedeVote()">Vote End</button>
+      <button class="btn btn-sm btn-secondary" id="btnStopWatching" style="display:none" onclick="stopWatching()">Stop Watching</button>
       <button class="btn btn-sm btn-secondary" id="btnRestartSolo" onclick="restartSoloGame()" style="display:none;" title="Restart this game">↺ Restart</button>
     </div>
   </div>
@@ -2475,6 +2476,8 @@ function showScreen(id) {
 
 function goHome() {
   leaveLobbyIfIn();
+  // Watching a game: going home stops watching (the players' "watching" count drops)
+  if (gameState && myIdx === -1) socket.emit('leaveRoom');
   activeSession = null;
   document.getElementById('gameOverOverlay').style.display = 'none';
   stopTurnClock();
@@ -2826,6 +2829,7 @@ const LOBBY_DIFF_LABEL = { hard: 'Easy', expert: 'Medium', mcts: 'Hard', master:
 let lastLobby = null;
 socket.on('lobbyUpdate', (data) => {
   lastLobby = data;
+  useChatFor(data.code);
   setTimeout(refreshInviteButton, 0);
   document.getElementById('lobbyCode').textContent = data.code;
   const isHost = !!data.host && data.host === myName;
@@ -2962,6 +2966,7 @@ socket.on('gameState', (state) => {
   }
   prevBoard = state.board ? state.board.map(row => [...row]) : null;
   updateWatching(state.watching || 0);
+  useChatFor(state.code);
 
   // Detect stock purchases: compare against previous stocks
   if (prevPlayerStocks && state.players) {
@@ -3266,6 +3271,7 @@ function renderMiniBoard(defunct, survivor) {
 }
 
 function renderBoard() {
+  if (!gameState) return;   // left the game (e.g. a delayed redraw after Stop Watching)
   const board = document.getElementById('board');
   const st = gameState;
   const isMyPlaceTurn = st.phase === 'placeTile' && st.currentPlayerIdx === myIdx;
@@ -3322,6 +3328,7 @@ function positionPreview(e, el) {
 
 /* ── Render Hand ───────────────────────────────── */
 function renderHand() {
+  if (!gameState) return;   // left the game (e.g. a delayed redraw after Stop Watching)
   const hand = document.getElementById('tileHand');
   const tiles = gameState.players[myIdx]?.tiles || [];
   const playable = gameState.playableTiles || [];
@@ -3352,6 +3359,7 @@ const CHAIN_TIER_INFO = {
 const CHAIN_START_PRICE = { Tower: 200, Luxor: 200, American: 300, Worldwide: 300, Festival: 300, Imperial: 400, Continental: 400 };
 
 function renderActionPanel() {
+  if (!gameState) return;   // left the game (e.g. a delayed redraw after Stop Watching)
   const st = gameState;
   const panel = document.getElementById('actionPanel');
   const title = document.getElementById('actionTitle');
@@ -3684,6 +3692,7 @@ function submitMergerDecision(held) {
 
 /* ── Stock Matrix ──────────────────────────────── */
 function renderStockMatrix() {
+  if (!gameState) return;   // left the game (e.g. a delayed redraw after Stop Watching)
   const st = gameState;
   const players = st.players;
   const chains = Object.keys(st.chains);
@@ -3827,6 +3836,7 @@ function _renderScoreboardFull() {
 
 /* ── Game Log ──────────────────────────────────── */
 function renderLog() {
+  if (!gameState) return;   // left the game (e.g. a delayed redraw after Stop Watching)
   const el = document.getElementById('gameLog');
   const admins = adminNamesOf(gameState.playerList);
   el.innerHTML = (gameState.log||[]).map(l=>`<div class="log-entry">${tagAdminsInText(escapeHtml(l), admins)}</div>`).join('');
@@ -3835,6 +3845,7 @@ function renderLog() {
 
 /* ── Header ────────────────────────────────────── */
 function renderHeader() {
+  if (!gameState) return;   // left the game (e.g. a delayed redraw after Stop Watching)
   document.getElementById('turnLabel').textContent = `Turn ${gameState.turnNumber}`;
   const curName = gameState.players[gameState.currentPlayerIdx]?.name || '';
   document.getElementById('currentPlayerLabel').innerHTML = escapeHtml(curName) + (isAdminName(curName) ? ADMIN_TAG : '');
@@ -3862,6 +3873,7 @@ function renderHeader() {
   // Spectator badge
   document.getElementById('spectatorBadge').style.display = myIdx === -1 ? '' : 'none';
   document.getElementById('btnVoteEnd').style.display = myIdx === -1 ? 'none' : '';
+  document.getElementById('btnStopWatching').style.display = myIdx === -1 ? '' : 'none';
   // Last action strip (most recent log entry)
   const log = gameState.log || [];
   document.getElementById('lastAction').textContent = log.length ? log[log.length - 1] : '';
@@ -4014,7 +4026,19 @@ function sendChat() {
   input.value = '';
 }
 
-socket.on('chatMessage', ({ name, message, isAdmin }) => {
+/* Each game/table has its own chat: it starts empty whenever you enter a different one */
+let chatRoom = null;
+function useChatFor(code) {
+  if (!code || code === chatRoom) return;
+  chatRoom = code;
+  document.getElementById('chatMessages').innerHTML = '';
+  chatUnread = 0; updateChatBadge();
+}
+function stopWatching() { socket.emit('leaveRoom'); gameState = null; goHome(); }
+
+socket.on('chatMessage', ({ code, name, message, isAdmin }) => {
+  if (code && chatRoom && code !== chatRoom) return;      // a message from a game you've left
+  if (code) useChatFor(code);
   const chat = document.getElementById('chatMessages');
   const isSelf = name === myName;
   const wrap = document.createElement('div');
