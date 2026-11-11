@@ -1362,8 +1362,7 @@
     font-size: 10px; font-weight: 600; text-transform: uppercase;
     letter-spacing: 1px; color: var(--text-muted); margin-bottom: 8px;
   }
-  #replayBoard { grid-template-columns: 18px repeat(12, 1fr); width: min(100%, calc((100cqh - 40px) * 1.733 + 42px)); }
-  #replayBoard .header-cell { aspect-ratio: auto; min-height: 18px; font-size: 10px; }
+  #replayBoard { grid-template-columns: repeat(12, 1fr); width: min(100%, calc((100cqh - 20px) * 1.733)); }
   @media (max-width: 900px) {
     .replay-body { flex-direction: column; overflow-y: auto; }
     .replay-board-col { flex: none; overflow: visible; }
@@ -4810,10 +4809,8 @@ function renderReplayFrame() {
 
 function renderReplayBoard(snap) {
   const el = document.getElementById('replayBoard');
-  let html = '<div class="board-cell header-cell"></div>';
-  for (let c = 0; c < 12; c++) html += `<div class="board-cell header-cell">${c+1}</div>`;
+  let html = '';   // every square shows its own name, so no row/column labels
   for (let r = 0; r < 9; r++) {
-    html += `<div class="board-cell header-cell">${String.fromCharCode(65+r)}</div>`;
     for (let c = 0; c < 12; c++) {
       const tile = `${c + 1}${String.fromCharCode(65 + r)}`;
       const cell = snap.board[r][c];
