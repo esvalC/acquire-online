@@ -54,12 +54,17 @@ Open `http://localhost:3000`. Share your local IP (e.g. `http://192.168.1.x:3000
 - Feedback system — bug reports and suggestions submitted in-app
 
 ### Bot AI
-| Difficulty | How it plays | vs the level below |
+| Difficulty | How it plays | vs 3× the level below (4-player, 25% = even) |
 |---|---|---|
 | Easy | Hand-tuned heuristic | — |
-| Medium | Monte Carlo search, ~40 playouts per move | wins 56% of 4-player games (25% = even) |
-| Hard | Monte Carlo search, ~200 playouts per move | 56% |
-| Master | Monte Carlo search, 3 s of thinking (thousands of playouts) | 35%; 94% vs Easy |
+| Medium | Monte Carlo search, ~40 futures per move | 49% (400 games) |
+| Hard | Monte Carlo search, ~200 futures per move | 67.5% (120) |
+| Master | Monte Carlo search, 3 s of thinking (thousands of futures) | 46% (120); 97% vs Easy |
+
+Since Nov 2026 each imagined future uses "quick-thinking" tile choices for its first
+16 turns (every player picks the tile that most improves their worth if the game ended
+now) and is scored directly after 24 turns. New vs previous version, head-to-head:
+Master 38.6%, Hard 35%, Medium 34.5%. Details: `ai/BOT_IMPROVEMENT_NOTES.md`.
 
 The search bots (`ai/searchBot.js`) re-deal every tile they can't see before each
 simulated game, so they never peek at opponents' hands or the bag. They run in a
