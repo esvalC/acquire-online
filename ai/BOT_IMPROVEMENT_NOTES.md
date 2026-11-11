@@ -151,3 +151,25 @@ is clearly ahead saved only ~10% time at 3 s → not used.
 that most improves their worth-if-the-game-ended-now relative to the leader (one step ahead,
 no nested search), instead of the Easy heuristic's fixed rules. Nested real Hard bots inside
 futures would be ~10,000× too slow; this captures most of the realism cheaply.
+
+### Round 4 and 3-second confirmations
+| Variant | Budget | Opponents | Result |
+|---|---|---|---|
+| Quick-thinking tiles AND buys (full futures) | 1 s | old Master 1 s | 30.5% (buys hurt → dropped) |
+| Look 32 + quick-thinking 2 rounds | 1 s | old Master 1 s | 43% (200) |
+| Quick-thinking 3 rounds, full futures | 1 s | old Master 1 s | 34.5% |
+| Look 40 + quick-thinking 2 rounds | 1 s | old Master 1 s | 38.3% (120) |
+| Look 32 + quick-thinking 4 rounds | 1 s | old Master 1 s | 34.2% (120) |
+| **Look 24 + quick-thinking 4 rounds** | **3 s** | **live Master 3 s (with speedups)** | **38.6% (114)** |
+| Quick-thinking 2 rounds, full futures | 3 s | live Master 3 s | 33.3% (114) |
+| Look 32 + quick-thinking 2 rounds | 3 s | live Master 3 s | 35.8% (120) |
+| Medium + look 24/quick 4 rounds | 0.15 s | old Medium | 34.5% (200) |
+| Hard + look 24/quick 4 rounds | 0.4 s | old Hard | 35% (200) |
+
+**Shipped (Nov 11, 05:19 UTC):** Medium, Hard and Master all use `horizon: 24, greedyTurns: 16`
+(`QUICK` in `ai/searchBot.js`). Thinking budgets unchanged (Master 3 s cap).
+Look-24 and look-32 were tied within noise at 3 s; look-24 was picked because it was
+strong at both 1 s and 3 s and is the same setting that lifted Medium and Hard.
+
+Benchmark tip: `bench/**` branches run on 20 GitHub shards; artifact downloads may be
+blocked from some environments — the per-shard job logs contain the same tables.
