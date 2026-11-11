@@ -547,6 +547,7 @@
     font-size: 12px; line-height: 1.5;
   }
   .rules-msg.bot { background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.2); align-self: flex-start; }
+  .rb-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
   .rules-msg.user { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.2); align-self: flex-end; color: var(--gold); }
 
   .rules-quick-btns { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
@@ -1923,12 +1924,14 @@
               <button class="quick-btn" onclick="askRule('How do bonuses work?')">Bonuses</button>
               <button class="quick-btn" onclick="askRule('What is a safe chain?')">Safe chains</button>
               <button class="quick-btn" onclick="askRule('How does trading stock work in mergers?')">Trading stock</button>
+              <button class="quick-btn" onclick="askRule('How am I doing?')">How am I doing?</button>
+              <button class="quick-btn" onclick="askRule('Can the game end yet?')">Can it end yet?</button>
             </div>
             <div class="chat-scroll" id="rulesChat">
-              <div class="rules-msg bot">Hi! I can answer any questions about Acquire rules. Ask me anything, or tap a topic above!</div>
+              <div class="rules-msg bot">Ask me about the rules, or about this game: "How much is Tower worth?", "What happens if I play 6D?", "Who leads Festival?", "Can the game end yet?", "How am I doing?"</div>
             </div>
             <div class="chat-input-row">
-              <input type="text" id="rulesInput" placeholder="Ask a rules question..." onkeydown="if(event.key==='Enter')askRuleFromInput()" />
+               <input type="text" id="rulesInput" placeholder="Ask about the rules or this game…" onkeydown="if(event.key==='Enter')askRuleFromInput()" />
               <button class="btn btn-sm" onclick="askRuleFromInput()">Ask</button>
             </div>
           </div>
@@ -4045,31 +4048,203 @@ function escapeHtml(text) {
 }
 
 /* ── Rules Chatbot ─────────────────────────────── */
-const RULES_KB = {
-  'tile placement': `Each turn, you MUST place one tile from your hand onto the matching board space. Placing a tile adjacent to nothing makes it a "lone tile." Adjacent to a lone tile creates a new hotel chain (if one is available). Adjacent to an existing chain expands it. Adjacent to two+ chains triggers a merger. If all 7 chains are on the board, you cannot play a tile that would create a new chain. Tiles that would merge two "safe" chains (11+ tiles each) are permanently unplayable.`,
-  'merger': `When you place a tile touching two or more different chains, a merger happens! The LARGER chain absorbs the smaller one(s). If chains are tied in size, the person who placed the tile chooses the survivor. Before the defunct chain disappears, majority/minority bonuses are paid, then each player (starting with the merger-maker, going clockwise) chooses what to do with their defunct shares: SELL them at current price, TRADE 2-for-1 into the survivor, or HOLD them for later.`,
-  'buy stock': `After placing a tile, you may buy up to 3 shares of stock in any ACTIVE hotel chains. Stock prices depend on the chain's size and tier (cheap/mid/expensive). There are only 25 shares per chain, so they can run out! You don't have to buy anything.`,
-  'end game': `A player can declare the game over if: (a) any chain reaches 41+ tiles, OR (b) all active chains are "safe" (11+ tiles). The game can also end by player vote (all but one must agree). When the game ends, bonuses are paid for all active chains, all stock is sold at current prices, and the richest player wins!`,
-  'bonus': `When a chain is acquired (or at game end), the majority shareholder gets a bonus of 10x the stock price, and the minority shareholder gets 5x the stock price. If there's a tie for majority, they split BOTH bonuses evenly (rounded down to nearest $100). If only one player holds stock, they get both bonuses.`,
-  'safe chain': `A chain with 11 or more tiles is "safe" — it cannot be taken over. Two safe chains can never merge (making such tile placements permanently illegal). Safe chains can still absorb smaller chains.`,
-  'trading stock': `During a merger, you can trade shares of the defunct chain 2-for-1 into the surviving chain. This is optional — you can also sell at current price, or keep shares hoping that chain gets re-founded later. Trading is especially good when the defunct chain was small (cheap shares) and the survivor is large (expensive shares).`,
-  'founding': `When you place a tile adjacent to one or more lone tiles and no existing chain, you found a new chain! Choose from any inactive chain name. The founder receives 1 FREE share. Then you can buy up to 3 more. You cannot found a chain if all 7 are already on the board.`,
-  'chain tiers': `Chains have 3 price tiers. Cheap ($): Tower, Luxor. Mid ($$): American, Worldwide, Festival. Expensive ($$$): Imperial, Continental. Higher tiers cost more per share but also pay bigger bonuses when merged.`,
-  'default': `I'm not sure about that specific question. Try asking about: tile placement, mergers, buying stock, end game conditions, bonuses, safe chains, trading stock, or founding chains!`
+/* ══ Rules helper ════════════════════════════════════════════════
+ * Answers rules questions, and questions about THIS game using the live
+ * board and market: chain prices and bonuses, who leads a chain, what a
+ * tile would do, whether the game can end, the current standings.
+ * Runs entirely in the browser (no AI service, no cost). */
+const RB_CHAINS = ['Tower', 'Luxor', 'American', 'Worldwide', 'Festival', 'Imperial', 'Continental'];
+const RB_TIER = { Tower: 0, Luxor: 0, American: 1, Worldwide: 1, Festival: 1, Imperial: 2, Continental: 2 };
+const RB_TIER_NAME = ['cheapest', 'middle', 'most expensive'];
+const rbPrice = (ch, n) => {
+  if (n < 2) return 0;
+  const base = n <= 2 ? 0 : n <= 3 ? 1 : n <= 4 ? 2 : n <= 5 ? 3 : n <= 10 ? 4 : n <= 20 ? 5 : n <= 30 ? 6 : n <= 40 ? 7 : 8;
+  return (base + RB_TIER[ch]) * 100 + 200;
 };
+const rbMoney = n => '$' + Number(n || 0).toLocaleString();
+const rbC = ch => `<b style="color:${chainColors[ch]}">${ch}</b>`;
+const rbTile = t => `<b>${escapeHtml(t)}</b>`;
 
-function findRuleAnswer(q) {
-  q = q.toLowerCase();
-  if (q.includes('tile') && (q.includes('place')||q.includes('play')||q.includes('put'))) return RULES_KB['tile placement'];
-  if (q.includes('merger')||q.includes('merge')||q.includes('acqui')) return RULES_KB['merger'];
-  if (q.includes('found')||q.includes('create')||q.includes('new chain')||q.includes('start')||q.includes('free share')||q.includes('founder')) return RULES_KB['founding'];
-  if (q.includes('buy')||q.includes('stock')||q.includes('purchase')||q.includes('share')) return RULES_KB['buy stock'];
-  if (q.includes('end')||q.includes('over')||q.includes('win')||q.includes('finish')) return RULES_KB['end game'];
-  if (q.includes('bonus')||q.includes('majority')||q.includes('minority')||q.includes('payout')) return RULES_KB['bonus'];
-  if (q.includes('safe')||q.includes('protect')||q.includes('immune')) return RULES_KB['safe chain'];
-  if (q.includes('trade')||q.includes('trading')||q.includes('swap')||q.includes('exchange')) return RULES_KB['trading stock'];
-  if (q.includes('tier')||q.includes('cheap')||q.includes('expensive')||q.includes('price')) return RULES_KB['chain tiers'];
-  return RULES_KB['default'];
+/* ── Static rules (how this site plays Acquire) ── */
+const RB_TOPICS = [
+  { id: 'turn', keys: ['turn', 'what do i do', 'how to play', 'order', 'step', 'start', 'basics', 'goal', 'object'],
+    a: () => `Each turn has three steps: <b>1)</b> place one tile from your hand on its matching square, <b>2)</b> buy up to 3 shares in any hotel chains on the board (optional), <b>3)</b> you draw a new tile automatically. The goal is to have the most money when the game ends — cash plus your shares and bonuses.` },
+  { id: 'tile', keys: ['tile', 'place', 'play', 'put', 'hand', 'square', 'lone', 'single'],
+    a: () => `You must place a tile if you can. A tile touching nothing is a <b>lone tile</b>. Touching a lone tile (and no chain) <b>founds</b> a new chain. Touching one chain <b>grows</b> it. Touching two or more chains starts a <b>merger</b>. Tip: ask me "what happens if I play 6D?" for any tile.` },
+  { id: 'unplayable', keys: ['unplayable', 'can\'t play', 'cannot play', 'illegal', 'dead', 'grey', 'gray', 'red tile', 'stuck', 'pass', 'swap', 'discard'],
+    a: () => `Two kinds of tiles can't be played. <b>Dead tiles</b> would merge two <b>safe</b> chains (11+ tiles each); that can never happen, so they are swapped for new tiles at the end of your turn. <b>Blocked tiles</b> would found an 8th chain while all 7 are on the board; you keep them, and they become playable once a chain is merged away. If every tile in your hand is unplayable, you skip placing and go straight to buying.` },
+  { id: 'found', keys: ['found', 'create', 'new chain', 'start a chain', 'free share', 'founder', 'name', 'choose chain', 'pick chain'],
+    a: () => `Placing a tile next to a lone tile (and no chain) founds a hotel chain. You pick any chain that isn't on the board, and you get <b>1 free share</b> of it. A new chain is at least 2 tiles. Only 7 chains exist, so when all 7 are on the board you can't found another.` },
+  { id: 'merge', keys: ['merge', 'merger', 'acquire', 'acquisition', 'takeover', 'take over', 'absorb', 'defunct', 'survivor', 'surviving', 'bigger', 'swallow'],
+    a: () => `A tile touching two or more chains merges them. The <b>largest chain survives</b>; if the largest are tied, the player who placed the tile chooses. For each chain that disappears (largest first): its top shareholders are paid <b>bonuses</b>, then every shareholder, starting with the player who caused the merger, decides what to do with those shares: <b>sell</b> them at the current price, <b>trade 2 for 1</b> into the survivor, or <b>keep</b> them in case that chain is founded again. Safe chains (11+) can absorb others but can never be absorbed.` },
+  { id: 'trade', keys: ['trade', 'trading', 'swap shares', 'exchange', '2 for 1', 'two for one', '2:1', 'sell', 'keep', 'hold'],
+    a: () => `When a chain is merged away you choose for each of its shares: <b>sell</b> at its current price, <b>trade</b> 2 of them for 1 share of the surviving chain (only while the bank still has survivor shares), or <b>keep</b> them. Kept shares are worth nothing unless that chain is founded again later. Trading is best when the survivor's shares cost much more than 2× the defunct chain's price.` },
+  { id: 'buy', keys: ['buy', 'purchase', 'stock', 'share', 'how many shares', 'limit', '25', 'run out', 'sold out'],
+    a: () => `After placing your tile you may buy up to <b>3 shares</b> in total, in any chains on the board (mix and match). Each chain has only <b>25 shares</b>; when they're gone, nobody can buy more. Buying is optional. The price depends on the chain's size and price tier.` },
+  { id: 'price', keys: ['price', 'cost', 'worth', 'value', 'expensive', 'cheap', 'tier', 'how much'],
+    a: () => `Share prices rise with a chain's size: steps at 2, 3, 4, 5, 6–10, 11–20, 21–30, 31–40 and 41+ tiles. There are 3 price tiers: <b>cheapest</b> Tower and Luxor (from $200), <b>middle</b> American, Worldwide and Festival (from $300), <b>most expensive</b> Imperial and Continental (from $400). Each tier adds $100 a share at every size. Ask "how much is Festival worth?" for live numbers.` },
+  { id: 'bonus', keys: ['bonus', 'majority', 'minority', 'payout', 'paid', 'shareholder', 'first place', 'second place', 'tie'],
+    a: () => `When a chain is merged away (and for every chain at the end of the game), the <b>majority</b> holder (most shares) gets 10× the share price and the <b>minority</b> holder (second most) gets 5×. Ties for most shares split both bonuses; ties for second split the minority bonus (rounded down to $100). If only one player owns shares, they get both. Ask "who leads Tower?" for this game.` },
+  { id: 'safe', keys: ['safe', 'protect', 'immune', '11', 'eleven'],
+    a: () => `A chain with <b>11 or more tiles is safe</b>: it can never be merged away. It can still absorb smaller chains. A tile that would join two safe chains is dead and gets swapped.` },
+  { id: 'end', keys: ['end', 'over', 'finish', 'win', 'winner', 'last', '41', 'declare', 'final'],
+    a: () => `The game can be ended when <b>a chain has 41+ tiles</b>, or when <b>every chain on the board is safe</b> (11+). Ending is optional: the player whose turn it is may press <b>End Game</b>, finishes that turn, and then the game ends. At the end, bonuses are paid for every chain on the board, all shares are sold at their current price, and the most money wins.` },
+  { id: 'vote', keys: ['vote', 'concede', 'quit', 'give up', 'stop early', 'end early'],
+    a: () => `Anyone can press <b>Vote End</b> to end the game early. With 3+ players it needs all but one player to vote yes (with 2 players, both). Bots agree once every human has voted yes. The game then ends normally: bonuses paid, shares sold, most money wins.` },
+  { id: 'money', keys: ['money', 'cash', 'broke', 'afford', 'run out of money', 'loan', 'borrow'],
+    a: () => `Everyone starts with $6,000. You can't spend more than you have and there are no loans; money comes from selling shares and from bonuses when chains you own are merged. Ask "how am I doing?" for the standings if the game ended now.` },
+  { id: 'strategy', keys: ['strategy', 'tip', 'tips', 'advice', 'should i', 'best', 'good move', 'win more', 'help me'],
+    a: () => `A few tips: <b>1)</b> Aim to be majority or minority holder in chains likely to be merged soon; the bonuses are big. <b>2)</b> Grow chains you lead toward 11 tiles so they're safe, or merge them away while you lead. <b>3)</b> Founding gives a free share and early, cheap shares. <b>4)</b> Keep some cash so you can buy when a chance appears. <b>5)</b> Watch who leads what in the Market tab before buying.` },
+];
+const RB_SUGGEST = ['How much is Tower worth?', 'What happens if I play 6D?', 'Who leads Festival?', 'Can the game end yet?', 'How am I doing?', 'How do mergers work?'];
+
+/* ── Reading the live game ── */
+function rbLive() { return (typeof gameState !== 'undefined' && gameState && gameState.board && gameState.players) ? gameState : null; }
+function rbHolders(st, ch) {
+  return st.players.map(p => ({ name: p.name, n: (p.stocks && p.stocks[ch]) || 0 })).filter(h => h.n > 0).sort((a, b) => b.n - a.n);
+}
+function rbBonusSplit(st, ch) {        // who would be paid what for this chain right now
+  const price = st.chains[ch].price, maj = price * 10, min = price * 5;
+  const h = rbHolders(st, ch);
+  if (!h.length) return [];
+  const top = h.filter(x => x.n === h[0].n);
+  if (top.length > 1 || h.length === 1) {
+    const each = Math.floor((maj + min) / top.length / 100) * 100;
+    return top.map(x => ({ name: x.name, amount: each, kind: top.length > 1 ? 'split' : 'both' }));
+  }
+  const rest = h.slice(1), second = rest.filter(x => x.n === rest[0].n);
+  const each2 = Math.floor(min / second.length / 100) * 100;
+  return [{ name: h[0].name, amount: maj, kind: 'majority' }, ...second.map(x => ({ name: x.name, amount: each2, kind: 'minority' }))];
+}
+function rbChainInfo(st, ch) {
+  const c = st.chains[ch];
+  if (!c.active) {
+    const held = rbHolders(st, ch);
+    return `${rbC(ch)} isn't on the board right now (it's one of the ${RB_TIER_NAME[RB_TIER[ch]]} chains: shares would start at ${rbMoney(rbPrice(ch, 2))}).` +
+      (held.length ? ` Kept shares from before: ${held.map(x => `${escapeHtml(x.name)} ${x.n}`).join(', ')}.` : '');
+  }
+  const issued = st.players.reduce((s, p) => s + ((p.stocks && p.stocks[ch]) || 0), 0);
+  let up = c.size + 1; while (up <= 41 && rbPrice(ch, up) === c.price) up++;
+  const next = up <= 41 ? ` ${up - c.size} more tile${up - c.size === 1 ? '' : 's'} would raise it to ${rbMoney(rbPrice(ch, up))}.` : '';
+  const split = rbBonusSplit(st, ch);
+  const lead = split.length ? ' If it merged now: ' + split.map(x => `${escapeHtml(x.name)} ${rbMoney(x.amount)}`).join(', ') + '.' : ' Nobody owns shares yet.';
+  return `${rbC(ch)}: <b>${c.size} tiles</b>, <b>${rbMoney(c.price)}</b> a share, ${25 - issued} of 25 shares left.` +
+    ` Bonuses: majority ${rbMoney(c.price * 10)}, minority ${rbMoney(c.price * 5)}.` +
+    (c.safe ? ' It is <b>safe</b> (11+ tiles).' : ` ${11 - c.size} more tile${11 - c.size === 1 ? '' : 's'} to be safe.`) + next + lead;
+}
+function rbLeaders(st, ch) {
+  if (!st.chains[ch].active && !rbHolders(st, ch).length) return `${rbC(ch)} isn't on the board and nobody holds its shares.`;
+  const h = rbHolders(st, ch);
+  if (!h.length) return `Nobody owns ${rbC(ch)} shares yet — buy 1 and you'd lead it.`;
+  const list = h.map(x => `${escapeHtml(x.name)} ${x.n}`).join(', ');
+  const split = rbBonusSplit(st, ch);
+  return `${rbC(ch)} shares: ${list}. ` + (split.length ? 'Bonuses right now: ' + split.map(x => `${escapeHtml(x.name)} ${rbMoney(x.amount)} (${x.kind})`).join(', ') + '.' : '');
+}
+function rbParseTile(q) {
+  const m = q.match(/\b(1[0-2]|[1-9])\s*-?\s*([a-i])\b/i) || q.match(/\b([a-i])\s*-?\s*(1[0-2]|[1-9])\b/i);
+  if (!m) return null;
+  const [col, row] = /\d/.test(m[1]) ? [Number(m[1]), m[2].toUpperCase()] : [Number(m[2]), m[1].toUpperCase()];
+  return { col, row, r: row.charCodeAt(0) - 65, c: col - 1, name: `${col}${row}` };
+}
+function rbTileAnswer(st, t) {
+  const board = st.board, at = (r, c) => (r >= 0 && r < 9 && c >= 0 && c < 12) ? board[r][c] : undefined;
+  if (at(t.r, t.c)) return `${rbTile(t.name)} is already on the board${board[t.r][t.c] !== 'lone' ? ` (part of ${rbC(board[t.r][t.c])})` : ''}.`;
+  const nb = [[t.r - 1, t.c], [t.r + 1, t.c], [t.r, t.c - 1], [t.r, t.c + 1]];
+  const chains = [...new Set(nb.map(([r, c]) => at(r, c)).filter(v => v && v !== 'lone'))];
+  // lone tiles connected to this square (they join whatever forms)
+  const seen = new Set(), stack = nb.filter(([r, c]) => at(r, c) === 'lone');
+  let lone = 0;
+  while (stack.length) { const [r, c] = stack.pop(), k = r * 12 + c; if (seen.has(k) || at(r, c) !== 'lone') continue; seen.add(k); lone++; stack.push([r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]); }
+  const me = st.players[myIdx];
+  const inHand = me && me.tiles && me.tiles.includes(t.name);
+  const hand = me && me.tiles ? (inHand ? ' It\'s in your hand.' : ' (It isn\'t in your hand.)') : '';
+  const active = RB_CHAINS.filter(ch => st.chains[ch].active);
+  if (!chains.length && !lone) return `${rbTile(t.name)} touches nothing, so it would be a <b>lone tile</b>.${hand}`;
+  if (!chains.length) {
+    if (active.length === 7) return `${rbTile(t.name)} would found a new chain, but all 7 are on the board, so it's <b>blocked</b> for now (playable again once a chain is merged away).${hand}`;
+    return `${rbTile(t.name)} would <b>found a new chain</b> of ${lone + 1} tiles. You'd pick the name and get 1 free share; shares would start at ${rbMoney(rbPrice('Tower', lone + 1))} (cheapest tier) to ${rbMoney(rbPrice('Imperial', lone + 1))} (most expensive).${hand}`;
+  }
+  if (chains.length === 1) {
+    const ch = chains[0], size = st.chains[ch].size + 1 + lone;
+    const p0 = st.chains[ch].price, p1 = rbPrice(ch, size);
+    return `${rbTile(t.name)} would grow ${rbC(ch)} from ${st.chains[ch].size} to <b>${size} tiles</b>` +
+      (p1 !== p0 ? `, raising its price from ${rbMoney(p0)} to ${rbMoney(p1)}` : ` (price stays ${rbMoney(p0)})`) +
+      (size >= 11 && !st.chains[ch].safe ? ', and make it <b>safe</b>' : '') + `.${hand}`;
+  }
+  const safe = chains.filter(ch => st.chains[ch].safe);
+  if (safe.length >= 2) return `${rbTile(t.name)} would join two safe chains (${safe.map(rbC).join(' and ')}), which is never allowed. It's a <b>dead tile</b> and gets swapped at the end of your turn.${hand}`;
+  const sorted = chains.slice().sort((a, b) => st.chains[b].size - st.chains[a].size);
+  const top = st.chains[sorted[0]].size, tied = sorted.filter(ch => st.chains[ch].size === top);
+  const survivor = tied.length > 1 ? null : sorted[0];
+  const gone = survivor ? sorted.slice(1) : sorted;
+  let s = `${rbTile(t.name)} would start a <b>merger</b> of ${sorted.map(ch => `${rbC(ch)} (${st.chains[ch].size})`).join(', ')}. `;
+  s += survivor ? `${rbC(survivor)} survives as the biggest. ` : `${tied.map(rbC).join(' and ')} are tied, so you'd choose which survives. `;
+  for (const ch of gone.filter(ch => ch !== survivor)) {
+    if (!survivor && tied.includes(ch)) continue;
+    const split = rbBonusSplit(st, ch);
+    s += `${rbC(ch)} would be merged away: ` + (split.length ? split.map(x => `${escapeHtml(x.name)} gets ${rbMoney(x.amount)}`).join(', ') : 'nobody holds shares, so no bonuses') + '. ';
+  }
+  return s + hand;
+}
+function rbEndAnswer(st) {
+  const active = RB_CHAINS.filter(ch => st.chains[ch].active);
+  if (!active.length) return 'No chains are on the board yet, so the game can\'t end. It can end once a chain reaches 41 tiles or every chain on the board is safe (11+).';
+  const biggest = active.slice().sort((a, b) => st.chains[b].size - st.chains[a].size)[0];
+  const unsafe = active.filter(ch => !st.chains[ch].safe);
+  if (st.endDeclared) return 'The end has been declared: the game ends when the current player finishes this turn.';
+  if (st.canDeclareEnd) return `<b>Yes</b> — ${st.chains[biggest].size >= 41 ? `${rbC(biggest)} has ${st.chains[biggest].size} tiles` : 'every chain on the board is safe'}. The player whose turn it is may press End Game.`;
+  return `Not yet. The biggest chain is ${rbC(biggest)} with ${st.chains[biggest].size} of 41 tiles, and ${unsafe.length} chain${unsafe.length === 1 ? ' isn\'t' : 's aren\'t'} safe yet (${unsafe.map(ch => `${rbC(ch)} ${st.chains[ch].size}`).join(', ')}).` +
+    (typeof st.tilesLeft === 'number' ? ` ${st.tilesLeft} tiles are left in the bag.` : '');
+}
+function rbStandings(st) {
+  const worth = st.players.map(p => ({ name: p.name, cash: p.cash, total: p.cash }));
+  for (const ch of RB_CHAINS) {
+    if (!st.chains[ch].active) continue;
+    st.players.forEach((p, i) => { worth[i].total += ((p.stocks && p.stocks[ch]) || 0) * st.chains[ch].price; });
+    for (const b of rbBonusSplit(st, ch)) { const w = worth.find(x => x.name === b.name); if (w) w.total += b.amount; }
+  }
+  worth.sort((a, b) => b.total - a.total);
+  const meName = myIdx >= 0 ? st.players[myIdx].name : null;
+  const myRank = meName ? worth.findIndex(w => w.name === meName) + 1 : 0;
+  return (myRank ? `If the game ended now you'd be <b>${['1st', '2nd', '3rd', '4th', '5th', '6th'][myRank - 1]}</b>. ` : 'If the game ended now: ') +
+    worth.map((w, i) => `${i + 1}. ${escapeHtml(w.name)} ${rbMoney(w.total)}`).join(' · ') +
+    ' (cash + shares at today\'s prices + bonuses).';
+}
+
+function findRuleAnswer(raw) {
+  const q = ' ' + String(raw).toLowerCase().replace(/[?!.,]/g, ' ').replace(/\s+/g, ' ') + ' ';
+  const st = rbLive();
+  const chain = RB_CHAINS.find(ch => q.includes(ch.toLowerCase()));
+  const tile = rbParseTile(q);
+  if (st) {
+    if (tile && /(play|place|put|happen|do|if|what about|would|can i|could)/.test(q) || (tile && q.trim().split(' ').length <= 3)) return rbTileAnswer(st, tile);
+    if (chain && /(who|lead|majority|minority|most|holder|owns|own|ahead|winning)/.test(q)) return rbLeaders(st, chain);
+    if (chain) return rbChainInfo(st, chain);
+    if (/(can|could) (the game|we|i|it) end|end (yet|now)|close to (the )?end|how (long|close)|game end yet|when (will|does) (the )?game end/.test(q)) return rbEndAnswer(st);
+    if (/(how am i doing|am i winning|who.?s winning|who is winning|standings|score|leaderboard|net worth|in the lead|who is ahead)/.test(q)) return rbStandings(st);
+    if (/(tiles? (left|remaining)|left in the bag|how many tiles)/.test(q)) return typeof st.tilesLeft === 'number' ? `<b>${st.tilesLeft}</b> tiles are left in the bag.` : 'I can\'t see the bag right now.';
+    if (/(my|i have|how much) (money|cash)|how much money/.test(q) && myIdx >= 0) return `You have <b>${rbMoney(st.players[myIdx].cash)}</b> in cash. ` + rbStandings(st);
+    if (/(whose turn|who.?s turn|who is playing)/.test(q)) return `It's <b>${escapeHtml(st.players[st.currentPlayerIdx].name)}</b>'s turn.`;
+  } else if (chain && !/(tier|cheap|expensive)/.test(q)) {
+    return `${rbC(chain)} is one of the ${RB_TIER_NAME[RB_TIER[chain]]} chains: shares start at ${rbMoney(rbPrice(chain, 2))} for a 2-tile chain and reach ${rbMoney(rbPrice(chain, 41))} at 41+ tiles. During a game I can tell you its live price, size and who leads it.`;
+  }
+  // Rules topics: score by matching words / phrases
+  const norm = q.replace(/(\w)s /g, '$1 ');
+  let best = null, bestScore = 0;
+  for (const t of RB_TOPICS) {
+    let score = 0;
+    for (const k of t.keys) {
+      const kk = ' ' + k + ' ', kn = ' ' + k.replace(/s$/, '') + ' ';
+      if (q.includes(kk) || norm.includes(kn)) score += k.includes(' ') ? 3 : 2;
+      else if (k.length > 4 && q.includes(k)) score += 1;
+    }
+    if (score > bestScore) { best = t; bestScore = score; }
+  }
+  if (best && bestScore >= 2) return best.a();
+  return `I'm not sure about that one. Try one of these:` + rbChips(RB_SUGGEST);
+}
+function rbChips(list) {
+  return `<div class="rb-chips">${list.map(s => `<button class="quick-btn" onclick='askRule(${JSON.stringify(s)})'>${escapeHtml(s)}</button>`).join('')}</div>`;
 }
 
 function askRule(question) {

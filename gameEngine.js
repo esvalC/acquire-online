@@ -846,6 +846,7 @@ function getClientState(state, forPlayerIdx) {
     log: state.log.slice(-30),
     quickstartTiles: state.quickstartTiles,
     turnNumber: state.turnNumber,
+    tilesLeft: state.tileBag.length,
     turnTimers: state.turnTimers,
     turnStartTime: state.turnStartTime,
     standings: state.standings,
