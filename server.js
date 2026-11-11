@@ -832,17 +832,25 @@ function recordGameEnd(code) {
   const standings = room.game.standings; // [{ name, cash }] sorted desc
   console.log(`[recordGameEnd] code=${code} standings=${JSON.stringify(standings)}`);
   if (!standings || standings.length === 0) return;
+  recordSessionRow(room, standings, room.game.endReason && room.game.endReason.type || null);
 
-  // Record session for all games regardless of auth status
+  // Ratings + career stats (see ratings.js)
+  try { room.ratingResult = ratings.recordGameOver(db, room); }
+  catch (err) { console.error('[ratings] recordGameOver failed:', err.message); }
+}
+
+/* Every game that got going is added to the games counter + Recent Games —
+ * finished, ended early by vote, or quit/abandoned partway ('quit'). */
+function recordSessionRow(room, standings, endType) {
   const durationSeconds = room.startedAt ? Math.round((Date.now() - room.startedAt) / 1000) : null;
   const humanCount = room.players.filter(p => !p.isBot).length;
   const turnCount  = room.game.turnNumber ?? null;
   const sessionStandings = standings.map(s => {
     const rp = room.players.find(p => p.name === s.name);
-    return { name: s.name, cash: s.cash, isBot: rp?.isBot || false, userId: rp?.userId || null };
+    const left = !!(rp && rp.forfeited);
+    return { name: s.name, cash: s.cash, isBot: !!(rp?.isBot && !left), userId: rp?.userId || rp?.leftUserId || null, ...(left ? { left: true } : {}) };
   });
   try {
-    const endType = room.game.endReason && room.game.endReason.type || null;
     const sessionId = db.recordSession(room.isSolo, room.players.length, humanCount, durationSeconds, turnCount, sessionStandings, room.replaySnapshots || [],
       room.mode || (room.isSolo ? 'Solo' : 'Multiplayer'), endType);
     console.log(`[session] recorded: solo=${room.isSolo} players=${room.players.length} turns=${turnCount} id=${sessionId} snapshots=${(room.replaySnapshots||[]).length}`);
@@ -850,10 +858,14 @@ function recordGameEnd(code) {
   } catch (err) {
     console.error('[session] recordSession failed:', err.message);
   }
-
-  // Ratings + career stats (see ratings.js)
-  try { room.ratingResult = ratings.recordGameOver(db, room); }
-  catch (err) { console.error('[ratings] recordGameOver failed:', err.message); }
+}
+// A game that never reached its end: everyone quit or walked away.
+function recordUnfinishedGame(room) {
+  if (!room || !room.game || room.gameRecorded || room.game.phase === 'gameOver' || !ratings.underway(room)) return;
+  room.gameRecorded = true;
+  const worth = engine.worthIfEndedNow(room.game);
+  const standings = room.game.players.map((p, i) => ({ name: p.name, cash: worth[i] })).sort((a, b) => b.cash - a.cash);
+  recordSessionRow(room, standings, 'quit');
 }
 
 /* ── Game start ─────────────────────────────────────────────── */
@@ -923,7 +935,7 @@ function forfeitSeat(code, p, why) {
   Object.assign(p, { isBot: true, difficulty: 'expert', personality: 'balanced', socketId: null, disconnected: false, token: null,
     leftUserId: p.userId || null, userId: null });
   room.game.log.push(`${p.name} ${why === 'left' ? 'left the game' : 'didn\'t come back'} — a bot plays their seat`);
-  if (!room.players.some(q => !q.isBot)) { deleteRoom(code); return; }
+  if (!room.players.some(q => !q.isBot)) { recordUnfinishedGame(room); deleteRoom(code); return; }
   broadcastState(code);
 }
 function scheduleDropTimer(code, p) {
@@ -948,7 +960,10 @@ function scheduleAbandonedRoomCleanup(code) {
     const humansGone = r.players.every(p => p.isBot || p.disconnected || !p.socketId);
     if (humansGone) {
       console.log(`Room ${code} abandoned for ${Math.round(grace / 60000)} min — deleting`);
-      if (r.game && r.game.phase !== 'gameOver') for (const p of r.players) if (!p.isBot && !p.forfeited) { try { ratings.recordQuit(db, r, p); } catch {} }
+      if (r.game && r.game.phase !== 'gameOver') {
+        for (const p of r.players) if (!p.isBot && !p.forfeited) { try { ratings.recordQuit(db, r, p); } catch {} }
+        recordUnfinishedGame(r);
+      }
       deleteRoom(code);
     }
   }, grace);
@@ -1569,7 +1584,7 @@ io.on('connection', (socket) => {
       return;
     }
     if (room.isSolo) {
-      if (room.game && room.game.phase !== 'gameOver') forfeitSeat(code, me, 'left');
+      if (room.game && room.game.phase !== 'gameOver') { forfeitSeat(code, me, 'left'); recordUnfinishedGame(room); }
       deleteRoom(code); return;
     }
     if (room.game) {

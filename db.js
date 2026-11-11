@@ -215,6 +215,8 @@ db.exec(`
   const sc = db.prepare(`PRAGMA table_info(game_sessions)`).all().map(r => r.name);
   if (!sc.includes('mode'))     db.exec(`ALTER TABLE game_sessions ADD COLUMN mode TEXT`);
   if (!sc.includes('end_type')) db.exec(`ALTER TABLE game_sessions ADD COLUMN end_type TEXT`);
+  const pc = db.prepare(`PRAGMA table_info(game_participants)`).all().map(r => r.name);
+  if (!pc.includes('left_game')) db.exec(`ALTER TABLE game_participants ADD COLUMN left_game INTEGER NOT NULL DEFAULT 0`);
   if (db.pragma('user_version', { simple: true }) < 2) {
     db.exec(`UPDATE users SET elo = 1000`);          // fresh start for the new rating
     db.pragma('user_version = 2');
@@ -519,7 +521,7 @@ module.exports = {
       'INSERT INTO game_sessions (is_solo, player_count, human_count, duration_seconds, turn_count, standings, replay_gz, mode, end_type) VALUES (?,?,?,?,?,?,?,?,?)'
     );
     const insertParticipant = db.prepare(
-      'INSERT OR IGNORE INTO game_participants (session_id, user_id, rank, cash) VALUES (?,?,?,?)'
+      'INSERT OR IGNORE INTO game_participants (session_id, user_id, rank, cash, left_game) VALUES (?,?,?,?,?)'
     );
     const run = db.transaction(() => {
       const r = insertSession.run(
@@ -529,8 +531,9 @@ module.exports = {
         mode || null, endType || null
       );
       const sessionId = r.lastInsertRowid;
+      _totalCache.at = 0;            // games counter shows the new game right away
       (standings || []).forEach((p, rank) => {
-        if (p.userId) insertParticipant.run(sessionId, p.userId, rank, p.cash);
+        if (p.userId) insertParticipant.run(sessionId, p.userId, rank, p.cash, p.left ? 1 : 0);
       });
       return sessionId;
     });
@@ -538,7 +541,7 @@ module.exports = {
   },
 
   getRecentSessions(limit = 15) {
-    return db.prepare('SELECT id, played_at, is_solo, player_count, human_count, duration_seconds, turn_count, standings FROM game_sessions ORDER BY played_at DESC LIMIT ?').all(limit);
+    return db.prepare('SELECT id, played_at, is_solo, player_count, human_count, duration_seconds, turn_count, standings, end_type FROM game_sessions ORDER BY played_at DESC LIMIT ?').all(limit);
   },
 
   getUserSessions(userId, limit = 20) {
@@ -561,7 +564,7 @@ module.exports = {
              SUM(gs.is_solo = 1) AS solo, SUM(gs.is_solo = 0) AS multi,
              SUM(gs.is_solo = 0 AND rank = 0) AS multiWins
       FROM game_participants gp JOIN game_sessions gs ON gs.id = gp.session_id
-      WHERE gp.user_id = ?`).get(userId);
+      WHERE gp.user_id = ? AND gp.left_game = 0 AND (gs.end_type IS NULL OR gs.end_type NOT IN ('vote', 'quit'))`).get(userId);
     return {
       games: t.games || 0, wins: t.wins || 0,
       avgPlace: t.games ? Math.round((t.avgRank + 1) * 10) / 10 : null,

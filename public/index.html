@@ -1048,6 +1048,8 @@
   .resume-banner { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.6); color: #fde68a; border-radius: 12px; padding: 12px 20px; font-size: 15px; cursor: pointer; margin-bottom: -8px; }
   .resume-banner:hover { background: rgba(245,158,11,0.25); }
   .resume-banner b { color: #fff; }
+  .session-end-tag { display: block; font-size: 8px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; color: #fbbf24; opacity: .8; margin-top: 3px; line-height: 1.2; }
+  .chip-left { font-size: 9px; color: #f87171; margin-left: 3px; text-transform: uppercase; letter-spacing: .5px; }
   .home-feedback-link { background: none; border: none; color: rgba(255,255,255,0.6); font-size: 13px; cursor: pointer; padding: 4px 8px; margin-top: -12px; }
   .home-feedback-link:hover { color: #fff; text-decoration: underline; }
   #leaderboardPage { flex-direction: column; align-items: center; min-height: 100vh; padding: 40px 24px 60px; gap: 24px; }
@@ -1396,7 +1398,7 @@
   }
   .session-mode {
     font-size: 10px; font-weight: 600; text-transform: uppercase;
-    letter-spacing: 0.5px; color: var(--text-muted); flex-shrink: 0; width: 36px;
+    letter-spacing: 0.5px; color: var(--text-muted); flex-shrink: 0; width: 58px;
   }
   .session-players-inline { flex: 1; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
   .session-player-chip {
@@ -5084,12 +5086,12 @@ function renderRecentGames(sessions) {
       }
       return `<span class="session-player-chip">
         <span class="${rankCls}">${i+1}.</span>
-        ${namePart}${badge}
+        ${namePart}${badge}${p.left ? '<span class="chip-left" title="Left partway — a bot finished their seat">left</span>' : ''}
         <span class="chip-cash">$${p.cash.toLocaleString()}</span>
       </span>`;
     }).join('');
     return `<div class="session-row" onclick="openReplay(${s.id}, event)">
-      <span class="session-mode">${modeLabel}</span>
+      <span class="session-mode">${modeLabel}${s.end_type === 'vote' ? '<span class="session-end-tag" title="Ended early by vote — not counted in stats">Ended early</span>' : s.end_type === 'quit' ? '<span class="session-end-tag" title="Not played to the end — not counted in stats">Unfinished</span>' : ''}</span>
       <div class="session-players-inline">${chips}</div>
       <span class="session-date">${date}</span>
       ${replayExpired(s.played_at)
