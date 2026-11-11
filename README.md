@@ -295,3 +295,17 @@ See [GitHub Issues](https://github.com/esvalC/acquire-online/issues) for current
 ## License
 
 This project is a fan implementation for personal and educational use. **Acquire** is a trademark of Hasbro. This project is not affiliated with or endorsed by Hasbro.
+
+## Database backups
+
+`scripts/backup-db.sh` runs nightly from the server's crontab (09:17 UTC) and uploads an
+integrity-checked, gzip-compressed copy of the SQLite database to the private S3 bucket:
+
+- `s3://acquire-training-data/backups/daily/acquire-<weekday>.db.gz` — last 7 days (overwritten weekly)
+- `s3://acquire-training-data/backups/monthly/acquire-<YYYY-MM>.db.gz` — one per month
+
+Log: `/home/ubuntu/acquire-data/backup.log`. To restore (stop the app first):
+
+```bash
+aws s3 cp s3://acquire-training-data/backups/daily/acquire-wed.db.gz - | gunzip > /home/ubuntu/acquire-data/acquire.db
+```
