@@ -108,3 +108,46 @@ Proposed additions to `selfplay.js`:
 ---
 
 *See also: the conversation transcript at `/Users/calvi/.claude/projects/-Users-calvi-Desktop-Projects-acquire-online-0-3/9c34876e-cf3b-4455-8f90-dcf17abdd4d6.jsonl`*
+
+---
+
+## Nov 10–11, 2026 — Master search round (overnight)
+
+How the search bots work: for each decision they list candidate moves, then repeatedly
+re-deal every unseen tile at random (no peeking), apply a candidate and play the rest of the
+game out quickly, and pick the candidate with the best average result (UCB1 over candidates).
+Medium/Hard/Master differ only in budget (40 / 200 / up to 16,000 futures; 0.15 / 0.4 / 3 s).
+
+All tests: 4-player games on GitHub runners, one hero vs 3 copies of the baseline, seats
+rotated, 200 games unless noted. 25% = equal strength. Ideas compared at 1 s/move (fast),
+winner confirmed at 3 s.
+
+### Speed (shipped — identical decisions, verified on 25 seeded full games)
+- `botAI.decideBotAction` called `require('./ai/searchBot')` on every simulated move:
+  ~36% of search time was module-path lookups. Now cached.
+- `maybeDeclareEnd` copied the whole game (JSON) to compute final standings each turn of
+  every future. Now `engine.worthIfEndedNow` computes the same totals directly.
+- `searchBot.clone` hand-written for the game's shape instead of JSON round-trip.
+- `analyzeTilePlacement` (hottest function) without Sets/destructuring.
+- Net: ~830 → ~950+ futures/sec on a 4-player mid-game position with quick-thinking, and
+  ~940 → ~1,275 for plain full playouts (≈1.35–1.6× more futures in the same 3 s).
+
+### Ideas tested vs today's Master (1 s each side)
+| Variant | Win % | Verdict |
+|---|---|---|
+| Futures cut at 20 turns, scored by worth-if-ended-now | 20% | worse alone |
+| Cut at 20 + quick-thinking tiles for 2 rounds (Calvin's idea) | **34%** | big gain |
+| Cut at 20 + quick-thinking 1 round | 30.5% | gain |
+| Quick-thinking 2 rounds, full-length futures | 35% | gain |
+| Quick-thinking 4 rounds, full-length futures | 33% | gain |
+| **Quick-thinking 4 rounds, cut at 24** | **38%** | best |
+| Quick-thinking 2 rounds + wider buy candidates | 37% | gain (buys ≈ neutral) |
+
+Relative to "cut at 20" (round 2): wider buys 24.5% (neutral), horizon 12 21% (worse),
+horizon 32 30.5% (better), sharper eval scale 3000 21% (worse). Early stopping when one move
+is clearly ahead saved only ~10% time at 3 s → not used.
+
+"Quick-thinking" = in the first rounds of each imagined future, every player picks the tile
+that most improves their worth-if-the-game-ended-now relative to the leader (one step ahead,
+no nested search), instead of the Easy heuristic's fixed rules. Nested real Hard bots inside
+futures would be ~10,000× too slow; this captures most of the realism cheaply.
