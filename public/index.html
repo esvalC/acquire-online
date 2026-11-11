@@ -1048,6 +1048,21 @@
   .resume-banner { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.6); color: #fde68a; border-radius: 12px; padding: 12px 20px; font-size: 15px; cursor: pointer; margin-bottom: -8px; }
   .resume-banner:hover { background: rgba(245,158,11,0.25); }
   .resume-banner b { color: #fff; }
+  @media (max-width: 600px) {
+    .game-header { flex-wrap: wrap; row-gap: 6px; }
+    .game-header-btns { order: 10; width: 100%; }
+    .game-header-btns .btn { flex: 1; min-width: 0; padding: 7px 4px; font-size: 11px; letter-spacing: .5px; white-space: nowrap; }
+    #btnDeclareEnd { background: linear-gradient(135deg, #f59e0b, #d97706); color: #1a1a1a; border: none; font-weight: 800; }
+  }
+  .end-panel { flex-shrink: 0; margin-top: 12px; border: 1px solid rgba(245,158,11,0.55); background: rgba(245,158,11,0.08); border-radius: 12px; padding: 14px; text-align: center; }
+  .end-panel .end-why { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-top: 8px; }
+  .end-panel .end-big { width: 100%; font-size: 18px; font-weight: 800; letter-spacing: 1px; padding: 14px 10px; border-radius: 10px; border: none; cursor: pointer;
+    background: linear-gradient(135deg, #f59e0b, #d97706); color: #1a1a1a; box-shadow: 0 4px 18px rgba(245,158,11,0.35); animation: endPulse 2s ease-in-out infinite; }
+  .end-panel .end-big:hover { filter: brightness(1.08); }
+  .end-panel .end-wait { font-size: 15px; font-weight: 700; color: var(--gold); }
+  @keyframes endPulse { 0%,100% { box-shadow: 0 4px 18px rgba(245,158,11,0.3); } 50% { box-shadow: 0 4px 28px rgba(245,158,11,0.65); } }
+  @media (max-width: 900px) { .end-panel { display: none !important; } }
+  @media (min-width: 901px) { #btnDeclareEnd.has-end-panel { display: none !important; } }
   .session-end-tag { display: block; font-size: 8px; font-weight: 600; letter-spacing: .3px; text-transform: uppercase; color: #fbbf24; opacity: .8; margin-top: 3px; line-height: 1.2; }
   .chip-left { font-size: 9px; color: #f87171; margin-left: 3px; text-transform: uppercase; letter-spacing: .5px; }
   .home-feedback-link { background: none; border: none; color: rgba(255,255,255,0.6); font-size: 13px; cursor: pointer; padding: 4px 8px; margin-top: -12px; }
@@ -1944,7 +1959,7 @@
       <span id="watchingBadge" class="watching-badge" hidden title="People watching this game"></span>
     </div>
     <div id="lastAction"></div>
-    <div style="display:flex; gap:6px;">
+    <div class="game-header-btns" style="display:flex; gap:6px;">
       <button class="btn btn-sm btn-secondary" id="btnDeclareEnd" onclick="declareEnd()" style="display:none;">End Game</button>
       <button class="btn btn-sm btn-danger" id="btnVoteEnd" onclick="initiateConcedeVote()">Vote End</button>
       <button class="btn btn-sm btn-secondary" id="btnLeaveGame" onclick="leaveGame()" title="Leave this game">Leave</button>
@@ -2047,6 +2062,8 @@
           </div>
         </div>
       </div>
+      <!-- Shown (desktop) once the game can be ended for real -->
+      <div id="endPanel" class="end-panel" hidden></div>
     </div>
   </div>
 </div>
@@ -3999,6 +4016,7 @@ function renderHeader() {
   const myTurnToEnd = canEnd && !gameState.endDeclared && myIdx === gameState.currentPlayerIdx
     && (gameState.phase === 'placeTile' || gameState.phase === 'buyStock');
   document.getElementById('btnDeclareEnd').style.display = myTurnToEnd ? 'inline-block' : 'none';
+  renderEndPanel(canEnd, myTurnToEnd);
   // Show a one-time toast the first time end conditions are met
   if (canEnd && !window._endConditionNotified) {
     window._endConditionNotified = true;
@@ -4018,7 +4036,8 @@ function renderHeader() {
   document.getElementById('btnRestartSolo').style.display = isSoloGame ? 'inline-block' : 'none';
   // Spectator badge
   document.getElementById('spectatorBadge').style.display = myIdx === -1 ? '' : 'none';
-  document.getElementById('btnVoteEnd').style.display = myIdx === -1 ? 'none' : '';
+  // No Vote End once the game can be finished for real (End Game does that properly)
+  document.getElementById('btnVoteEnd').style.display = myIdx === -1 || ((gameState.canDeclareEnd || gameState.endDeclared) && !gameState.concedeActive) ? 'none' : '';
   document.getElementById('btnLeaveGame').style.display = myIdx === -1 || gameState.phase === 'gameOver' ? 'none' : '';
   document.getElementById('btnStopWatching').style.display = myIdx === -1 ? '' : 'none';
   // Last action strip (most recent log entry)
@@ -4123,6 +4142,34 @@ function renderGameOver() {
 function placeTile(tile) { hideTilePreview(); socket.emit('placeTile', { tile }); }
 function chooseChain(chain) { socket.emit('chooseChain', { chain }); }
 function chooseMergerSurvivor(chain) { socket.emit('chooseMergerSurvivor', { chain }); }
+/* Once the game can be ended for real: a big End Game button under the market
+ * (desktop; phones keep the header button), and no Vote End button — so nobody
+ * ends a finished game "early" by mistake. */
+function renderEndPanel(canEnd, myTurnToEnd) {
+  const panel = document.getElementById('endPanel');
+  const over = gameState.phase === 'gameOver';
+  const show = !!(canEnd || gameState.endDeclared) && myIdx >= 0 && !over;
+  document.getElementById('btnDeclareEnd').classList.toggle('has-end-panel', show);
+  panel.hidden = !show;
+  if (!show) { panel.innerHTML = ''; return; }
+  const chains = gameState.chains || {};
+  const big = Object.keys(chains).filter(c => chains[c].active && chains[c].size >= 41).sort((a, b) => chains[b].size - chains[a].size)[0];
+  const why = big ? `${big} has ${chains[big].size} tiles (41+ ends the game).` : 'Every chain on the board is safe (11+ tiles).';
+  let key, html;
+  if (gameState.endDeclared) {
+    const who = gameState.players[gameState.endDeclared.by]?.name || 'A player';
+    key = 'declared';
+    html = `<div class="end-wait">🏁 Final turn</div><div class="end-why">${escapeHtml(who)} ended the game — it finishes when this turn does.</div>`;
+  } else if (myTurnToEnd) {
+    key = 'mine';
+    html = `<button class="end-big" onclick="declareEnd()">🏁 END GAME</button><div class="end-why">${escapeHtml(why)} You still finish this turn, then bonuses are paid and all stock is sold.</div>`;
+  } else {
+    key = 'wait';
+    html = `<div class="end-wait">🏁 The game can be ended</div><div class="end-why">${escapeHtml(why)} The End Game button appears here on your turn.</div>`;
+  }
+  key += '|' + why;
+  if (panel.dataset.key !== key) { panel.dataset.key = key; panel.innerHTML = html; }
+}
 function declareEnd() {
   if (confirm('End the game? You still finish this turn (place your tile, buy stock), then final bonuses are paid and all stock is sold.')) socket.emit('declareGameEnd');
 }
@@ -5283,7 +5330,7 @@ function leaveGame() {
   goHome();
 }
 function earlyEndOk() {
-  if (!currentUser) return true;
+  if (!currentUser || (gameState && gameState.canDeclareEnd)) return true;
   return confirm('End the game early? Games ended early can only lower your rating: if you\'re winning you gain nothing, and if you\'re behind it still counts as a loss.');
 }
 

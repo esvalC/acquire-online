@@ -765,8 +765,15 @@ function checkConcedeResult(state) {
 
   if (yesVotes >= needed) {
     state.concedeActive = false;
-    state.log.push('Vote passed! Ending game by concession.');
-    endGame(state, { type: 'vote', text: 'The players voted to end the game early.' });
+    // If the game could already be ended for real (a 41+ chain, or every chain
+    // safe), agreeing to stop is the same as finishing it — count it as finished.
+    if (canDeclareGameEnd(state)) {
+      state.log.push('Vote passed! The end conditions were met, so the game is finished.');
+      endGame(state, describeEndCondition(state, null));
+    } else {
+      state.log.push('Vote passed! Ending game by concession.');
+      endGame(state, { type: 'vote', text: 'The players voted to end the game early.' });
+    }
     return { ok: true, result: 'passed', gameOver: true };
   }
 
