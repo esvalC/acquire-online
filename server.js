@@ -870,7 +870,7 @@ function broadcastLobby(code) {
   if (!room) return;
   const lobbyData = {
     code,
-    players: room.players.map(p => ({ name: p.name, ready: p.ready, isBot: p.isBot || false, difficulty: p.isBot ? p.difficulty : undefined, isAdmin: isAdminUser(p.userId) || undefined })),
+    players: room.players.map(p => ({ name: p.name, ready: p.ready, away: !!p.disconnected || undefined, isBot: p.isBot || false, difficulty: p.isBot ? p.difficulty : undefined, isAdmin: isAdminUser(p.userId) || undefined })),
     spectators: room.spectators.map(s => ({ name: s.name })),
     maxPlayers: room.config.maxPlayers,
     host: (roomHost(room) || {}).name || null,
@@ -1004,6 +1004,16 @@ function scheduleDropTimer(code, p) {
     const r = rooms[code];
     if (r && r.players.includes(p) && p.disconnected && !p.socketId) forfeitSeat(code, p, 'gone');
   }, RECONNECT_GRACE_MS));
+}
+
+const LOBBY_GRACE_MS = Number(process.env.LOBBY_GRACE_MS) || 15 * 60 * 1000;
+function scheduleLobbyDrop(code, p) {
+  clearDropTimer(code, p.name);
+  dropTimers.set(`${code}|${p.name}`, setTimeout(() => {
+    dropTimers.delete(`${code}|${p.name}`);
+    const r = rooms[code];
+    if (r && !r.game && r.players.includes(p) && p.disconnected) leaveLobbySeat(code, p);
+  }, LOBBY_GRACE_MS));
 }
 
 function scheduleAbandonedRoomCleanup(code) {
@@ -1649,9 +1659,12 @@ io.on('connection', (socket) => {
         if (room.players.every(q => q.isBot || q.disconnected)) scheduleAbandonedRoomCleanup(currentRoomCode);
       }
     } else {
+      // Waiting at a table: keep the seat while they're away (texting the code,
+      // phone locked...). They come back automatically; the seat is freed only
+      // after LOBBY_GRACE_MS. Leave Table / the back button still leave at once.
       const me = room.players.find(p => p.socketId === socket.id);
-      if (me) leaveLobbySeat(currentRoomCode, me);
-      else broadcastLobby(currentRoomCode);
+      if (me) { me.socketId = null; me.disconnected = true; me.ready = false; scheduleLobbyDrop(currentRoomCode, me); }
+      broadcastLobby(currentRoomCode);
     }
   }
   // Join a game/table room, leaving any other first

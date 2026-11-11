@@ -1096,6 +1096,10 @@
   .tut-controls[hidden] { display: none; }
   .tut-progress { font-size: 11px; color: var(--gold); font-weight: 700; white-space: nowrap; }
   @media (max-width: 600px) { .tut-bubble { max-width: calc(100vw - 16px); font-size: 13px; } .tut-controls { width: 100%; } .tut-progress { flex: 1; } }
+  .lobby-share { text-align: center; margin: 4px 0 14px; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .lobby-share-hint { font-size: 11px; color: var(--text-muted); }
+  .lobby-link { color: var(--gold); font-size: 14px; font-weight: 600; word-break: break-all; text-decoration: underline; }
+  .lobby-share .btn { width: auto; padding: 6px 16px; }
   .end-panel { flex-shrink: 0; margin-top: 12px; border: 1px solid rgba(245,158,11,0.55); background: rgba(245,158,11,0.08); border-radius: 12px; padding: 14px; text-align: center; }
   .end-panel .end-why { font-size: 12px; color: var(--text-dim); line-height: 1.5; margin-top: 8px; }
   .end-panel .end-big { width: 100%; font-size: 18px; font-weight: 800; letter-spacing: 1px; padding: 14px 10px; border-radius: 10px; border: none; cursor: pointer;
@@ -1986,6 +1990,12 @@
   <div class="lobby-card">
     <div class="panel-title" style="text-align:center">Room Code</div>
     <div class="room-code" id="lobbyCode">----</div>
+    <div class="lobby-share">
+      <div class="lobby-share-hint">Send this link — it takes friends straight to this table:</div>
+      <a id="lobbyLink" class="lobby-link" href="#"></a>
+      <button class="btn btn-sm btn-secondary" id="lobbyShareBtn" onclick="shareTableLink()">Share link</button>
+      <div class="lobby-share-hint">You can leave this page to text it — your seat is saved for 15 minutes.</div>
+    </div>
     <div class="panel-title">Players</div>
     <ul class="player-list" id="lobbyPlayers"></ul>
     <div id="lobbyAddBot" class="lobby-add-bot" style="display:none;">
@@ -2708,6 +2718,11 @@ function goHome() {
   try { clearHint(); hintKey = null; } catch {}
   // Watching a game: going home stops watching (the players' "watching" count drops)
   if (gameState && myIdx === -1) socket.emit('leaveRoom');
+  // Leaving a finished multiplayer game: stop getting its updates
+  if (gameState && myIdx >= 0 && gameState.phase === 'gameOver' && !isSoloGame) {
+    socket.emit('leaveRoom');
+    if (gameState.code) clearSession(gameState.code);
+  }
   activeSession = null;
   document.getElementById('gameOverOverlay').style.display = 'none';
   stopTurnClock();
@@ -2826,6 +2841,19 @@ function joinRoom(spectate = false) {
   });
 }
 
+// Opened a table link: join right away with your account name or the name
+// you used last time; otherwise just ask for a name.
+function joinFromLink(code, tries = 0) {
+  if (authToken && !currentUser && tries < 20) return setTimeout(() => joinFromLink(code, tries + 1), 150);
+  document.getElementById('joinCode').value = code;
+  const saved = (() => { try { return localStorage.getItem('acquire_last_name') || ''; } catch { return ''; } })();
+  if (!currentUser && saved && !document.getElementById('joinName').value) document.getElementById('joinName').value = saved;
+  if (currentUser || saved) { joinRoom(); return; }
+  const n = document.getElementById('joinName');
+  if (n) { n.focus(); n.scrollIntoView({ block: 'center' }); }
+  showToast(`Enter your name to join table ${code}`);
+}
+
 /* ── Solo Actions ──────────────────────────────── */
 function adjustBotCount(delta) {
   selectedBotCount = Math.min(5, Math.max(1, selectedBotCount + delta));
@@ -2900,6 +2928,7 @@ function startSoloGame() {
 let activeSession = null; // { code, name, token } of the room we're in — used to rejoin after a reconnect
 function saveSession(code, name, token) {
   activeSession = { code, name, token };
+  try { localStorage.setItem('acquire_last_name', name); } catch {}
   localStorage.setItem('acquire_token_' + code, token);
   localStorage.setItem('acquire_name_' + code, name);
 }
@@ -3056,6 +3085,7 @@ function attemptReconnect(code, name, token) {
       attemptReconnect(code, name, token);
     } else {
       document.getElementById('joinCode').value = code;
+      setTimeout(() => joinFromLink(code), 0);
     }
     return;
   }
@@ -3083,8 +3113,27 @@ function toggleReady() { socket.emit('toggleReady'); }
 /* ── Lobby Updates ─────────────────────────────── */
 const LOBBY_DIFF_LABEL = { hard: 'Easy', expert: 'Medium', mcts: 'Hard', master: 'Master' };
 let lastLobby = null;
+function tableLink(code) { return `${location.origin}/multiplayer/${code}`; }
+function setLobbyLink(code) {
+  const a = document.getElementById('lobbyLink');
+  if (!a || !code || code === '----') return;
+  a.href = tableLink(code);
+  a.textContent = tableLink(code).replace(/^https?:\/\//, '');
+  document.getElementById('lobbyShareBtn').textContent = navigator.share ? 'Share link' : 'Copy link';
+}
+async function shareTableLink() {
+  const code = document.getElementById('lobbyCode').textContent;
+  const url = tableLink(code);
+  if (navigator.share) {
+    try { await navigator.share({ title: 'Join my Acquire table', text: `Join my Acquire game (table ${code}):`, url }); } catch {}
+    return;
+  }
+  try { await navigator.clipboard.writeText(url); showToast('Link copied'); }
+  catch { showToast(url); }
+}
 socket.on('lobbyUpdate', (data) => {
   lastLobby = data;
+  setLobbyLink(data.code);
   useChatFor(data.code);
   setTimeout(refreshInviteButton, 0);
   document.getElementById('lobbyCode').textContent = data.code;
@@ -3095,7 +3144,7 @@ socket.on('lobbyUpdate', (data) => {
     <li class="player-item">
       <span>${escapeHtml(p.name)}${p.isAdmin ? ADMIN_TAG : ''}${p.isBot ? ` <span class="player-badge player-badge-bot">Bot · ${LOBBY_DIFF_LABEL[p.difficulty] || 'Medium'}</span>` : ''}${p.name === data.host ? ' <span class="lobby-host">host</span>' : ''}</span>
       <span style="display:flex;align-items:center;gap:6px;">
-        <span class="ready-badge ${p.ready ? 'ready' : 'waiting'}">${p.ready ? 'Ready' : 'Waiting'}</span>
+        <span class="ready-badge ${p.away ? 'waiting' : p.ready ? 'ready' : 'waiting'}">${p.away ? 'Away' : p.ready ? 'Ready' : 'Waiting'}</span>
         ${p.isBot && isHost && !data.gameInProgress ? `<button class="lobby-remove-bot" title="Remove bot" onclick='removeLobbyBot(${JSON.stringify(p.name)})'>✕</button>` : ''}
       </span>
     </li>
@@ -3189,7 +3238,8 @@ socket.on('connect', () => {
     // Room is gone (usually the server restarted) — don't leave a dead board on screen
     activeSession = null;
     clearSession(code);
-    showToast('That game was lost when the server restarted. Sorry!');
+    const atTable = document.getElementById('lobby').classList.contains('active');
+    showToast(atTable ? 'That table closed while you were away.' : 'That game was lost when the server restarted. Sorry!');
     const home = window.location.pathname.startsWith('/beta') ? '/beta' : '/';
     setTimeout(() => { window.location.href = home; }, 2500);
   });
@@ -3199,6 +3249,9 @@ socket.on('connect', () => {
 socket.on('gameState', (state) => {
   // Don't update live game state while replay overlay is open — prevents "(you)" bleed-through
   if (document.getElementById('replayOverlay').style.display !== 'none') return;
+  // A finished game you already left (someone else leaving it still sends an
+  // update): don't pop its game-over screen up over whatever you're doing.
+  if (state.phase === 'gameOver' && !document.getElementById('game').classList.contains('active')) return;
   window._gameUrl = location.href;
 
   const prevIdx = prevCurrentPlayerIdx;
@@ -5465,7 +5518,7 @@ function tutShow() {
   tutDimEl.className = 'tut-dim';
   document.body.appendChild(tutDimEl);
   if (target) {
-    target.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    target.scrollIntoView({ block: window.innerWidth <= 900 ? 'center' : 'nearest', inline: 'nearest', behavior: 'smooth' });
     tutTargetEl = target; target.classList.add('tut-target');
   }
   tutSetAlso(st);
@@ -5593,7 +5646,9 @@ function tutBlock(e) {
     tutBubbleEl.classList.remove('tut-shake'); void tutBubbleEl.offsetWidth; tutBubbleEl.classList.add('tut-shake');
   }
 }
-['click', 'pointerdown', 'mousedown', 'touchstart', 'dblclick', 'contextmenu'].forEach(t => document.addEventListener(t, tutBlock, { capture: true, passive: false }));
+// Only clicks are blocked — touches and drags still scroll the page on phones.
+['click', 'dblclick', 'contextmenu'].forEach(t => document.addEventListener(t, tutBlock, { capture: true }));
+document.addEventListener('pointerdown', e => { if (tut && e.target && e.target.matches && e.target.matches('input[type=range]')) tutBlock(e); }, { capture: true });
 function renderTutControls() {
   const box = document.getElementById('tutControls');
   if (!box) return;
