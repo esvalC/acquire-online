@@ -1090,6 +1090,8 @@
   .tut-bubble .tut-wait { margin-top: 8px; font-size: 12px; font-weight: 700; color: #b45309; text-align: right; }
   .tut-bubble.tail-down::after { content: ''; position: absolute; bottom: -12px; left: var(--tail-x, 50%); transform: translateX(-50%); border: 9px solid transparent; border-top: 12px solid #d97706; }
   .tut-bubble.tail-up::after { content: ''; position: absolute; top: -12px; left: var(--tail-x, 50%); transform: translateX(-50%); border: 9px solid transparent; border-bottom: 12px solid #d97706; }
+  .tut-bubble.tut-shake { animation: tutShake .4s ease; }
+  @keyframes tutShake { 0%,100% { transform: translateX(0); } 20% { transform: translateX(-7px); } 40% { transform: translateX(7px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
   .tut-controls { display: inline-flex; align-items: center; gap: 6px; border-radius: 8px; box-shadow: 0 0 0 2px rgba(245,158,11,0.55); padding: 2px 4px; }
   .tut-controls[hidden] { display: none; }
   .tut-progress { font-size: 11px; color: var(--gold); font-weight: 700; white-space: nowrap; }
@@ -5366,7 +5368,7 @@ const TUT_CHAPTERS = [
   ] },
   { title: 'Mergers', steps: [
     { at: tutCell('4E'), t: `A few turns have passed. You lead <b>American</b> (6 tiles). <b>Tower</b> has 3 tiles: you own 5 of its shares, Rex 3 and Aria 1.` },
-    { at: tutHand('6E'), t: `Look at <b>6E</b>: it touches American <i>and</i> Tower. Playing it causes a <b>merger</b>. The <b>bigger hotel survives</b> and buys out the smaller one — American (6) takes over Tower (3), and Tower closes.` },
+    { at: tutHand('6E'), also: tutCell('6E'), t: `Look at <b>6E</b>: it touches American <i>and</i> Tower. Playing it causes a <b>merger</b>. The <b>bigger hotel survives</b> and buys out the smaller one — American (6) takes over Tower (3), and Tower closes.` },
     { at: tutHand('6E'), also: tutCell('6E'), me: true, t: `Play <b>6E</b>.` },
     { at: '#actionPanel', t: `Tower's shareholders are paid right away. You were the biggest holder: <b>$3,000</b> 1st-place bonus. Rex was 2nd: <b>$1,500</b>. Aria, in 3rd, gets nothing.` },
     { at: '#actionPanel', me: true, preset: { sell: 1, trade: 4 }, t: `Now choose what to do with your 5 Tower shares — any mix of:<br>• <b>Sell</b> them at Tower's price now ($300 each)<br>• <b>Trade</b> 2 Tower for 1 American<br>• <b>Keep</b> them<br><br>We've set <b>Sell 1, Trade 4</b> for you — press <b>Confirm</b>.` },
@@ -5376,7 +5378,7 @@ const TUT_CHAPTERS = [
     { at: () => document.getElementById('buycard-Festival'), also: tutBuyBtn, me: true, t: `Your buy. Festival is about to matter — click <b>2</b> on the Festival card, then <b>Buy</b>.` },
     { bot: 2, at: tutCell('11B'), t: `Aria played a loose tile and kept her cash. <b>Aria:</b> “Saving up.”` },
     { bot: 2, at: tutCell('1A'), t: `Rex played a loose tile and bought 1 Worldwide.` },
-    { at: tutHand('7H'), t: `<b>7H</b> touches Festival and Worldwide, and both have <b>4 tiles</b>. When the hotels are the same size, the player who caused the merger <b>chooses which one survives</b>.` },
+    { at: tutHand('7H'), also: tutCell('7H'), t: `<b>7H</b> touches Festival and Worldwide, and both have <b>4 tiles</b>. When the hotels are the same size, the player who caused the merger <b>chooses which one survives</b>.` },
     { at: tutHand('7H'), also: tutCell('7H'), me: true, t: `Play <b>7H</b>.` },
     { at: tutBtn('Festival'), me: true, t: `You lead Festival 5–1, so keep it alive: choose <b>Festival</b>.` },
     { bot: 1, at: '#stockMatrix', t: `Worldwide's shareholders were paid: Aria $5,000 (1st), Rex $2,500 (2nd). You owned none, so you have nothing to decide. <b>Aria:</b> “Trading 4 Worldwide for 2 Festival.”` },
@@ -5386,8 +5388,8 @@ const TUT_CHAPTERS = [
   ] },
   { title: 'Safe hotels & stuck tiles', steps: [
     { at: tutCell('3B'), t: `All 7 hotels are on the board now. A hotel with <b>11 or more tiles is safe</b>: it can still buy out smaller hotels, but it can never be bought out. Continental (12) and Imperial (11) are safe.` },
-    { at: tutHand('3C'), t: `<b>3C</b> is crossed out: it would join Continental and Imperial — two safe hotels. That's never allowed, so it's a <b>dead tile</b>. It's swapped for a new one at the end of your turn.` },
-    { at: tutHand('7H'), t: `<b>7H</b> is crossed out for a different reason: it would found a new hotel, but all 7 are already on the board. It's <b>blocked</b> — you keep it, and it becomes playable once a hotel closes in a merger.` },
+    { at: tutHand('3C'), also: tutCell('3C'), t: `<b>3C</b> is crossed out: it would join Continental and Imperial — two safe hotels. That's never allowed, so it's a <b>dead tile</b>. It's swapped for a new one at the end of your turn.` },
+    { at: tutHand('7H'), also: tutCell('7H'), t: `<b>7H</b> is crossed out for a different reason: it would found a new hotel, but all 7 are already on the board. It's <b>blocked</b> — you keep it, and it becomes playable once a hotel closes in a merger.` },
     { at: tutHand('7A'), also: tutCell('7A'), me: true, t: `Play <b>7A</b> — it grows Continental.` },
     { at: () => document.getElementById('buycard-Continental'), also: tutBuyBtn, me: true, t: `Click <b>2</b> on the Continental card, then <b>Buy</b>.` },
     { at: '#tileHand', t: `Your dead tile 3C was swapped for a new one. The blocked 7H stays in your hand.` },
@@ -5574,6 +5576,24 @@ function tutOnState() {
     tutPlace();
   }
 }
+/* Only the thing the bubble asks for can be clicked (plus the bubble, the
+ * Skip chapter / Exit bar and the ☰ menu). Everything else is blocked, so
+ * nobody gets ahead of the script by clicking early. */
+function tutAllowed(el) {
+  if (!el || !el.closest) return true;
+  if (el.closest('.tut-bubble, #tutControls, .menu-btn, .profile-overlay, #inviteToasts')) return true;
+  const st = tutStep();
+  if (!st || !st.me || (tut && tut.busy)) return false;
+  return [tutTargetEl, ...tutAlsoEls].some(t => t && t.contains(el));
+}
+function tutBlock(e) {
+  if (!tut || tutAllowed(e.target)) return;
+  e.preventDefault(); e.stopPropagation();
+  if (e.type === 'click' && tutBubbleEl) {
+    tutBubbleEl.classList.remove('tut-shake'); void tutBubbleEl.offsetWidth; tutBubbleEl.classList.add('tut-shake');
+  }
+}
+['click', 'pointerdown', 'mousedown', 'touchstart', 'dblclick', 'contextmenu'].forEach(t => document.addEventListener(t, tutBlock, { capture: true, passive: false }));
 function renderTutControls() {
   const box = document.getElementById('tutControls');
   if (!box) return;
