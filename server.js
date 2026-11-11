@@ -1391,11 +1391,40 @@ io.on('connection', (socket) => {
   });
 
   /* ── Leave room (e.g. solo player goes back to setup) ── */
+  // Solo: ends the game. Multiplayer table (before it starts): the host
+  // cancels the table for everyone; anyone else just leaves their seat.
+  // During a multiplayer game it counts as dropping out (others play on).
   socket.on('leaveRoom', () => {
-    if (currentRoom && rooms[currentRoom]) {
-      deleteRoom(currentRoom);
-    }
+    const code = currentRoom;
+    const room = code && rooms[code];
     currentRoom = null;
+    if (!room) return;
+    socket.leave(code);
+    const me = room.players.find(p => p.socketId === socket.id);
+
+    if (room.isSolo) { if (me) deleteRoom(code); return; }
+
+    if (!me) {                                              // spectator
+      room.spectators = room.spectators.filter(s => s.socketId !== socket.id);
+      if (!room.game) broadcastLobby(code);
+      return;
+    }
+    if (room.game) {
+      me.socketId = null; me.disconnected = true;
+      room.game.log.push(`${me.name} left the game`);
+      broadcastState(code);
+      if (room.players.every(q => q.isBot || q.disconnected)) scheduleAbandonedRoomCleanup(code);
+      return;
+    }
+    if (roomHost(room) === me) {
+      io.to(code).emit('tableClosed', { by: me.name });
+      for (const id of io.sockets.adapter.rooms.get(code) || []) io.sockets.sockets.get(id)?.leave(code);
+      deleteRoom(code);
+      return;
+    }
+    room.players = room.players.filter(p => p !== me);
+    room.players.forEach((p, i) => { p.idx = i; });
+    broadcastLobby(code);
   });
 
   /* ── Disconnect ───────────────────────────────── */

@@ -1655,6 +1655,7 @@
     </div>
     <div style="margin-top:16px;">
       <button class="btn" onclick="toggleReady()">Toggle Ready</button>
+      <button class="btn btn-secondary" id="lobbyLeaveBtn" style="margin-top:8px" onclick="leaveTable()">Leave Table</button>
     </div>
     <div style="margin-top:8px; font-size:11px; color:var(--text-muted); text-align:center;">
       Game starts when all players are ready
@@ -2638,9 +2639,12 @@ function toggleReady() { socket.emit('toggleReady'); }
 
 /* ── Lobby Updates ─────────────────────────────── */
 const LOBBY_DIFF_LABEL = { hard: 'Easy', expert: 'Medium', mcts: 'Hard', master: 'Master' };
+let lastLobby = null;
 socket.on('lobbyUpdate', (data) => {
+  lastLobby = data;
   document.getElementById('lobbyCode').textContent = data.code;
   const isHost = !!data.host && data.host === myName;
+  document.getElementById('lobbyLeaveBtn').textContent = isHost ? 'Cancel Table' : 'Leave Table';
   const list = document.getElementById('lobbyPlayers');
   list.innerHTML = data.players.map(p => `
     <li class="player-item">
@@ -2653,6 +2657,23 @@ socket.on('lobbyUpdate', (data) => {
   `).join('');
   document.getElementById('lobbyAddBot').style.display =
     isHost && !data.gameInProgress && data.players.length < data.maxPlayers ? 'flex' : 'none';
+});
+// Host: closes the table for everyone. Anyone else: gives up their seat.
+function leaveTable() {
+  const d = lastLobby;
+  const isHost = d && d.host === myName;
+  const others = d ? d.players.filter(p => !p.isBot && p.name !== myName).length : 0;
+  if (isHost && others > 0 && !confirm(`Cancel this table? The ${others === 1 ? 'other player' : others + ' other players'} will be sent back to the home screen.`)) return;
+  socket.emit('leaveRoom');
+  if (d) clearSession(d.code);
+  lastLobby = null;
+  goHome();
+}
+socket.on('tableClosed', ({ by }) => {
+  if (lastLobby) clearSession(lastLobby.code);
+  lastLobby = null;
+  goHome();
+  showToast(`${by || 'The host'} cancelled the table`);
 });
 function addLobbyBot() {
   const difficulty = document.getElementById('lobbyBotDifficulty').value;
