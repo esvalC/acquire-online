@@ -159,6 +159,12 @@ db.exec(`
   if (!uc.includes('allow_requests')) db.exec(`ALTER TABLE users ADD COLUMN allow_requests INTEGER NOT NULL DEFAULT 1`);
   if (!uc.includes('friends_only_dm')) db.exec(`ALTER TABLE users ADD COLUMN friends_only_dm INTEGER NOT NULL DEFAULT 0`);
   if (!uc.includes('last_seen'))      db.exec(`ALTER TABLE users ADD COLUMN last_seen INTEGER`);
+  // Messages default to friends-only for everyone (new accounts get it at sign-up).
+  // One-time switch for accounts made before this default; afterwards each player's choice sticks.
+  if (db.pragma('user_version', { simple: true }) < 1) {
+    db.exec(`UPDATE users SET friends_only_dm = 1`);
+    db.pragma('user_version = 1');
+  }
 }
 const MESSAGE_DAYS = 90;
 const pair = (a, b) => (a < b ? [a, b] : [b, a]);
@@ -229,7 +235,7 @@ const stmts = {
   findById:           db.prepare('SELECT id, username, created_at, elo, games_played, games_won, is_admin, public_profile, token_version, (password_hash IS NOT NULL) AS has_password FROM users WHERE id = ?'),
   tokenVersion:       db.prepare('SELECT token_version FROM users WHERE id = ?'),
   setPassword:        db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?'),
-  createPwUser:       db.prepare('INSERT INTO users (username, phone_hash, password_hash) VALUES (?, ?, ?)'),
+  createPwUser:       db.prepare('INSERT INTO users (username, phone_hash, password_hash, friends_only_dm) VALUES (?, ?, ?, 1)'),
   setAdmin:           db.prepare('UPDATE users SET is_admin = ? WHERE id = ?'),
   setPublicProfile:   db.prepare('UPDATE users SET public_profile = ? WHERE id = ?'),
   createUser:      db.prepare('INSERT INTO users (username, phone_hash, phone_encrypted) VALUES (?, ?, ?)'),
